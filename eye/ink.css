@@ -1,0 +1,29 @@
+/* 构成 — the palette every page shares: paper, ink, one blue. Load it last. */
+/* ── the palette: paper, ink, one blue ── */
+:root{
+  --paper:#ECE9E2; --ink:#1B1B20; --soft:#6C6B68; --faint:#A6A49E;
+  --hair:rgba(27,27,32,.15); --river:rgba(27,27,32,.34);
+  --me:#F3F1EC; --me-ink:#7B7975; --drop:#1B1B20; --accent:#2933C4; --blue:#2933C4;
+  --latin:"Cormorant Garamond", "Source Serif 4", Georgia, serif;
+}
+:root[data-side="moon"]{
+  --paper:#1B1A20; --ink:#ECE9E2; --soft:#A9A7A1; --faint:#74736F;
+  --hair:rgba(236,233,226,.15); --river:rgba(236,233,226,.32);
+  --me:#202025; --me-ink:#9F9D97; --drop:#ECE9E2; --accent:#5A64F2; --blue:#3B46DC;
+}
+#star, #drops{ display:none; }
+::selection{ background:color-mix(in srgb, var(--blue) 28%, transparent); }
+
+input[type="range"]{ accent-color:var(--blue); }
+
+/* ── a leaf from the home's sketchbook behind the quieter rooms, on a wide screen: the swallow that carries the post behind the
+   people you write to; the far cathedral behind the attic and the kitchen; by night the swallow among the stars, and the moons.
+   (The leaf lies under everything on the page: so the body lets the sheet of the page — html — show through.) ── */
+@media (min-width:1000px) and (min-aspect-ratio:5/4){
+  body.contacts, body.attic, body.kitchen{ background:transparent; }
+  body.contacts::before, body.attic::before, body.kitchen::before{ content:""; position:fixed; z-index:-1; pointer-events:none; background:no-repeat center / contain; }
+  body.contacts::before{ left:-9vw; bottom:-12vh; width:min(56vw, 104vh); aspect-ratio:3 / 2; background-image:url(draft-day-a.webp); opacity:.55; transform:rotate(-18deg); }
+  :root[data-side="moon"] body.contacts::before{ background-image:url(draft-night-a.webp); opacity:.62; transform:rotate(10deg); left:-8vw; bottom:-6vh; }
+  body.attic::before, body.kitchen::before{ right:1vw; bottom:-3vh; height:96vh; aspect-ratio:2 / 3; background-image:url(draft-day-b.webp); opacity:.4; }
+  :root[data-side="moon"] body.attic::before, :root[data-side="moon"] body.kitchen::before{ right:3vw; bottom:7vh; height:auto; width:min(46vw, 760px); aspect-ratio:3 / 2; background-image:url(draft-night-b.webp); opacity:.5; }
+}

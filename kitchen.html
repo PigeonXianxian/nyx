@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <link rel="apple-touch-icon" href="icon-180.png"><link rel="icon" href="icon-192.png"><link rel="manifest" href="manifest.webmanifest">   <!-- the night tree -->
 
-<meta name="theme-color" content="#ECE8E1">
+<meta name="theme-color" content="#ECE9E2">
 <title>Kitchen</title>
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/400.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/600.min.css" rel="stylesheet">
@@ -21,8 +21,8 @@
      图鉴 Recipes — everything your companion wrote; tick the steps, 做过了 logs it; photos of what you made, with a comment back.
      时间轴 Timeline — what you ate, day by day.
      Data: {relay}/app/kitchen (kitchen.json in the relay's folder). */
-  :root{ --bg:#ECE8E1; --card:rgba(247,242,232,.78); --ink:#221E1C; --soft:#6B625C; --line:rgba(34,30,28,.14); --acc:#A4492A; --pick:rgba(164,73,42,.1); --tab:64px; --ai:"AI："; }
-  :root[data-side="moon"]{ --bg:#0C0A09; --card:rgba(42,32,28,.6); --ink:#E8C9B8; --soft:#BC9684; --line:rgba(235,198,178,.14); --acc:#C9785A; --pick:rgba(201,120,90,.16); }
+  :root{ --bg:#ECE9E2; --card:rgba(247,242,232,.78); --ink:#1B1B20; --soft:#6C6B68; --line:rgba(27,27,32,.14); --acc:var(--accent); --pick:rgba(41,51,196,.1); --tab:64px; --ai:"AI："; }
+  :root[data-side="moon"]{ --bg:#17171B; --card:rgba(32,32,37,.6); --ink:#ECE9E2; --soft:#A9A7A1; --line:rgba(236,233,226,.14); --acc:var(--accent); --pick:rgba(41,51,196,.16); }
   *{ box-sizing:border-box; }
   [hidden]{ display:none !important; }
   html,body{ margin:0; background:var(--bg); color:var(--ink); font-family:"Source Serif 4",Georgia,"Noto Serif SC","Songti SC","STSong",serif; -webkit-tap-highlight-color:transparent; }
@@ -73,9 +73,9 @@
   ol.steps{ list-style:none; padding:0; margin:16px 0; counter-reset:s; }
   ol.steps li{ counter-increment:s; position:relative; padding:12px 12px 12px 44px; margin-bottom:8px; background:var(--card); border:1px solid var(--line); border-radius:14px; font-size:15px; line-height:1.7; cursor:pointer; }
   ol.steps li::before{ content:counter(s); position:absolute; left:14px; top:12px; width:20px; height:20px; border-radius:50%; border:1px solid var(--acc); color:var(--acc); font-size:12px; line-height:20px; text-align:center; }
-  ol.steps li.done{ color:var(--soft); text-decoration:line-through; text-decoration-color:rgba(164,73,42,.5); }
+  ol.steps li.done{ color:var(--soft); text-decoration:line-through; text-decoration-color:rgba(41,51,196,.5); }
   ol.steps li.done::before{ content:"✓"; background:var(--acc); color:#fff; }
-  .tip{ font-size:14px; line-height:1.8; padding:12px 14px; border-left:2px solid var(--acc); background:rgba(164,73,42,.04); border-radius:0 10px 10px 0; }
+  .tip{ font-size:14px; line-height:1.8; padding:12px 14px; border-left:2px solid var(--acc); background:rgba(41,51,196,.04); border-radius:0 10px 10px 0; }
   .cooked{ margin-top:18px; width:100%; border:0; background:var(--ink); color:var(--bg); border-radius:14px; padding:12px; font-size:15px; letter-spacing:.14em; cursor:pointer; }
   .ph-h{ display:flex; align-items:baseline; justify-content:space-between; margin:22px 0 10px; }
   .ph-h b{ font-size:15px; letter-spacing:.14em; }
@@ -90,7 +90,7 @@
   .ph .pc.wait::before{ content:""; }
   /* 时间轴：左边一条竖线，每天一个点 */
   .tl{ position:relative; padding-left:26px; }
-  .tl::before{ content:""; position:absolute; left:6px; top:6px; bottom:0; width:1.5px; background:linear-gradient(to bottom, var(--acc), rgba(164,73,42,.15)); }
+  .tl::before{ content:""; position:absolute; left:6px; top:6px; bottom:0; width:1.5px; background:linear-gradient(to bottom, var(--acc), rgba(41,51,196,.15)); }
   .day{ position:relative; margin-bottom:22px; }
   .day::before{ content:""; position:absolute; left:-25px; top:5px; width:11px; height:11px; border-radius:50%; background:var(--bg); border:2px solid var(--acc); }
   .day .dd{ font-size:14px; font-weight:600; letter-spacing:.1em; }
@@ -105,8 +105,10 @@
   .toast{ position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + var(--tab) + 70px); transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:7px 16px; border-radius:999px; font-size:13px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:9; }
   .toast.on{ opacity:1; }
 </style>
+<link href="fonts/cormorant.css" rel="stylesheet">
+<link rel="stylesheet" href="eye/ink.css">
 </head>
-<body>
+<body class="kitchen">
 <div class="top"><button class="back" id="home" aria-label="回去"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button></div>
 <h1 id="title">家里</h1>
 <div id="vk"></div>

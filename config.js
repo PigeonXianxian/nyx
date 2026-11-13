@@ -6,8 +6,8 @@ window.NYX = {
   aiName: "Companion",
   meName: "Me",
   title: "Nyx",
-  // home: "ink" (the river poster) or "tree" (NyxTree). Each device can switch in the drawer; this is the default.
-  home: "ink",
+  // home: "eye" (构成: the eye by day, the well by night), "ink" (the river poster) or "tree" (NyxTree). Each device can switch in the drawer; this is the default.
+  home: "eye",
   // treePhoto: a picture laid under the tree on the night side, pressed dark, e.g. "photos/forest.jpg". Leave null for none.
   treePhoto: null,
   // stickers: folder with <name>.png (or .gif) — [sticker:name] in a message shows it. Leave null for none.
@@ -17,20 +17,22 @@ window.NYX = {
   // the home poster: one block per entry, biggest first. id "chat" opens the chat; anything else needs an href.
   // art: tokens | context | clusters | sampling | beam | gelu | loss (left out = picked in order)
   apps: [
-    { id: "chat", en: "Chat", zh: "聊天", art: "tokens" },
-    { id: "listen", en: "Listen", zh: "一起听", href: "listen.html", art: "sampling" },
+    // Chat opens a dial of two, as on the plates: 进入 goes in; 联系人 is everyone you talk to
+    { id: "chat", en: "Chat", zh: "聊天", art: "tokens", apps: [
+      { id: "chat", en: "Enter", zh: "进入", d: "去说话" },
+      { id: "contacts", en: "Contacts", zh: "联系人", d: "跟谁说话，点谁连谁", href: "contacts.html" }] },
     // a folder: one block on the home page, a small heading with its rooms in the drawer; d is the one line under each room in the folder sheet
-    { id: "home", en: "Home", zh: "小家", art: "clusters", apps: [
-      { id: "contacts", en: "Contacts", zh: "联系人", d: "跟谁说话，点谁连谁", href: "contacts.html" },
-      { id: "attic", en: "Attic", zh: "杂物间", d: "收着的小东西", href: "attic.html" },
-      { id: "room", en: "Room", zh: "房间", d: "一间空屋子，自己摆家具", href: "room.html" }] },
     { id: "hold", en: "Hold", zh: "底舱", art: "beam", apps: [
       { id: "memory", en: "Memory", zh: "记忆", d: "写进记忆库的那些" },        // add href: "<your Ombre-Brain / Memory Galaxy address>" once it's set up
       { id: "town", en: "Town", zh: "小镇", d: "一个主题一栋房子，一条记忆一扇窗", href: "town/index.html" },   // the memory town: one house per topic, one window per memory (town/, relay/nyx_town.py)
       { id: "board", en: "Yard", zh: "船坞", d: "它手上在修什么，几只小机各领各的活" },
       { id: "heart", en: "Heart", zh: "心脏", d: "它的人设和后台，只读" }] },
+    { id: "listen", en: "Listen", zh: "一起听", href: "listen.html", art: "sampling" },
     { id: "life", en: "Life", zh: "生活", art: "context", apps: [
-      { id: "kitchen", en: "Kitchen", zh: "厨房", d: "做饭，端给它吃", href: "kitchen.html" }] }
+      { id: "kitchen", en: "Kitchen", zh: "厨房", d: "做饭，端给它吃", href: "kitchen.html" }] },
+    { id: "home", en: "Home", zh: "小家", art: "clusters", apps: [
+      { id: "attic", en: "Attic", zh: "杂物间", d: "收着的小东西", href: "attic.html" },
+      { id: "room", en: "Room", zh: "房间", d: "一间空屋子，自己摆家具", href: "room.html" }] }
   ],
 
   // Room: an empty room to furnish with .glb files — docs/room-blender.md

@@ -43,7 +43,7 @@
   function paintSide() {
     var root = document.documentElement, s = root.dataset.side, p = PAPER[s];
     root.style.setProperty("--grain", p[0]); root.style.setProperty("--marks", p[1]);
-    var m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = s === "moon" ? "#0C0A09" : "#ECE8E1";
+    var m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = s === "moon" ? "#1B1A20" : "#ECE9E2";
   }
   paintSide();
   window.NyxPaper = { paint: paintSide };

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
 <link rel="apple-touch-icon" href="icon-180.png"><link rel="icon" href="icon-192.png"><link rel="manifest" href="manifest.webmanifest">   <!-- the night tree -->
 
-<meta name="theme-color" content="#0C0A09">
+<meta name="theme-color" content="#17171B">
 <title>Room</title>
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/400.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/500.min.css" rel="stylesheet">
@@ -14,24 +14,26 @@
   try { document.documentElement.dataset.side = localStorage.getItem("nyx_side") === "moon" ? "moon" : "sun"; } catch (e) { document.documentElement.dataset.side = "sun"; }
 </script>
 <style>
-  :root{ --ink:#221E1C; --paper:#ECE8E1; --soft:#6B625C; --serif:"Source Serif 4", Georgia, "Songti SC", "Noto Serif SC", serif; }
-  :root[data-side="moon"]{ --ink:#E8C9B8; --paper:#0C0A09; --soft:#BC9684; }
-  html,body{ margin:0; height:100%; overflow:hidden; background:#0C0A09; font-family:var(--serif); -webkit-tap-highlight-color:transparent; }
+  :root{ --ink:#1B1B20; --paper:#ECE9E2; --soft:#6C6B68; --serif:"Source Serif 4", Georgia, "Songti SC", "Noto Serif SC", serif; }
+  :root[data-side="moon"]{ --ink:#ECE9E2; --paper:#17171B; --soft:#A9A7A1; }
+  html,body{ margin:0; height:100%; overflow:hidden; background:#17171B; font-family:var(--serif); -webkit-tap-highlight-color:transparent; }
   canvas{ display:block; width:100vw; height:100vh; height:100dvh; touch-action:none; }
   button{ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; }
   .top{ position:fixed; z-index:2; left:0; right:0; top:0; display:flex; align-items:center; justify-content:space-between; padding:calc(env(safe-area-inset-top) + 10px) 14px 0; pointer-events:none; }
   .top > *{ pointer-events:auto; }
-  .round{ width:44px; height:44px; border-radius:50%; display:grid; place-items:center; background:rgba(236,232,225,.72); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); color:#221E1C; }
-  :root[data-side="moon"] .round{ background:rgba(20,15,13,.66); color:#E8C9B8; }
+  .round{ width:44px; height:44px; border-radius:50%; display:grid; place-items:center; background:rgba(236,233,226,.72); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); color:#1B1B20; }
+  :root[data-side="moon"] .round{ background:rgba(23,23,27,.66); color:#ECE9E2; }
   .round svg{ width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
   .round span{ width:14px; height:14px; border-radius:50%; background:currentColor; transition:box-shadow .6s; }
-  :root[data-side="moon"] .round span{ box-shadow:inset 5px -3px 0 0 rgba(20,15,13,1); }
+  :root[data-side="moon"] .round span{ box-shadow:inset 5px -3px 0 0 rgba(23,23,27,1); }
   h1{ margin:0; font-weight:400; font-style:italic; font-size:20px; color:#fff; text-shadow:0 1px 8px rgba(0,0,0,.4); }
-  .tag{ position:fixed; z-index:2; left:50%; bottom:calc(env(safe-area-inset-bottom) + 30px); transform:translate(-50%, 8px); opacity:0; transition:opacity .25s, transform .25s; background:rgba(236,232,225,.9); color:#221E1C; padding:9px 18px; border-radius:99px; font-size:15px; font-style:italic; pointer-events:none; white-space:nowrap; }
-  :root[data-side="moon"] .tag{ background:rgba(20,15,13,.86); color:#E8C9B8; }
+  .tag{ position:fixed; z-index:2; left:50%; bottom:calc(env(safe-area-inset-bottom) + 30px); transform:translate(-50%, 8px); opacity:0; transition:opacity .25s, transform .25s; background:rgba(236,233,226,.9); color:#1B1B20; padding:9px 18px; border-radius:99px; font-size:15px; font-style:italic; pointer-events:none; white-space:nowrap; }
+  :root[data-side="moon"] .tag{ background:rgba(23,23,27,.86); color:#ECE9E2; }
   .tag.on{ opacity:1; transform:translate(-50%, 0); }
   .msg{ position:fixed; inset:0; display:grid; place-items:center; color:#bbb; font-style:italic; pointer-events:none; }
 </style>
+<link href="fonts/cormorant.css" rel="stylesheet">
+<link rel="stylesheet" href="eye/ink.css">
 </head>
 <body>
 <canvas id="c"></canvas>

@@ -19,7 +19,7 @@
     var from = root.dataset.side, to = from === "moon" ? "sun" : "moon";
     root.dataset.side = to;
     try { localStorage.setItem("nyx_side", to); } catch (e) {}
-    paintSide(); if (window.NyxSplash) NyxSplash(from, to, C.splash);
+    paintSide(); if (window.NyxSplash && homeKind() !== "eye") NyxSplash(from, to, C.splash);
     if (home) setTimeout(home.refresh, 400);
   }
   $("flip").onclick = flip; $("flip2").onclick = flip;
@@ -70,12 +70,13 @@
       if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.4) return; if (dx > 0 && !H.hidden) openDrawer(); else closeDrawer(); }, { passive: true }); })();
 
   /* two homes: NyxInk (the river poster) and NyxTree; the choice is kept per device */
-  function homeKind() { var k = null; try { k = localStorage.getItem("nyx_home"); } catch (e) {} return k === "tree" || k === "ink" ? k : (C.home === "tree" ? "tree" : "ink"); }
+  function homeKind() { var k = null; try { k = localStorage.getItem("nyx_home"); } catch (e) {} if (k !== "tree" && k !== "ink" && k !== "eye") k = C.home; if (k === "eye" && !window.NyxEye) k = "ink"; return k === "tree" || k === "eye" ? k : "ink"; }
   function makeHome() {
     if (home && home.stop) home.stop();
     var kind = homeKind();
     document.documentElement.dataset.home = kind;
-    home = kind === "tree" && window.NyxTree ? NyxTree($("poster"), APPS, openApp, { photo: C.treePhoto })
+    home = kind === "eye" ? NyxEye($("poster"), APPS, openApp, { drawer: openDrawer })
+      : kind === "tree" && window.NyxTree ? NyxTree($("poster"), APPS, openApp, { photo: C.treePhoto })
       : NyxHome($("poster"), APPS, openApp, C.tagline, { me: C.meName, drawer: openDrawer, ask: C.clawd && C.clawd.path ? askClawd : null, agents: function () { return api("/app/agents").then(function (d) { return d.agents; }); } });
     document.querySelectorAll("#homes button").forEach(function (b) { b.classList.toggle("on", b.dataset.h === kind); });
   }
@@ -187,8 +188,9 @@
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   var STK = /\[(?:sticker|表情)[:：]([^\]\n]{1,40})\]/g;
   function rich(s) {
+    var short = C.home === "eye" && (s || "").length < 60 && ((s || "").match(/\n/g) || []).length === 1;   // 构成: one break in a short line is a pause, drawn as a blue dot
     return esc(s || "")
-      .replace(STK, function (all, name) { return C.stickers ? '<img class="stk" alt="' + name + '" src="' + C.stickers + encodeURIComponent(name) + '.png" data-n="' + encodeURIComponent(name) + '">' : all; }).replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"，。！？）]/g, function (u) { return '<a href="' + u + '" target="_blank" rel="noopener">' + u + "</a>"; }).replace(/\n/g, "<br>");
+      .replace(STK, function (all, name) { return C.stickers ? '<img class="stk" alt="' + name + '" src="' + C.stickers + encodeURIComponent(name) + '.png" data-n="' + encodeURIComponent(name) + '">' : all; }).replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"，。！？）]/g, function (u) { return '<a href="' + u + '" target="_blank" rel="noopener">' + u + "</a>"; }).replace(/\n/g, short ? '<i class="nl"></i>' : "<br>");
   }
   function hm(ts) { var d = new Date(ts); return isNaN(d) ? "" : String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
   function dayOf(ts) { var d = new Date(ts); return isNaN(d) ? "" : d.toDateString(); }
@@ -342,6 +344,7 @@
     var prevDay = after ? dayOf(after.dataset.ts) : null;
     if (dayOf(m.ts) !== prevDay) { var dd = document.createElement("div"); dd.className = "day"; dd.textContent = dayLabel(m.ts); log.insertBefore(dd, ref); }
     else if (after && after.dataset.from === m.from) el.classList.add("cont");
+    if (after && dayOf(m.ts) === prevDay && Date.parse(m.ts) - Date.parse(after.dataset.ts) > 9e5) el.classList.add("gap");   // a quarter of an hour of quiet: the time goes in the margin
     log.insertBefore(el, ref);
     keepTyping(); if (stick) toBottom();
   }
@@ -832,7 +835,7 @@
     text.addEventListener("blur", function () { [80, 350].forEach(function (d) { setTimeout(apply, d); }); });
   })();
 
-  if (window.NyxSplash) NyxSplash(root.dataset.side, root.dataset.side, C.splash);
+  if (window.NyxSplash && homeKind() !== "eye") NyxSplash(root.dataset.side, root.dataset.side, C.splash);
   var saved = null; try { saved = localStorage.getItem("nyx_key"); } catch (e) {}
   if (saved) enter(saved).catch(function (e) { if (e.auth) logout(); else { $("gate").hidden = true; $("room").hidden = false; $("aiName").textContent = AI; setState(false, "reconnecting…"); setTimeout(function () { enter(saved).catch(function () {}); }, 3000); } });
   else $("gate").hidden = false;

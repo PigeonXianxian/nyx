@@ -5,16 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <link rel="apple-touch-icon" href="icon-180.png"><link rel="icon" href="icon-192.png"><link rel="manifest" href="manifest.webmanifest">   <!-- the night tree -->
 
-<meta name="theme-color" content="#ECE8E1">
+<meta name="theme-color" content="#ECE9E2">
 <title>Nyx</title>
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/400.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/500.min.css" rel="stylesheet">
 <link href="fonts/source-serif-4.css" rel="stylesheet">
+<link href="fonts/cormorant.css" rel="stylesheet">
 <script>
   /* pick the side before first paint so nothing flashes */
   try { document.documentElement.dataset.side = localStorage.getItem("nyx_side") === "moon" ? "moon" : "sun"; } catch (e) { document.documentElement.dataset.side = "sun"; }
 </script>
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="eye/ink.css">
+<link rel="stylesheet" href="eye/eye.css">
 </head>
 <body>
 <div id="paper" aria-hidden="true"></div>
@@ -43,17 +46,20 @@
   <div class="scroller"><div id="poster"></div></div>
 </section>
 
-<aside id="drawer" aria-hidden="true"><div class="sh"></div><nav class="pn"><div class="hd"><i></i><span id="drawerTitle"></span></div><div id="drawerList"></div><div class="homes" id="homes"><span>home</span><button type="button" data-h="ink">Ink</button><button type="button" data-h="tree">Tree</button></div></nav></aside>
+<aside id="drawer" aria-hidden="true"><div class="sh"></div><nav class="pn"><div class="hd"><i></i><span id="drawerTitle"></span></div><div id="drawerList"></div><p class="credit">构成 · visual design after <a href="https://github.com/StarFold146/nyx" target="_blank" rel="noopener">396 / StarFold146</a><br>built on Nyx · CC BY-NC 4.0</p><div class="homes" id="homes"><span>home</span><button type="button" data-h="eye">Eye</button><button type="button" data-h="ink">Ink</button><button type="button" data-h="tree">Tree</button></div></nav></aside>
 
 <section id="room" hidden>
   <header class="top">
-    <button class="back" id="back" type="button" aria-label="Home"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-    <div class="who">
+    <button class="flip" id="flip" type="button" aria-label="Flip day / night"><span></span></button>
+    <button class="back" id="back" type="button" aria-label="Home"><svg viewBox="-1.29 -1.32 2.02 1.71"><path d="M0.690 0.148L0.655 0.186L0.610 0.208L0.559 0.216L0.506 0.216L0.453 0.219L0.403 0.227L0.352 0.232L0.301 0.241L0.262 0.272L0.211 0.279L0.161 0.286L0.111 0.300L0.059 0.305L0.007 0.310L-0.044 0.310L-0.097 0.307L-0.149 0.303L-0.200 0.294L-0.251 0.282L-0.302 0.275L-0.355 0.268L-0.399 0.242L-0.448 0.228L-0.498 0.211L-0.548 0.205L-0.599 0.211L-0.649 0.225L-0.700 0.234L-0.750 0.242L-0.800 0.253L-0.850 0.264L-0.900 0.276L-0.951 0.284L-1.000 0.297L-1.051 0.311L-1.101 0.320L-1.153 0.323L-1.199 0.344L-1.250 0.352L-1.241 0.331L-1.194 0.317L-1.155 0.284L-1.109 0.261L-1.059 0.242L-1.011 0.224L-0.961 0.211L-0.912 0.196L-0.865 0.175L-0.866 0.151L-0.917 0.151L-0.970 0.148L-1.022 0.146L-1.075 0.148L-1.125 0.148L-1.178 0.148L-1.226 0.139L-1.188 0.118L-1.137 0.112L-1.084 0.112L-1.036 0.093L-0.987 0.081L-0.936 0.076L-0.885 0.068L-0.833 0.063L-0.780 0.060L-0.729 0.054L-0.678 0.044L-0.625 0.042L-0.574 0.035L-0.524 0.029L-0.473 0.018L-0.422 0.008L-0.372 -0.006L-0.321 -0.018L-0.321 -0.055L-0.374 -0.057L-0.425 -0.062L-0.466 -0.087L-0.460 -0.139L-0.451 -0.190L-0.443 -0.241L-0.435 -0.289L-0.435 -0.343L-0.442 -0.393L-0.451 -0.443L-0.456 -0.495L-0.468 -0.544L-0.494 -0.588L-0.515 -0.636L-0.541 -0.682L-0.569 -0.725L-0.592 -0.772L-0.623 -0.816L-0.650 -0.860L-0.681 -0.901L-0.709 -0.944L-0.746 -0.981L-0.780 -1.020L-0.813 -1.061L-0.851 -1.096L-0.882 -1.138L-0.922 -1.169L-0.957 -1.206L-0.993 -1.243L-1.031 -1.279L-1.003 -1.280L-0.961 -1.255L-0.911 -1.239L-0.864 -1.216L-0.821 -1.185L-0.777 -1.154L-0.736 -1.121L-0.691 -1.094L-0.646 -1.066L-0.602 -1.036L-0.559 -1.005L-0.517 -0.973L-0.477 -0.941L-0.435 -0.909L-0.392 -0.879L-0.353 -0.843L-0.316 -0.808L-0.275 -0.777L-0.239 -0.741L-0.200 -0.707L-0.164 -0.668L-0.125 -0.632L-0.090 -0.593L-0.051 -0.558L-0.023 -0.515L0.015 -0.477L0.046 -0.436L0.080 -0.397L0.110 -0.353L0.141 -0.310L0.179 -0.277L0.210 -0.236L0.252 -0.206L0.282 -0.164L0.309 -0.120L0.338 -0.076L0.359 -0.029L0.406 -0.016L0.458 -0.018L0.510 -0.018L0.557 -0.001L0.602 0.027L0.630 0.070L0.656 0.112Z"/></svg></button>
+  </header>
+  <div class="who">
+    <svg class="who-eye" viewBox="0 0 44 24" aria-hidden="true"><path d="M2 12C10 3.5 34 3.5 42 12C34 20.5 10 20.5 2 12Z"/><circle class="iris" cx="22" cy="12" r="6.6"/><circle class="pupil" cx="22" cy="12" r="2.4"/></svg>
+    <div class="who-in">
       <b id="aiName"></b>
       <span id="state"><i></i><em>offline</em></span>
     </div>
-    <button class="flip" id="flip" type="button" aria-label="Flip day / night"><span></span></button>
-  </header>
+  </div>
 
   <main id="log" aria-live="polite"></main>
 
@@ -104,20 +110,30 @@
       <button class="clip" id="clip" type="button" aria-label="Attach"><svg viewBox="0 0 24 24"><path d="M20 11.5l-8.2 8.2a4.8 4.8 0 0 1-6.8-6.8l8.6-8.6a3.2 3.2 0 0 1 4.5 4.5l-8.5 8.5a1.6 1.6 0 0 1-2.3-2.3l7.8-7.8"/></svg></button>
       <input type="file" id="file" multiple hidden>
       <button class="clip" id="emo" type="button" aria-label="Emoji and stickers"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.6 14.2a4 4 0 0 0 6.8 0"/><path d="M9.5 9.8h.01M14.5 9.8h.01"/></svg></button>
-      <textarea id="text" rows="1" placeholder="Write a letter…" enterkeyhint="send"></textarea>
-      <button class="drop" id="send" type="button" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 18V6M7 11l5-5 5 5"/></svg></button>
+      <textarea id="text" rows="1" placeholder="写一句" enterkeyhint="send"></textarea>
+      <button class="drop" id="send" type="button" aria-label="Send"><svg viewBox="-1.29 -1.32 2.02 1.71"><path d="M0.690 0.148L0.655 0.186L0.610 0.208L0.559 0.216L0.506 0.216L0.453 0.219L0.403 0.227L0.352 0.232L0.301 0.241L0.262 0.272L0.211 0.279L0.161 0.286L0.111 0.300L0.059 0.305L0.007 0.310L-0.044 0.310L-0.097 0.307L-0.149 0.303L-0.200 0.294L-0.251 0.282L-0.302 0.275L-0.355 0.268L-0.399 0.242L-0.448 0.228L-0.498 0.211L-0.548 0.205L-0.599 0.211L-0.649 0.225L-0.700 0.234L-0.750 0.242L-0.800 0.253L-0.850 0.264L-0.900 0.276L-0.951 0.284L-1.000 0.297L-1.051 0.311L-1.101 0.320L-1.153 0.323L-1.199 0.344L-1.250 0.352L-1.241 0.331L-1.194 0.317L-1.155 0.284L-1.109 0.261L-1.059 0.242L-1.011 0.224L-0.961 0.211L-0.912 0.196L-0.865 0.175L-0.866 0.151L-0.917 0.151L-0.970 0.148L-1.022 0.146L-1.075 0.148L-1.125 0.148L-1.178 0.148L-1.226 0.139L-1.188 0.118L-1.137 0.112L-1.084 0.112L-1.036 0.093L-0.987 0.081L-0.936 0.076L-0.885 0.068L-0.833 0.063L-0.780 0.060L-0.729 0.054L-0.678 0.044L-0.625 0.042L-0.574 0.035L-0.524 0.029L-0.473 0.018L-0.422 0.008L-0.372 -0.006L-0.321 -0.018L-0.321 -0.055L-0.374 -0.057L-0.425 -0.062L-0.466 -0.087L-0.460 -0.139L-0.451 -0.190L-0.443 -0.241L-0.435 -0.289L-0.435 -0.343L-0.442 -0.393L-0.451 -0.443L-0.456 -0.495L-0.468 -0.544L-0.494 -0.588L-0.515 -0.636L-0.541 -0.682L-0.569 -0.725L-0.592 -0.772L-0.623 -0.816L-0.650 -0.860L-0.681 -0.901L-0.709 -0.944L-0.746 -0.981L-0.780 -1.020L-0.813 -1.061L-0.851 -1.096L-0.882 -1.138L-0.922 -1.169L-0.957 -1.206L-0.993 -1.243L-1.031 -1.279L-1.003 -1.280L-0.961 -1.255L-0.911 -1.239L-0.864 -1.216L-0.821 -1.185L-0.777 -1.154L-0.736 -1.121L-0.691 -1.094L-0.646 -1.066L-0.602 -1.036L-0.559 -1.005L-0.517 -0.973L-0.477 -0.941L-0.435 -0.909L-0.392 -0.879L-0.353 -0.843L-0.316 -0.808L-0.275 -0.777L-0.239 -0.741L-0.200 -0.707L-0.164 -0.668L-0.125 -0.632L-0.090 -0.593L-0.051 -0.558L-0.023 -0.515L0.015 -0.477L0.046 -0.436L0.080 -0.397L0.110 -0.353L0.141 -0.310L0.179 -0.277L0.210 -0.236L0.252 -0.206L0.282 -0.164L0.309 -0.120L0.338 -0.076L0.359 -0.029L0.406 -0.016L0.458 -0.018L0.510 -0.018L0.557 -0.001L0.602 0.027L0.630 0.070L0.656 0.112Z"/></svg></button>
     </div>
   </footer>
 </section>
 
 <script src="config.js"></script>
 <script src="paper.js"></script>
-<script src="splash.js"></script>
 <script src="home.js"></script>
 <script src="water.js"></script>
 <script src="tree.js"></script>
 <script src="hold.js"></script>
+<script src="eye/rough.js"></script>
+<script src="eye/core.js"></script>
+<script src="eye/birds.js"></script>
+<script src="eye/sketch.js"></script>
+<script src="eye/orrery.js"></script>
+<script src="eye/plate.js"></script>
+<script src="eye/day.js"></script>
+<script src="eye/stair.js"></script>
+<script src="eye/stair2.js"></script>
+<script src="eye/moons.js"></script>
+<script src="eye/night.js"></script>
+<script src="eye/home.js"></script>
 <script src="app.js"></script>
-<script src="thinkcrab.js"></script>
 </body>
 </html>

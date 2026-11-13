@@ -1,16 +1,16 @@
 /* Nyx — one paper, two sides. Day: grey-white paper, ink. Night: black paper, rust. */
 :root{
-  --paper:#ECE8E1; --ink:#221E1C; --soft:#6B625C; --faint:#A39A92;
-  --hair:rgba(34,30,28,.16); --river:rgba(34,30,28,.5);
-  --me:#F7F2E8; --me-ink:#3A2A22; --drop:#221E1C; --accent:#D97757;
+  --paper:#ECE9E2; --ink:#1B1B20; --soft:#6C6B68; --faint:#A39A92;
+  --hair:rgba(27,27,32,.16); --river:rgba(27,27,32,.5);
+  --me:#F7F2E8; --me-ink:#3A2A22; --drop:#1B1B20; --accent:var(--accent);
   --serif:"Source Serif 4", Georgia, "Noto Serif SC", "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
   --mono:ui-monospace, "SF Mono", Menlo, monospace;
   --pad:18px;
 }
 :root[data-side="moon"]{
-  --paper:#0C0A09; --ink:#E8C9B8; --soft:#BC9684; --faint:#7E6052;
-  --hair:rgba(235,198,178,.14); --river:#7A3420;
-  --me:#2A201C; --me-ink:#EBC6B2; --drop:#C9785A; --accent:#E8784A;
+  --paper:#17171B; --ink:#ECE9E2; --soft:#A9A7A1; --faint:#7E6052;
+  --hair:rgba(236,233,226,.14); --river:#7A3420;
+  --me:#2A201C; --me-ink:#EBC6B2; --drop:var(--accent); --accent:#E8784A;
 }
 *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html,body{ margin:0; height:100%; background:var(--paper); color:var(--ink); font-family:var(--serif); transition:background-color .8s, color .8s; }
@@ -46,7 +46,7 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 #state{ font-size:12px; font-style:italic; color:var(--faint); display:flex; align-items:center; gap:6px; }
 #state i{ width:5px; height:5px; border-radius:50%; background:currentColor; }
 #state.on{ color:var(--soft); } #state.on i{ background:var(--accent); }
-#state .spin{ display:inline-block; width:1.1em; text-align:center; font-style:normal; font-weight:400; color:#FF7A2E; text-shadow:0 0 6px rgba(255,122,46,.45); margin-right:3px; }
+#state .spin{ display:inline-block; width:1.1em; text-align:center; font-style:normal; font-weight:400; color:var(--accent); text-shadow:0 0 6px rgba(41,51,196,.45); margin-right:3px; }
 .flip{ width:40px; height:40px; border-radius:50%; border:1px solid var(--hair); display:grid; place-items:center; }
 .flip span{ width:14px; height:14px; border-radius:50%; background:var(--ink); transition:box-shadow .6s, background .6s; }
 :root[data-side="moon"] .flip span{ background:transparent; box-shadow:inset -5px -1px 0 0 var(--ink); }
@@ -121,7 +121,7 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 
 /* ── home poster ── */
 :root{ --hi:rgba(255,255,255,.9); }
-:root[data-side="moon"]{ --hi:rgba(235,198,178,.92); }
+:root[data-side="moon"]{ --hi:rgba(236,233,226,.92); }
 #home{ position:fixed; inset:0; z-index:1; display:flex; flex-direction:column; }
 .hbar{ position:absolute; left:0; right:0; top:0; z-index:3; display:flex; align-items:center; justify-content:space-between; padding:calc(env(safe-area-inset-top) + 12px) var(--pad) 0; pointer-events:none; }
 .hbar > *{ pointer-events:auto; }
@@ -159,10 +159,10 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 #drawer .hd{ display:flex; align-items:center; gap:10px; padding:0 8px 18px; font-size:22px; }
 #drawer .hd i{ width:10px; height:10px; border-radius:50%; background:var(--accent); }
 #drawerList .ctr{ display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:11px 10px; font-size:16px; border-radius:12px; }
-#drawerList .ctr:active{ background:rgba(215,128,94,.12); }
+#drawerList .ctr:active{ background:rgba(41,51,196,.12); }
 #drawerList .ctr svg{ width:20px; height:20px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
-:root[data-side="moon"] #drawerList .ctr svg{ color:#D97757; }
-#drawerList .gp{ padding:16px 10px 6px; font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:#A4492A; }
+:root[data-side="moon"] #drawerList .ctr svg{ color:var(--accent); }
+#drawerList .gp{ padding:16px 10px 6px; font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent); }
 :root[data-side="moon"] #drawerList .gp{ color:#B9705A; }
 #drawerList small{ margin-left:8px; font-size:11px; color:var(--faint); letter-spacing:.06em; text-transform:none; font-weight:400; }
 #drawerList .gp small{ opacity:.8; }
@@ -216,11 +216,11 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .orb{ position:absolute; z-index:6; right:14px; bottom:96px; width:52px; height:52px; border-radius:50%; padding:0; border:0; cursor:pointer;
   background:radial-gradient(120% 120% at 30% 20%, rgba(255,255,255,.75), rgba(255,255,255,.18) 55%, rgba(255,255,255,.08));
   -webkit-backdrop-filter:blur(14px) saturate(1.3); backdrop-filter:blur(14px) saturate(1.3);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(255,255,255,.45), 0 10px 28px rgba(34,30,28,.14);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(255,255,255,.45), 0 10px 28px rgba(27,27,32,.14);
   color:var(--ink); touch-action:none; -webkit-tap-highlight-color:transparent; transition:transform .15s; }
 .orb:active{ transform:scale(.94); }
-:root[data-side="moon"] .orb{ background:radial-gradient(120% 120% at 30% 20%, rgba(235,198,178,.22), rgba(20,15,13,.45) 60%, rgba(12,10,9,.6));
-  box-shadow:inset 0 1px 0 rgba(235,198,178,.35), inset 0 0 0 1px rgba(235,198,178,.16), 0 10px 28px rgba(0,0,0,.45); }
+:root[data-side="moon"] .orb{ background:radial-gradient(120% 120% at 30% 20%, rgba(236,233,226,.22), rgba(23,23,27,.45) 60%, rgba(12,10,9,.6));
+  box-shadow:inset 0 1px 0 rgba(236,233,226,.35), inset 0 0 0 1px rgba(236,233,226,.16), 0 10px 28px rgba(0,0,0,.45); }
 .orb svg{ position:absolute; inset:6px; width:40px; height:40px; transform:rotate(-90deg); fill:none; }
 .orb circle{ stroke-width:1.6; stroke-linecap:round; }
 .orb .tk{ stroke:currentColor; opacity:.14; }
@@ -229,15 +229,15 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .orb b{ position:absolute; inset:0; display:grid; place-items:center; font:italic 600 12px/1 var(--serif); letter-spacing:-.02em; }
 .orb.hot{ color:var(--accent); }
 
-.meter{ position:absolute; inset:0; z-index:7; display:flex; align-items:flex-end; justify-content:center; background:rgba(34,30,28,.08); }
+.meter{ position:absolute; inset:0; z-index:7; display:flex; align-items:flex-end; justify-content:center; background:rgba(27,27,32,.08); }
 :root[data-side="moon"] .meter{ background:rgba(0,0,0,.35); }
 .meter .sheet{ width:min(100% - 24px, 440px); margin-bottom:calc(env(safe-area-inset-bottom) + 12px); padding:20px 22px 18px; border-radius:26px; box-sizing:border-box;
   background:linear-gradient(160deg, rgba(255,255,255,.78), rgba(255,255,255,.42)); color:var(--ink);
   -webkit-backdrop-filter:blur(26px) saturate(1.35); backdrop-filter:blur(26px) saturate(1.35);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(255,255,255,.5), 0 24px 60px rgba(34,30,28,.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(255,255,255,.5), 0 24px 60px rgba(27,27,32,.18);
   animation:meterUp .32s cubic-bezier(.2,.8,.2,1); }
-:root[data-side="moon"] .meter .sheet{ background:linear-gradient(160deg, rgba(42,32,28,.82), rgba(16,12,10,.7));
-  box-shadow:inset 0 1px 0 rgba(235,198,178,.25), inset 0 0 0 1px rgba(235,198,178,.12), 0 24px 60px rgba(0,0,0,.55); }
+:root[data-side="moon"] .meter .sheet{ background:linear-gradient(160deg, rgba(32,32,37,.82), rgba(23,23,27,.7));
+  box-shadow:inset 0 1px 0 rgba(236,233,226,.25), inset 0 0 0 1px rgba(236,233,226,.12), 0 24px 60px rgba(0,0,0,.55); }
 @keyframes meterUp{ from{ transform:translateY(24px); opacity:0; } to{ transform:none; opacity:1; } }
 .meter .mh{ display:flex; align-items:baseline; gap:10px; font:italic 400 22px/1.2 var(--serif); }
 .meter .mh em{ font-size:13px; color:var(--soft); letter-spacing:.12em; text-transform:uppercase; font-style:normal; }
@@ -271,10 +271,10 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .tree .tag{ position:absolute; left:0; top:0; width:0; height:0; padding:0; border:0; background:none; color:var(--ink); cursor:pointer; }
 .tree .tag i{ position:absolute; left:-11px; top:-11px; width:22px; height:22px; border-radius:50%;
   background:rgba(255,255,255,.55); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-  box-shadow:inset 0 0 0 .6px rgba(31,26,22,.55), inset 0 1px 0 rgba(255,255,255,.9); transition:box-shadow .3s, background .3s; }
+  box-shadow:inset 0 0 0 .6px rgba(27,27,32,.55), inset 0 1px 0 rgba(255,255,255,.9); transition:box-shadow .3s, background .3s; }
 .tree .tag i::after{ content:""; position:absolute; left:50%; top:50%; width:4.6px; height:4.6px; margin:-2.3px 0 0 -2.3px; border-radius:50%; background:#B8613A; }
 :root[data-side="moon"] .tree .tag i{ background:rgba(255,255,255,.08); box-shadow:inset 0 0 0 .6px rgba(217,207,194,.6), inset 0 1px 0 rgba(255,255,255,.18); }
-.tree .tag.hit i{ background:rgba(255,255,255,.85); box-shadow:inset 0 0 0 .6px rgba(31,26,22,.4), 0 0 0 7px rgba(255,255,255,.28); }
+.tree .tag.hit i{ background:rgba(255,255,255,.85); box-shadow:inset 0 0 0 .6px rgba(27,27,32,.4), 0 0 0 7px rgba(255,255,255,.28); }
 .tree .tag span{ position:absolute; left:17px; top:-10px; white-space:nowrap; text-align:left; font:400 13px/1.15 var(--serif); opacity:.88; }
 .tree .tag.l span{ left:auto; right:17px; text-align:right; }
 .tree .tag small{ display:block; font-size:10.5px; letter-spacing:.08em; opacity:.7; margin-top:2px; }
@@ -287,10 +287,10 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 /* the fan beside the ball: gauge, board, heart */
 .fan{ position:absolute; z-index:6; display:flex; gap:8px; pointer-events:none; }
 .fan button{ width:46px; height:46px; border-radius:50%; border:0; padding:0; position:relative; display:grid; place-items:center; color:var(--ink); cursor:pointer;
-  background:radial-gradient(120% 120% at 30% 20%, rgba(255,255,255,.75), rgba(246,242,235,.55) 60%, rgba(236,232,225,.5)); box-shadow:0 6px 18px rgba(60,40,30,.12), inset 0 0 0 .6px var(--hair);
+  background:radial-gradient(120% 120% at 30% 20%, rgba(255,255,255,.75), rgba(246,242,235,.55) 60%, rgba(236,233,226,.5)); box-shadow:0 6px 18px rgba(60,40,30,.12), inset 0 0 0 .6px var(--hair);
   -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); opacity:0; transform:translateX(24px) scale(.6); transition:opacity .22s, transform .32s cubic-bezier(.3,1.4,.5,1); }
 .fan button[hidden]{ display:none; }
-:root[data-side="moon"] .fan button{ background:radial-gradient(120% 120% at 30% 20%, rgba(235,198,178,.22), rgba(20,15,13,.55) 60%, rgba(12,10,9,.7)); }
+:root[data-side="moon"] .fan button{ background:radial-gradient(120% 120% at 30% 20%, rgba(236,233,226,.22), rgba(23,23,27,.55) 60%, rgba(12,10,9,.7)); }
 .fan button svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
 .fan button span{ position:absolute; top:100%; margin-top:4px; font:italic 11px/1 var(--serif); color:var(--soft); white-space:nowrap; }
 .fan.open{ pointer-events:auto; }
@@ -298,12 +298,12 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .fan.open button:nth-child(2){ transition-delay:.04s; } .fan.open button:nth-child(1){ transition-delay:.08s; }
 
 /* the hold's sheets: board, heart, a folder — the same glass as the gauge */
-.hold{ position:fixed; inset:0; z-index:40; display:flex; align-items:flex-end; justify-content:center; background:rgba(34,30,28,.12); }
+.hold{ position:fixed; inset:0; z-index:40; display:flex; align-items:flex-end; justify-content:center; background:rgba(27,27,32,.12); }
 .hold[hidden]{ display:none; }
 :root[data-side="moon"] .hold{ background:rgba(0,0,0,.4); }
 .hold .sheet{ width:min(100% - 24px, 460px); max-height:min(82vh, 760px); display:flex; flex-direction:column; margin-bottom:calc(env(safe-area-inset-bottom) + 12px); border-radius:26px; box-sizing:border-box;
   background:linear-gradient(160deg, rgba(252,249,244,.94), rgba(242,236,228,.9)); box-shadow:0 18px 50px rgba(40,25,18,.22), inset 0 1px 0 rgba(255,255,255,.9); -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); }
-:root[data-side="moon"] .hold .sheet{ background:linear-gradient(160deg, rgba(42,32,28,.96), rgba(16,12,10,.94)); box-shadow:0 18px 50px rgba(0,0,0,.5), inset 0 1px 0 rgba(235,198,178,.08); }
+:root[data-side="moon"] .hold .sheet{ background:linear-gradient(160deg, rgba(32,32,37,.96), rgba(23,23,27,.94)); box-shadow:0 18px 50px rgba(0,0,0,.5), inset 0 1px 0 rgba(236,233,226,.08); }
 .hold .hh{ display:flex; align-items:baseline; justify-content:space-between; padding:18px 22px 10px; }
 .hold .hh b{ font:italic 400 22px/1.2 var(--serif); }
 .hold .hh small{ font-style:normal; font-size:12px; letter-spacing:.12em; color:var(--soft); margin-left:6px; }
@@ -343,7 +343,7 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .hold .view.md{ font:14.5px/1.75 var(--serif); }
 /* a folder: a table of contents on paper, not a grid of icons. One ink river down the left with the numerals strung on it, like the home page */
 .hold.fold .sheet{ background:var(--paper); -webkit-backdrop-filter:none; backdrop-filter:none; }
-:root[data-side="moon"] .hold.fold .sheet{ background:#17120F; }
+:root[data-side="moon"] .hold.fold .sheet{ background:#17171B; }
 .hold.fold .hh{ justify-content:flex-start; gap:12px; padding:24px 26px 6px; }
 .hold.fold .hh b{ flex:1; display:flex; align-items:baseline; font:600 28px/1.2 var(--serif); font-style:normal; letter-spacing:.1em; }
 .hold.fold .hh b small{ font:italic 400 19px var(--serif); letter-spacing:0; margin-left:10px; }
@@ -353,7 +353,7 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .hold .toc::before{ content:""; position:absolute; left:25px; top:24px; bottom:30px; width:2px; border-radius:2px; background:var(--river); -webkit-mask:linear-gradient(180deg, #000 0 70%, transparent); mask:linear-gradient(180deg, #000 0 70%, transparent); }
 .hold .toc .it{ display:flex; align-items:flex-start; gap:18px; width:100%; border:0; background:none; color:var(--ink); text-align:left; padding:14px 0; cursor:pointer; font-family:var(--serif); }
 .hold .toc .n{ position:relative; z-index:1; flex:none; width:36px; text-align:center; font:italic 18px/1.5 var(--serif); color:var(--soft); background:var(--paper); }
-:root[data-side="moon"] .hold .toc .n{ background:#17120F; }
+:root[data-side="moon"] .hold .toc .n{ background:#17171B; }
 .hold .toc .it.cur .n{ color:var(--accent); }
 .hold .toc .tx{ display:flex; flex-direction:column; min-width:0; }
 .hold .toc b{ font-size:20px; font-weight:500; letter-spacing:.06em; }
