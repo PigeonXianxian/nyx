@@ -134,6 +134,8 @@ Description=Nyx relay$SFX
 After=network.target
 
 [Service]
+# the Claude Code window the relay starts (tmux) must outlive a restart of the relay: stop only the relay itself
+KillMode=process
 User=$USER
 WorkingDirectory=$DIR/relay
 EnvironmentFile=$DIR/relay/relay.env
