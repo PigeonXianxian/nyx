@@ -256,3 +256,9 @@
 .sess .sa .fl button{ padding:4px 0; color:var(--soft); font:italic 14px var(--latin); }
 .sess .sa .fl button.on{ color:var(--ink); text-decoration:underline 1px var(--blue); text-underline-offset:5px; }
 .sess .sa .fl button.add{ color:var(--blue); }
+/* dragging a session: the whole group it would go into lights, heading and sessions together */
+.sess .gbox{ position:relative; transition:background-color .15s; }
+.sess .gbox.drop{ background:color-mix(in srgb, var(--blue) 7%, transparent); box-shadow:inset 2px 0 0 var(--blue); }
+.sess .gbox.drop > .gh::after{ background:var(--blue); } .sess .gbox.drop > .gh .gn{ color:var(--blue); }
+.msg.opening .nt{ animation:openingBreath 1.6s ease-in-out infinite; }
+@keyframes openingBreath{ 50%{ opacity:.45; } }

@@ -228,6 +228,15 @@
       carryOn(view, viewInfo.elsewhere);
     };
   }
+  /* a new window is on its way (Sessions, the gauge): say so in the letter, and follow the window to its new session */
+  function opening(where) {
+    carrying = true; closeMeter(); toast("Opening a new window" + (where || "") + "…");
+    var old = log.querySelector(".msg.opening"); if (old) old.remove();
+    var n = build({ id: "", from: "ai", kind: "term", text: "opening a new window" + (where || "") + "…", ts: new Date().toISOString(), meta: { note: true } });
+    n.classList.add("opening"); log.appendChild(n); toBottom();
+  }
+  function openingDone() { var n = log.querySelector(".msg.opening"); if (n) n.remove(); }
+  function openingFailed(msg) { carrying = false; openingDone(); toast(msg); }
   function carryOn(sid, elsewhere) {   // the window closes its session and opens this one (--resume); the page follows it
     var away = elsewhere ? (elsewhere === "vscode" ? "open in VS Code right now" : "open in another Claude Code right now") : "";
     ask.confirm("Carry this session on here?", { body: (away ? "It is " + away + "; two windows on one session don't see each other's new turns. " : "") + "The window in use now closes; it stays in Sessions.", ok: "carry it on" }).then(function (yes) {
@@ -729,7 +738,7 @@
   function verifyWin(before, label) {
     var start = Date.now(), last = "", lastAt = 0;
     winCheck = true; winResult = null; $("mWinNote").textContent = "Checking the window really changed…";
-    function finish(text, same) { winCheck = false; winResult = { text: text, same: same, at: Date.now() }; loadWin(); loadMeter(); paintWin(); toast(text); }
+    function finish(text, same) { winCheck = false; winResult = { text: text, same: same, at: Date.now() }; openingDone(); loadWin(); loadMeter(); paintWin(); toast(text); }
     (function tick() {
       api("/app/window").then(function (d) { return d; }, function () { return null; }).then(function (d) {
         if (d && d.sid) { last = d.sid; lastAt = d.started_at; }
@@ -762,12 +771,13 @@
     ask.confirm(q, { body: body, ok: "open it" }).then(function (yes) { if (yes) newWinGo(); });
   }
   function newWinGo() {
+    opening("");
     winCheck = true; winResult = null; $("mWinNote").textContent = "…";
     api("/app/window").then(function (d) { return d.sid || ""; }, function () { return winRaw; }).then(function (before) {
       return api("/app/window/new", { method: "POST" }).then(function () { verifyWin(before, "New window open."); }, function (e) {
         if (/500/.test(e.message)) return verifyWin(before, "The first start failed, but a window is back up.");
         if (/50[24]|fetch|network|abort|timeout/i.test(e.message)) return verifyWin(before, "New window open.");
-        winCheck = false; winResult = { text: /409/.test(e.message) ? "It's busy restarting already, so nothing changed." : "Didn't work: " + e.message + ". Still the old window.", same: false, at: Date.now() }; paintWin();
+        winCheck = false; winResult = { text: /409/.test(e.message) ? "It's busy restarting already, so nothing changed." : "Didn't work: " + e.message + ". Still the old window.", same: false, at: Date.now() }; paintWin(); openingFailed(winResult.text);
       });
     });
   }
@@ -907,6 +917,7 @@
       if (!cc && window.NyxCC && !GROUP) cc = NyxCC({ api: api, text: text, grow: grow, send: send, put: put, toast: toast, openMeter: openMeter, reload: function () { loadMeter(); loadWin(); },
         name: function () { return AI; }, used: function () { return win && win.used; }, ghost: ghost, fail: failGhost, local: localCard, verify: verifyWin,
         ccmode: function () { return CCMODE; }, view: function (sid) { openView(sid); }, carry: carryOn, viewing: function () { return view; },
+        opening: opening, openingFailed: openingFailed,
         newWin: function () { $("mNew").onclick(); }, carryNote: carryNote, compact: function () {
           api("/app/window/compact", { method: "POST" }).then(function (r) { toast(r && r.started === false ? "Sent; it hasn't visibly started" : "Compacting — give it a minute"); setTimeout(loadWin, 30000); },
             function (e) { toast(/409/.test(e.message) ? "Busy — compact once it has finished" : "Didn't compact: " + e.message); }); } });

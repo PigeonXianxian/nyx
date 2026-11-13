@@ -392,12 +392,13 @@
       var live = ws.filter(function (w) { return !w.archived; }), arch = ws.filter(function (w) { return w.archived; }), h = "", gs = data.groups || [];
       gs.forEach(function (g) {
         var in_ = live.filter(function (w) { return w.group === g.id; });
-        h += '<div class="gh' + (g.fold ? " fold" : "") + '" data-g="' + esc(g.id) + '"><button type="button" data-a="fold" class="gn"><i></i>' + esc(g.name) + "<small>" + in_.length + "</small></button>" +
+        h += '<div class="gbox" data-g="' + esc(g.id) + '"><div class="gh' + (g.fold ? " fold" : "") + '" data-g="' + esc(g.id) + '"><button type="button" data-a="fold" class="gn"><i></i>' + esc(g.name) + "<small>" + in_.length + "</small></button>" +
           '<span class="ga"><button type="button" data-a="gnewin" title="A new window in this group">+ window</button><button type="button" data-a="gren">rename</button><button type="button" data-a="gdel">delete</button></span></div>';
         if (!g.fold) h += in_.length ? in_.map(rowHTML).join("") : '<p class="none sm">' + (fine ? "Drag a session here, or file it from its ⋯." : "File a session here from its ⋯.") + "</p>";
+        h += "</div>";
       });
       var loose = live.filter(function (w) { return !w.group; });
-      if (loose.length || !gs.length) h += (gs.length ? '<div class="gh loose" data-g=""><span class="gn"><i></i>ungrouped<small>' + loose.length + "</small></span></div>" : "") + (loose.length ? loose.map(rowHTML).join("") : '<p class="none">No sessions yet.</p>');
+      if (loose.length || !gs.length) h += '<div class="gbox" data-g="">' + (gs.length ? '<div class="gh loose" data-g=""><span class="gn"><i></i>ungrouped<small>' + loose.length + "</small></span></div>" : "") + (loose.length ? loose.map(rowHTML).join("") : '<p class="none">No sessions yet.</p>') + "</div>";
       if (arch.length) h += '<div class="gh arch' + (showArch ? "" : " fold") + '"><button type="button" data-a="showarch" class="gn"><i></i>archived<small>' + arch.length + "</small></button></div>" + (showArch ? arch.map(rowHTML).join("") : "");
       if (data.chat === "cc") h += '<p class="none sm foot">The same sessions as Claude Code in this folder, VS Code’s included. One session is best open in one place at a time.</p>';
       S.querySelector(".sb").innerHTML = h;
@@ -437,24 +438,32 @@
       }
       else if (a === "new" || a === "gnewin") newIn(a === "gnewin" ? g : null);
     }
-    // with a mouse: drag a session onto a group's heading (or "ungrouped") to file it there
+    // with a mouse: drag a session onto a group — its heading, one of its sessions, anywhere in it — to file it there
     var dragSid = null;
     function wireDrag() {
       S.addEventListener("dragstart", function (e) { var r = e.target.closest && e.target.closest(".srow[draggable]"); if (!r) return; dragSid = r.dataset.sid; r.classList.add("dragging"); try { e.dataTransfer.setData("text/plain", dragSid); e.dataTransfer.effectAllowed = "move"; } catch (x) {} });
-      S.addEventListener("dragend", function () { dragSid = null; S.querySelectorAll(".dragging, .gh.drop").forEach(function (n) { n.classList.remove("dragging", "drop"); }); });
-      S.addEventListener("dragover", function (e) { var h = dragSid && e.target.closest && e.target.closest(".gh[data-g]"); if (!h) return; e.preventDefault(); S.querySelectorAll(".gh.drop").forEach(function (n) { if (n !== h) n.classList.remove("drop"); }); h.classList.add("drop"); });
-      S.addEventListener("dragleave", function (e) { var h = e.target.closest && e.target.closest(".gh.drop"); if (h && !h.contains(e.relatedTarget)) h.classList.remove("drop"); });
-      S.addEventListener("drop", function (e) { var h = dragSid && e.target.closest && e.target.closest(".gh[data-g]"); if (!h) return; e.preventDefault(); var sid = dragSid, w = find_(sid); dragSid = null; if (w && (w.group || "") !== h.dataset.g) setMeta(sid, { group: h.dataset.g || null }); });
+      S.addEventListener("dragend", function () { dragSid = null; S.querySelectorAll(".dragging, .drop").forEach(function (n) { n.classList.remove("dragging", "drop"); }); });
+      function box(e) { return dragSid && e.target.closest ? e.target.closest(".gbox[data-g]") : null; }   // the group under the pointer: its heading, its sessions, its empty line
+      S.addEventListener("dragover", function (e) { var b = box(e); if (!b) return; e.preventDefault(); try { e.dataTransfer.dropEffect = "move"; } catch (x) {} S.querySelectorAll(".gbox.drop").forEach(function (n) { if (n !== b) n.classList.remove("drop"); }); b.classList.add("drop"); });
+      S.addEventListener("dragleave", function (e) { var b = e.target.closest && e.target.closest(".gbox.drop"); if (b && !b.contains(e.relatedTarget)) b.classList.remove("drop"); });
+      S.addEventListener("drop", function (e) { var b = box(e); if (!b) return; e.preventDefault(); b.classList.remove("drop"); var sid = dragSid, w = find_(sid); dragSid = null; if (w && (w.group || "") !== b.dataset.g) setMeta(sid, { group: b.dataset.g || null }); });
     }
     function newIn(g) {
       ask.confirm("Open a new window" + (g ? " in “" + g.name + "”" : "") + "?", { body: "The one in use closes; it stays in this list. " + o.carryNote(), ok: "open it" }).then(function (yes) {
         if (!yes) return;
-        note("Opening a new window…");
-        o.api("/app/window").then(function (d) { return d.sid || ""; }, function () { return ""; }).then(function (before) {
-          return post("/app/cc/sessions/new", g ? { group: g.id } : {}).then(function () { note("New window open."); load(); o.verify(before, "New window open."); });
-        }).catch(function (e) { note(/50[024]|fetch|network/i.test(String(e.message)) ? "Starting… check back in a minute." : "Didn’t open: " + why(e)); setTimeout(load, 8000); });
+        S.hidden = true;
+        var where = g ? " in “" + g.name + "”" : "";
+        o.opening(where);   // the letter says so, and follows the window to its new session when it's up
+        var before = null;
+        o.api("/app/window").then(function (d) { return d.sid || ""; }, function () { return ""; }).then(function (b0) {
+          before = b0; return post("/app/cc/sessions/new", g ? { group: g.id } : {});
+        }).then(function () { o.verify(before, "New window open" + where + "."); }, function (e) {
+          if (before !== null && /50[024]|fetch|network/i.test(String(e.message))) o.verify(before, "New window open" + where + ".");   // the proxy gave up waiting; the window may well be up
+          else o.openingFailed("Didn’t open: " + why(e));
+        });
       });
     }
+
 
     loadCmds();
     return { paint: paint, meter: meter, input: input, key: key, slash: slash, sessions: sessions, close: close, setModel: setModel };
