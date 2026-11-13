@@ -5,6 +5,7 @@
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/400.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/500.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5.2.5/400-italic.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5.2.5/500-italic.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/long-cang@5.2.5/400.css">
 <script src="../config.js"></script>   <!-- the companion's name (NYX.aiName); missing when the town runs on its own, then it is "Companion" -->
+<script src="../ask.js"></script>
 <style>
 /* The gallery as a small book lying open on kraft paper, held upright on a phone, spine across the middle:
    the upper page has the work, the lower page the companion's note; swipe up (or tap the lower half) and the lower page turns up to the next spread.
@@ -74,6 +75,7 @@ body{background:var(--kraft);background-image:url("data:image/svg+xml,%3Csvg xml
 <svg class="prop over clip" viewBox="0 0 22 56" fill="none" stroke="#8f9496" stroke-width="2" stroke-linecap="round"><path d="M6 44V10a5 5 0 0 1 10 0v38a7 7 0 0 1-14 0V16"/></svg>
 </div>
 <div class="pg" id="pg"></div>
+const ask = window.NyxAsk || { confirm: async (q) => confirm(q), prompt: async (q, o) => { const v = prompt(q, (o && o.value) || ''); return v == null ? null : v.trim(); } };   // the house's own questions (../ask.js); the browser's when the town runs on its own
 <script>
 (async () => {
   const AI = (window.NYX && NYX.aiName) || 'Companion', ME = (window.NYX && NYX.meName) || 'Me', SP = (s) => /[\u3400-\u9fff]/.test(s) ? [...s].join(' ') : s;   // space out Chinese names, leave Latin ones
@@ -124,7 +126,7 @@ body{background:var(--kraft);background-image:url("data:image/svg+xml,%3Csvg xml
   addEventListener('keydown', (e) => { if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ') flip(1); if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') flip(-1); });
   book.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-say]'); if (!b) return;
-    const id = b.dataset.say, text = (prompt('在纸条底下回一句') || '').trim(); if (!text) return;
+    const id = b.dataset.say, text = ((await ask.prompt('在纸条底下回一句', { ok: '贴上', cancel: '算了' })) || '').trim(); if (!text) return;
     const j = await api({ method: 'POST', body: JSON.stringify({ id, text: text.slice(0, 200) }) });
     if (j?.ok) { replies = j.replies; document.querySelectorAll(`[data-re="${CSS.escape(id)}"]`).forEach((box) => box.innerHTML = reHtml(id)); }
   });

@@ -5,6 +5,8 @@
 (function () {
   "use strict";
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  var ask = window.NyxAsk || { confirm: function (q, o) { return Promise.resolve(confirm(q + (o && o.body ? "\n\n" + o.body : ""))); },   // the house's own questions (ask.js)
+    prompt: function (q, o) { var v = prompt(q, (o && o.value) || ""); return Promise.resolve(v == null ? null : v.trim()); }, alert: function (q) { alert(q); return Promise.resolve(); } };
   function fmt(ts) { var d = new Date(ts); return (d.getMonth() + 1) + "/" + d.getDate() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
 
   window.NyxHold = function (api, names) {
@@ -57,19 +59,19 @@
           var act = e.target.closest("[data-act]");
           if (!act) { card.classList.toggle("open"); return; }
           var it = items.find(function (x) { return x.id === card.dataset.id; }); if (!it) return;
-          var body, a = act.dataset.act;
-          if (a === "wait") body = { wait: !it.wait, who: ME };
-          else if (a === "back") { var why = prompt("Send " + it.id + " back — what's wrong?", ""); if (why == null) return; body = { status: "todo", owner: "", who: ME, note: "sent back: " + (why || "no reason given") }; }
-          else if (a === "del") { if (!confirm("Delete " + it.id + "?")) return; body = { delete: true }; }
-          else if (a === "pri") body = { pri: { p0: "p1", p1: "p2", p2: "p0" }[it.pri], who: ME };
-          else body = Object.assign({ status: it.status === "todo" ? "doing" : it.status === "doing" ? "done" : "todo", who: ME }, it.status === "todo" ? { owner: ME } : {});
-          api("/app/board/" + it.id, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(function () {}).then(boardLoad);
+          var a = act.dataset.act;
+          function go(body) { api("/app/board/" + it.id, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(function () {}).then(boardLoad); }
+          if (a === "wait") go({ wait: !it.wait, who: ME });
+          else if (a === "back") ask.prompt("Send " + it.id + " back", { body: "What's wrong with it?", placeholder: "a line on why", ok: "send back" }).then(function (why) { if (why != null) go({ status: "todo", owner: "", who: ME, note: "sent back: " + (why || "no reason given") }); });
+          else if (a === "del") ask.confirm("Delete " + it.id + "?", { ok: "delete", danger: true }).then(function (yes) { if (yes) go({ delete: true }); });
+          else if (a === "pri") go({ pri: { p0: "p1", p1: "p2", p2: "p0" }[it.pri], who: ME });
+          else go(Object.assign({ status: it.status === "todo" ? "doing" : it.status === "doing" ? "done" : "todo", who: ME }, it.status === "todo" ? { owner: ME } : {}));
         });
         B.body.addEventListener("submit", function (e) {
           e.preventDefault(); var f = e.target, title = f.t.value.trim(); if (!title) return;
           api("/app/board", { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ title: title, body: f.b.value.trim(), pri: f.p.value, size: f.s.value, by: ME, wait: !!f.w.value }) })
-            .then(function () { tab = "todo"; boardLoad(); }).catch(function () { alert("Didn't go through. Try again?"); });
+            .then(function () { tab = "todo"; boardLoad(); }).catch(function () { ask.alert("Didn't go through", { body: "Try again?" }); });
         });
       }
       B.open(); boardPaint(); boardLoad();
@@ -136,10 +138,12 @@
         }).join("") : '<p class="none">No windows yet.</p>');
         Wn.body.onclick = function (e) {
           var b = e.target.closest("[data-i]"); if (!b) return; var w = ws[+b.dataset.i]; if (w.current) return;
-          if (!confirm("Go back to the window opened " + when(w.started) + "? The one in use closes; you can come back to it here too.")) return;
-          Wn.body.innerHTML = '<p class="none">Switching…</p>';
-          (names.chat || api)("/app/window/switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: w.sid }) })
-            .then(function () { Wn.close(); if (after) setTimeout(after, 2500); }).catch(function (e) { Wn.body.innerHTML = '<p class="none">Didn\u2019t switch: ' + esc(e.message) + "</p>"; });
+          ask.confirm("Go back to the window opened " + when(w.started) + "?", { body: "The one in use closes; you can come back to it here too.", ok: "go back" }).then(function (yes) {
+            if (!yes) return;
+            Wn.body.innerHTML = '<p class="none">Switching…</p>';
+            (names.chat || api)("/app/window/switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: w.sid }) })
+              .then(function () { Wn.close(); if (after) setTimeout(after, 2500); }).catch(function (e) { Wn.body.innerHTML = '<p class="none">Didn\u2019t switch: ' + esc(e.message) + "</p>"; });
+          });
         };
       }).catch(function () { Wn.body.innerHTML = '<p class="none">Couldn\u2019t get the list.</p>'; });
     }

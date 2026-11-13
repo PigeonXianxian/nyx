@@ -6,6 +6,8 @@
    Pictures themselves go through /app/upload and come back from /uploads/<file>. */
 (function () {
   "use strict";
+  var ask = window.NyxAsk || { confirm: function (q, o) { return Promise.resolve(confirm(q + (o && o.body ? "\n\n" + o.body : ""))); },   // the house's own questions (ask.js)
+    prompt: function (q, o) { var v = prompt(q, (o && o.value) || ""); return Promise.resolve(v == null ? null : v.trim()); } };
   var C = window.NYX || {}, RELAY = C.relay || "/relay", AI = C.aiName || "Companion";
   var $ = function (id) { return document.getElementById(id); };
   var key = null; try { key = localStorage.getItem("nyx_key"); } catch (e) {}
@@ -40,7 +42,7 @@
     $("cats").innerHTML = chips.map(function (c) { return '<button type="button" class="cat' + (cur === c[0] ? " on" : "") + '" data-id="' + c[0] + '" style="--c:' + c[2] + '"><i></i>' + esc(c[1]) + "<small>" + n(c[0]) + "</small></button>"; }).join("") +
       '<button type="button" class="cat new" id="newc">+ shelf</button>';
     $("cats").querySelectorAll(".cat[data-id]").forEach(function (b) { b.onclick = function () { cur = b.dataset.id; render(); }; });
-    $("newc").onclick = function () { var nm = (prompt("Name the new shelf") || "").trim(); if (!nm) return; api("/cat", { op: "add", name: nm }).then(function (r) { D.cats.push(r.cat); cur = r.cat.id; render(); }).catch(function () { toast("Couldn't add it."); }); };
+    $("newc").onclick = function () { ask.prompt("A new shelf", { placeholder: "its name", ok: "add it" }).then(function (nm) { if (!nm) return; api("/cat", { op: "add", name: nm }).then(function (r) { D.cats.push(r.cat); cur = r.cat.id; render(); }).catch(function () { toast("Couldn't add it."); }); }); };
     $("catbar").hidden = !catOf(cur);
     $("sub").textContent = D.items.length ? D.items.length + " things up here." : "Things kept for later.";
     var list = shown(), g = $("grid");
@@ -53,18 +55,18 @@
   }
 
   /* shelves */
-  $("ren").onclick = function () { var c = catOf(cur); var nm = (prompt("Rename the shelf", c.name) || "").trim(); if (!nm || nm === c.name) return; api("/cat", { op: "rename", id: c.id, name: nm }).then(function () { c.name = nm; render(); }).catch(function () { toast("Couldn't rename it."); }); };
-  $("rm").onclick = function () { var c = catOf(cur); if (!confirm("Remove the shelf “" + c.name + "”? Its things go back to Unsorted.")) return; api("/cat", { op: "del", id: c.id }).then(function () { cur = "all"; load(); }).catch(function () { toast("Couldn't remove it."); }); };
+  $("ren").onclick = function () { var c = catOf(cur); ask.prompt("Rename the shelf", { value: c.name, ok: "rename" }).then(function (nm) { if (!nm || nm === c.name) return; api("/cat", { op: "rename", id: c.id, name: nm }).then(function () { c.name = nm; render(); }).catch(function () { toast("Couldn't rename it."); }); }); };
+  $("rm").onclick = function () { var c = catOf(cur); ask.confirm("Remove the shelf “" + c.name + "”?", { body: "Its things go back to Unsorted.", ok: "remove", danger: true }).then(function (yes) { if (!yes) return; api("/cat", { op: "del", id: c.id }).then(function () { cur = "all"; load(); }).catch(function () { toast("Couldn't remove it."); }); }); };
 
   /* select mode */
   function selCount() { var k = Object.keys(picked).length; $("selN").textContent = k + " picked"; $("bMove").disabled = $("bDel").disabled = !k; }
   $("selBtn").onclick = function () { sel = !sel; picked = {}; document.body.classList.toggle("selecting", sel); $("selBtn").textContent = sel ? "Done" : "Select"; $("selbar").hidden = !sel; $("add").hidden = sel; selCount(); render(); };
-  $("bDel").onclick = function () { var fs = Object.keys(picked); if (!confirm("Throw out " + fs.length + "?")) return; api("/item", { op: "del", files: fs }).then(function () { picked = {}; $("selBtn").click(); load(); }).catch(function () { toast("Couldn't throw them out."); }); };
+  $("bDel").onclick = function () { var fs = Object.keys(picked); ask.confirm("Throw out " + fs.length + "?", { ok: "throw out", danger: true }).then(function (yes) { if (!yes) return; api("/item", { op: "del", files: fs }).then(function () { picked = {}; $("selBtn").click(); load(); }).catch(function () { toast("Couldn't throw them out."); }); }); };
   $("bMove").onclick = function () {
     var opts = D.cats.map(function (c) { return '<button type="button" data-id="' + c.id + '" style="--c:' + tint(c.id) + '"><i></i>' + esc(c.name) + "</button>"; }).join("") + '<button type="button" data-id=""><i style="background:var(--faint)"></i>Unsorted</button><button type="button" data-new="1">+ new shelf</button>';
     sheet("Move " + Object.keys(picked).length + " to", opts, function (b) {
       var go = function (cid) { api("/item", { op: "move", files: Object.keys(picked), cat: cid }).then(function () { closeSheet(); picked = {}; $("selBtn").click(); cur = cid || (D.cats.length ? "none" : "all"); load(); toast("Moved."); }).catch(function () { toast("Couldn't move them."); }); };
-      if (b.dataset.new) { var nm = (prompt("Name the new shelf") || "").trim(); if (!nm) return; api("/cat", { op: "add", name: nm }).then(function (r) { D.cats.push(r.cat); go(r.cat.id); }); return; }
+      if (b.dataset.new) { ask.prompt("A new shelf", { placeholder: "its name", ok: "add it" }).then(function (nm) { if (!nm) return; api("/cat", { op: "add", name: nm }).then(function (r) { D.cats.push(r.cat); go(r.cat.id); }); }); return; }
       go(b.dataset.id);
     });
   };

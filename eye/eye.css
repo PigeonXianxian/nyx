@@ -1,0 +1,203 @@
+/* 构成 — the eye home and the pages that follow its look. Loaded after app.css. */
+:root[data-home="eye"] .hbar{ display:none; }
+:root[data-home="eye"] .scroller{ overflow:hidden; }
+:root[data-home="eye"] #poster{ position:absolute; inset:0; max-width:none; margin:0; }
+.eye-cv{ display:block; width:100%; height:100%; touch-action:none; -webkit-user-select:none; user-select:none; cursor:default; }
+
+/* ── the door ── */
+.mark{ width:74px; height:74px; border-radius:50%; background:radial-gradient(circle, var(--ink) 0 14%, var(--paper) 15% 30%, var(--blue) 31% 100%); box-shadow:-4px 4px 0 0 color-mix(in srgb, var(--blue) 45%, var(--paper)); animation:none; }
+#gate h1{ font-family:var(--latin); font-style:italic; font-weight:500; font-size:34px; letter-spacing:.04em; }
+#gate p{ font-family:var(--latin); font-size:17px; letter-spacing:.03em; }
+#gateKey{ border-bottom-color:var(--river); letter-spacing:.2em; }
+#gateForm button{ border-radius:0; background:none; color:var(--blue); border:1px solid var(--blue); font-family:var(--latin); font-style:italic; font-size:19px; letter-spacing:.14em; padding:9px; }
+#gateForm button:active{ background:var(--blue); color:var(--paper); }
+
+/* ── the letter page (chat): a surveyor's notebook, written to by post ── */
+#room{ animation:leaf .5s ease both; }
+@keyframes leaf{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+.top{ padding:calc(env(safe-area-inset-top) + 14px) 22px 0 20px; }
+.flip{ width:34px; height:34px; border:1px dotted var(--faint); }
+.flip span{ width:17px; height:17px; background:linear-gradient(90deg, var(--blue) 0 50%, transparent 50%); box-shadow:inset 0 0 0 1px var(--blue); transition:transform .7s; }
+:root[data-side="moon"] .flip span{ background:linear-gradient(90deg, var(--blue) 0 50%, transparent 50%); box-shadow:inset 0 0 0 1px var(--blue); transform:rotate(180deg); }
+.back{ width:44px; height:38px; margin:0; border-bottom:1px solid var(--river); align-content:center; }
+.back svg{ width:34px; height:31px; fill:var(--ink); stroke:none; }
+.who{ flex:none; flex-direction:row; align-items:center; gap:14px; padding:20px 22px 12px 30px; }
+.who-eye{ width:44px; height:24px; flex:none; fill:none; stroke:var(--ink); stroke-width:1.3; }
+.who-eye .iris{ fill:var(--blue); stroke:none; } .who-eye .pupil{ fill:var(--paper); stroke:none; }
+.who-in{ display:flex; flex-direction:column; gap:1px; min-width:0; }
+.who b{ font-weight:500; font-size:23px; letter-spacing:.07em; }
+#state{ font-family:var(--latin); font-size:15px; letter-spacing:.06em; color:var(--faint); gap:7px; }
+#state em::after{ content:"  \00b7  by post"; white-space:pre; }
+#state i{ width:4px; height:4px; }
+#state.on{ color:var(--soft); } #state.on i{ background:var(--blue); }
+#state .spin{ color:var(--accent); text-shadow:none; }
+
+#log{ --m:46px; counter-reset:ln; padding:8px 22px 20px 0;
+  background-image:linear-gradient(var(--river), var(--river)); background-repeat:repeat-y; background-size:1px 100%; background-position:var(--m) 0; background-attachment:local; }
+.msg, .msg.ai, .msg.me{ display:block; position:relative; margin-top:15px; padding:0 0 0 calc(var(--m) + 16px); counter-increment:ln; justify-content:flex-start; }
+.msg.cont{ margin-top:7px; }
+.msg.me{ padding-left:calc(var(--m) + 56px); }
+.msg::before, .msg.ai::before, .msg.ai.cont::before{ content:counter(ln); display:block; position:absolute; left:0; top:.62em; width:calc(var(--m) - 12px); height:auto; text-align:right;
+  background:none; box-shadow:none; border-radius:0; font:400 10px/1 var(--latin); letter-spacing:.06em; color:var(--faint); }
+.msg::after{ content:""; position:absolute; left:calc(var(--m) - 7px); top:1.02em; width:7px; height:1px; background:var(--river); opacity:.7; }
+.msg:nth-child(7n+3)::after{ left:0; right:-22px; width:auto; background:var(--hair); z-index:-1; }
+.msg .body, .msg.ai .body, .msg.me .body{ display:inline-block; max-width:min(100%, 560px); padding:0; border:0; border-radius:0; background:none; box-shadow:none; font-size:16px; line-height:1.8; letter-spacing:.02em; }
+@media (max-width:700px){ .msg, .msg.ai, .msg.me{ margin-top:13px; } .msg .body, .msg.ai .body, .msg.me .body{ max-width:100%; font-size:15px; line-height:1.78; } }
+.msg.ai .body{ color:var(--ink); font-weight:500; }
+.msg.me .body{ color:var(--me-ink); }
+.msg.me.pending .body{ opacity:.55; }
+.msg .t, .msg.me .t{ display:none; }
+.msg.gap{ margin-top:40px; }
+.msg.gap .t{ display:block; position:absolute; left:10px; top:-23px; margin:0; text-align:left; font:italic 400 12px/1 var(--latin); letter-spacing:.14em; color:var(--faint); }
+.msg.pending .t, .msg.failed .t{ display:inline; position:static; margin-left:10px; font:italic 400 12px/1 var(--latin); letter-spacing:.06em; color:var(--faint); }
+.msg.failed .t{ color:var(--accent); }
+.msg .who{ display:block; padding:0; font:italic 400 13px/1.4 var(--latin); letter-spacing:.1em; color:var(--faint); }
+.msg .q{ margin:1px 0 3px; padding:0 0 0 10px; border-left:1px solid var(--river); border-radius:0; background:none; font-size:.82em; line-height:1.5; font-weight:400; color:var(--faint); opacity:1; }
+.msg .nl{ display:inline-block; width:4px; height:4px; margin:0 .62em .22em; border-radius:50%; background:var(--blue); vertical-align:middle; }
+.msg.think .body{ font-weight:400; font-size:14px; color:var(--faint); } .msg.act .body{ font-weight:400; color:var(--faint); }
+.msg a{ color:var(--accent); text-underline-offset:3px; }
+.msg.sel .body{ background:color-mix(in srgb, var(--blue) 12%, transparent); }
+
+/* the postmark between days */
+.day{ display:flex; align-items:center; gap:12px; height:60px; margin:26px 0 4px; padding-left:calc(var(--m) - 30px); text-align:left; font:italic 400 14px/1 var(--latin); letter-spacing:.16em; color:var(--faint); }
+.day::before{ content:""; flex:none; width:128px; height:58px; background:no-repeat left center/contain; background-image:var(--pm, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 88 42' fill='none' stroke='%235A62D0' stroke-width='1.2'%3E%3Ccircle cx='21' cy='21' r='19'/%3E%3Ccircle cx='21' cy='21' r='14.5'/%3E%3Cpath d='M14 21h14M21 14v14' stroke-width='.8'/%3E%3Cpath d='M44 12q5 -4 10 0t10 0 10 0 10 0M44 18q5 -4 10 0t10 0 10 0 10 0M44 24q5 -4 10 0t10 0 10 0 10 0M44 30q5 -4 10 0t10 0 10 0 10 0'/%3E%3C/svg%3E")); opacity:.92; }
+
+/* pictures come as prints */
+.att{ gap:12px; margin:6px 0 6px; }
+.att img{ max-width:min(180px, 46vw); max-height:220px; padding:6px 6px 16px; border-radius:1px; background:#F5F3EE; box-shadow:0 1px 6px rgba(20,20,26,.2); transform:rotate(-1.4deg); }
+.att img:nth-child(even){ transform:rotate(1.1deg); }
+:root[data-side="moon"] .att img{ background:#E4E1DA; }
+.att .file{ border-radius:0; background:none; border:1px solid var(--hair); }
+.msg.only-stk .stk{ max-width:76px; max-height:76px; padding:6px; background:var(--me); box-shadow:0 1px 4px rgba(20,20,26,.16); }
+
+#typing{ padding:16px 0 0 calc(var(--m) + 16px); gap:5px; }
+#typing i{ background:var(--accent); }
+
+/* the writing line: one corner of a frame, and a swallow to carry it */
+.write{ background:none; padding:4px 26px calc(env(safe-area-inset-bottom) + 20px) 46px; }
+.write::before{ display:none; }
+.line{ align-items:center; gap:10px; padding:2px 0 4px 16px; border-left:1px solid var(--river); border-bottom:1px solid var(--river); }
+#text{ order:0; font-size:16px; padding:9px 0 7px; caret-color:var(--blue); }
+#text::placeholder{ font-style:normal; letter-spacing:.24em; color:var(--faint); }
+#clip{ order:1; } #emo{ order:2; } #send{ order:3; }
+.clip{ margin:0; } .clip svg{ width:21px; height:21px; stroke-width:1.3; }
+.drop{ width:40px; height:36px; margin:0 -10px -6px 2px; border-radius:0; transform:none; background:none; transition:transform .25s; }
+.drop svg{ width:34px; height:31px; transform:rotate(-14deg); fill:var(--ink); stroke:none; }
+.drop:active{ transform:translate(8px, -8px); box-shadow:none; }
+.drop:disabled{ opacity:.35; }
+.quote{ border-left:1px solid var(--river); border-radius:0; background:none; margin-left:16px; }
+.emo{ border-radius:2px; box-shadow:0 2px 14px rgba(20,20,26,.14); }
+.tray .it{ border-radius:1px; }
+
+/* the gauge: a small instrument, not a glass ball */
+.orb, :root[data-side="moon"] .orb{ right:16px; bottom:104px; width:46px; height:46px; background:var(--paper); -webkit-backdrop-filter:none; backdrop-filter:none; box-shadow:0 0 0 1px var(--river), 0 4px 14px rgba(20,20,26,.12); color:var(--blue); }
+.orb .tk{ opacity:.22; } .orb b{ font:italic 500 13px/1 var(--latin); color:var(--ink); }
+.orb svg{ inset:3px; }
+
+/* the drawer and the sheets take the same ink */
+#drawer .hd{ font-family:var(--latin); font-style:italic; font-size:26px; }
+#drawer .hd i{ background:var(--blue); }
+#drawerList .ctr{ border-radius:0; } #drawerList .ctr:active{ background:color-mix(in srgb, var(--blue) 10%, transparent); }
+#drawerList .gp{ color:var(--accent); font-family:var(--latin); font-size:13px; }
+.toast{ border-radius:0; }
+
+/* sheets are paper too: opaque, square, a hair line round them */
+.meter, :root[data-side="moon"] .meter{ background:color-mix(in srgb, var(--paper) 62%, transparent); }
+.meter .sheet, :root[data-side="moon"] .meter .sheet{ border-radius:2px; background:var(--paper) var(--grain); background-size:180px; -webkit-backdrop-filter:none; backdrop-filter:none; box-shadow:0 0 0 1px var(--river), 0 14px 40px rgba(16,16,22,.2); }
+.meter .mh{ font-family:var(--latin); font-weight:500; font-size:26px; }
+.meter .mh em{ font-family:var(--latin); letter-spacing:.2em; }
+.meter .ring .v{ stroke:var(--blue); } .meter .ring b{ font:italic 500 21px/1 var(--latin); }
+.meter .ctx i b{ background:var(--blue); }
+.meter .models button{ border-radius:0; box-shadow:inset 0 0 0 1px var(--hair); }
+.meter .models button.on{ background:var(--blue); color:#F1EEE7; }
+.fan button, :root[data-side="moon"] .fan button{ border-radius:50%; background:var(--paper); -webkit-backdrop-filter:none; backdrop-filter:none; box-shadow:0 0 0 1px var(--river), 0 4px 12px rgba(16,16,22,.12); }
+.fan button span{ font-family:var(--latin); font-style:italic; }
+#drawer .credit{ margin:22px 10px 0; font:italic 400 13px/1.6 var(--latin); letter-spacing:.04em; color:var(--faint); }
+#drawer .credit a{ color:var(--soft); text-underline-offset:3px; }
+
+
+/* ── the letter page, to her measure: smaller and closer set, the margin nearer the edge, the gauge a small card at the head ── */
+.top{ padding:calc(env(safe-area-inset-top) + 14px) 18px 0 14px; }
+.flip{ width:27px; height:27px; } .flip span{ width:13px; height:13px; }
+.back{ width:34px; height:30px; } .back svg{ width:26px; height:24px; }
+.who{ gap:10px; padding:26px 60px 9px 31px; }
+.who-eye{ width:31px; height:17px; stroke-width:1.5; }
+.who b{ font-size:17px; letter-spacing:.06em; }
+#state{ font-size:11px; letter-spacing:.05em; gap:5px; } #state i{ width:3px; height:3px; }
+#log{ --m:38px; padding:6px 18px 14px 0; }
+.msg, .msg.ai, .msg.me{ margin-top:8px; padding-left:calc(var(--m) + 8px); }
+.msg.cont{ margin-top:4px; }
+.msg.me{ padding-left:calc(var(--m) + 39px); }
+.msg::before, .msg.ai::before, .msg.ai.cont::before{ width:calc(var(--m) - 9px); top:.78em; font-size:7.5px; letter-spacing:.04em; }
+.msg::after{ left:calc(var(--m) - 5px); width:5px; top:.92em; }
+.msg:nth-child(7n+3)::after{ right:-18px; }
+.msg .body, .msg.ai .body, .msg.me .body{ font-size:14px; line-height:1.72; letter-spacing:.03em; }
+@media (max-width:700px){ .msg, .msg.ai, .msg.me{ margin-top:8px; } .msg .body, .msg.ai .body, .msg.me .body{ font-size:13.6px; line-height:1.72; } }
+.msg.gap{ margin-top:30px; } .msg.gap .t{ left:6px; top:-17px; font-size:9px; }
+.msg .q{ font-size:.8em; padding-left:8px; }
+.msg .nl{ width:3.5px; height:3.5px; margin:0 .55em .2em; }
+.day{ height:52px; margin:18px 0 2px; font-size:11.5px; padding-left:calc(var(--m) - 30px); } .day::before{ width:104px; height:47px; }
+.att img{ max-width:min(128px, 38vw); max-height:150px; padding:4px 4px 11px; }
+#typing{ padding:10px 0 0 calc(var(--m) + 8px); gap:4px; } #typing i{ width:3px; height:3px; }
+.write{ padding:2px 18px calc(env(safe-area-inset-bottom) + 52px) 38px; }
+.line{ gap:8px; padding:1px 0 3px 8px; }
+#text{ font-size:14px; padding:8px 0 6px; } #text::placeholder{ letter-spacing:.2em; }
+.clip{ width:26px; height:30px; } .clip svg{ width:17px; height:17px; stroke-width:1.2; }
+.drop{ width:32px; height:30px; margin:0 -6px -8px 0; } .drop svg{ width:25px; height:23px; }
+.quote{ margin-left:8px; font-size:12px; }
+/* the gauge: a small paper card at the head of the page, a half moon on it */
+.orb, :root[data-side="moon"] .orb{ right:38px; bottom:calc(100% - env(safe-area-inset-top) - 88px); width:22px; height:27px; border-radius:1.5px; background:#F4F2ED; box-shadow:0 1px 4px rgba(20,20,26,.22); }
+.orb svg, .orb b{ display:none; }
+.orb::before{ content:""; position:absolute; left:50%; top:50%; width:11px; height:11px; margin:-5.5px 0 0 -5.5px; border-radius:50%; background:linear-gradient(90deg, transparent 0 38%, var(--blue) 38%); box-shadow:inset 0 0 0 1px var(--blue); }
+.back svg{ width:30px; height:22px; } .drop svg{ width:30px; height:22px; transform:rotate(-12deg); }
+:root[data-side="moon"] .orb{ background:#2A2A30; box-shadow:0 0 0 1px rgba(236,233,226,.18); }
+.att{ gap:9px; margin:5px 0 5px; }
+.att img{ max-width:min(108px, 32vw); max-height:124px; padding:3px; border-radius:0; transform:rotate(-.7deg); box-shadow:0 1px 5px rgba(20,20,26,.2); }
+.att img:nth-child(even){ transform:rotate(.6deg); }
+
+/* ── a wide screen ──
+   The home is the same plate drawn larger over the whole window (home.js lays it out). The letter page is not the phone's
+   page made wider: it is a spread, as in a book. On the left-hand page, the plate — the orbits going slowly round, and the
+   swallow that carries the post (eye/plate.js draws it; by night it is the swallow among the stars) — with the name and the
+   eye at its head like a title. On the right-hand page, the letter, set large: the measure and the type grow with the window. */
+.plate{ display:none; }
+@media (min-width:1000px) and (min-aspect-ratio:5/4){
+  #room{ --lp:clamp(320px, 34vw, 720px);                                          /* the left-hand page */
+    --u:clamp(16.5px, .7vw + 6.5px, 21px);                                         /* the size of the writing */
+    --m:calc(var(--u) * 2.9);                                                      /* the margin the lines are numbered in */
+    --col:min(calc(100vw - var(--lp) - 190px), calc(var(--u) * 46));               /* the measure */
+    --rm:calc((100vw - var(--lp) - var(--col) - var(--m)) / 2);                    /* what is left either side of it */
+    background:linear-gradient(var(--river), var(--river)) no-repeat var(--lp) 0 / 1px 100%; }   /* the fold */
+  #room > canvas.plate{ display:block; position:absolute; left:0; top:0; width:var(--lp); height:100%; z-index:0; pointer-events:none; }
+  #room .top{ position:absolute; left:0; right:0; top:0; z-index:2; padding:26px 34px 0 30px; pointer-events:none; }
+  #room .top > *{ pointer-events:auto; }
+  #room .who{ position:absolute; z-index:2; left:clamp(34px, 3.4vw, 72px); top:clamp(96px, 13vh, 150px); width:calc(var(--lp) - clamp(34px, 3.4vw, 72px) * 2); padding:0; flex-direction:column; align-items:flex-start; gap:calc(var(--u) * .9); }
+  #room .who-eye{ width:calc(var(--u) * 4.6); height:calc(var(--u) * 2.5); stroke-width:1.2; }
+  #room .who b{ font-size:calc(var(--u) * 2.35); letter-spacing:.05em; }
+  #room #state{ font-size:calc(var(--u) * .86); }
+  #room .who::after{ content:"PL. III   \00b7   LETTERS, BY POST"; display:block; white-space:nowrap; margin-top:calc(var(--u) * 1.5); padding-top:calc(var(--u) * .8); border-top:1px solid var(--river); width:calc(var(--u) * 15); font:400 calc(var(--u) * .68)/1.9 var(--latin); letter-spacing:.3em; color:var(--faint); }
+  #log{ --m:calc(var(--u) * 2.9); margin:0 0 0 calc(var(--lp) + var(--rm));   /* the same margin as the writing frame below (the phone's 38px would leave the rule short of it) */
+         width:calc(var(--col) + var(--m)); flex:1 1 auto; padding:clamp(48px, 8vh, 84px) 0 22px 0; }
+  .msg .body, .msg.ai .body, .msg.me .body{ max-width:100%; font-size:var(--u); line-height:1.86; }
+  .msg, .msg.ai, .msg.me{ margin-top:calc(var(--u) * .72); padding-left:calc(var(--m) + var(--u) * .9); } .msg.me{ padding-left:calc(var(--m) + var(--u) * 3.9); }
+  .msg.cont{ margin-top:calc(var(--u) * .3); }
+  .msg::before, .msg.ai::before, .msg.ai.cont::before{ font-size:calc(var(--u) * .56); width:calc(var(--m) - 12px); }
+  .msg::after{ left:calc(var(--m) - 7px); width:7px; }
+  .msg:nth-child(7n+3)::after{ right:calc(var(--rm) * -.5); }
+  .msg.gap{ margin-top:calc(var(--u) * 2.1); } .msg.gap .t{ font-size:calc(var(--u) * .62); top:calc(var(--u) * -1.15); }
+  .msg .who{ font-size:calc(var(--u) * .82); }
+  .msg.think .body{ font-size:calc(var(--u) * .88); }
+  .day{ font-size:calc(var(--u) * .78); height:calc(var(--u) * 3.6); margin:calc(var(--u) * 1.2) 0 2px; padding-left:calc(var(--m) - var(--u) * 1.8); } .day::before{ width:calc(var(--u) * 7.4); height:calc(var(--u) * 3.36); }
+  .att img{ max-width:calc(var(--u) * 13); max-height:calc(var(--u) * 14); }
+  #typing{ padding:calc(var(--u) * .7) 0 0 calc(var(--m) + var(--u) * .9); gap:5px; } #typing i{ width:4px; height:4px; }
+  .write{ margin:0 0 0 calc(var(--lp) + var(--rm)); width:calc(var(--col) + var(--m)); padding:4px 0 clamp(26px, 5vh, 48px) var(--m); }
+  .line{ gap:calc(var(--u) * .6); padding:calc(var(--u) * .15) 0 calc(var(--u) * .3) calc(var(--u) * .9); }
+  #text{ font-size:var(--u); padding:calc(var(--u) * .55) 0 calc(var(--u) * .4); }
+  .clip{ width:calc(var(--u) * 1.9); height:calc(var(--u) * 2); } .clip svg{ width:calc(var(--u) * 1.2); height:calc(var(--u) * 1.2); }
+  .drop{ width:calc(var(--u) * 2.4); height:calc(var(--u) * 2); } .drop svg{ width:calc(var(--u) * 2.1); height:calc(var(--u) * 1.5); }
+  .quote{ font-size:calc(var(--u) * .84); }
+  .orb, :root[data-side="moon"] .orb{ right:calc(var(--rm) * .5 - 14px); bottom:auto; top:clamp(96px, 13vh, 150px); width:28px; height:34px; }
+  /* a registration mark out in the right-hand margin, after the plates */
+  #room::after{ content:""; position:absolute; right:calc(var(--rm) * .5 - 17px); top:calc(clamp(96px, 13vh, 150px) + 70px); width:34px; height:34px; border-radius:50%; pointer-events:none; opacity:.5;
+    background:linear-gradient(var(--soft), var(--soft)) center / 1px 54px no-repeat, linear-gradient(var(--soft), var(--soft)) center / 54px 1px no-repeat; box-shadow:inset 0 0 0 1px var(--soft); overflow:visible; }
+}

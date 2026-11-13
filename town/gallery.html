@@ -5,6 +5,7 @@
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/400.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/500.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5.2.5/400-italic.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5.2.5/500-italic.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/long-cang@5.2.5/400.css">
 <script src="../config.js"></script>   <!-- the companion's name (NYX.aiName); missing when the town runs on its own, then it is "Companion" -->
+<script src="../ask.js"></script>
 <style>
 /* The companion's gallery: inside the small museum by the square. One work per wall, swipe left and right.
    Each wall: the work, a museum label, the companion's handwritten note (why it stopped there), and your answers under the note.
@@ -84,6 +85,7 @@ html[data-s="tang"] .note mark{background:linear-gradient(transparent 40%,rgba(2
 <div class="rail" id="rail"></div>
 <div class="dots" id="dots"></div>
 <div class="toast" id="toast"></div>
+const ask = window.NyxAsk || { confirm: async (q) => confirm(q), prompt: async (q, o) => { const v = prompt(q, (o && o.value) || ''); return v == null ? null : v.trim(); } };   // the house's own questions (../ask.js); the browser's when the town runs on its own
 <script>
 (async () => {
   const AI = (window.NYX && NYX.aiName) || 'Companion', ME = (window.NYX && NYX.meName) || 'Me', SP = (s) => /[\u3400-\u9fff]/.test(s) ? [...s].join(' ') : s;   // space out Chinese names, leave Latin ones
@@ -124,7 +126,7 @@ html[data-s="tang"] .note mark{background:linear-gradient(transparent 40%,rgba(2
     if (f) f.onsubmit = async (e) => { e.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return;
       const j = await api({ method: 'POST', body: JSON.stringify({ id, text }) }); if (!j?.ok) { toast(j?.why || '没连上'); return; }
       replies = j.replies; box.innerHTML = reHtml(id); wire(box); toast('贴上了'); };
-    box.querySelectorAll('[data-drop]').forEach((b) => b.onclick = async () => { if (!confirm('撤回这一句？')) return;
+    box.querySelectorAll('[data-drop]').forEach((b) => b.onclick = async () => { if (!(await ask.confirm('撤回这一句？', { ok: '撤回', cancel: '留着', danger: true }))) return;
       const j = await api({ method: 'POST', body: JSON.stringify({ id, drop: +b.dataset.drop }) }); if (j?.ok) { replies = j.replies; box.innerHTML = reHtml(id); wire(box); } });
   }
   document.querySelectorAll('.re').forEach(wire);

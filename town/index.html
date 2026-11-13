@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="apple-touch-icon" href="../icon-180.png"><link rel="icon" href="../icon-192.png"><link rel="manifest" href="../manifest.webmanifest">   <!-- the night tree -->
 <script src="../config.js"></script>   <!-- NYX.aiName for the gallery sign; absent when the town runs on its own -->
+<script src="../ask.js"></script>
 
 <meta name="theme-color" content="#f6efe3">
 <title>小镇</title>
@@ -118,6 +119,7 @@
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
 </script>
 <script type="module">
+const ask = window.NyxAsk || { confirm: async (q) => confirm(q), prompt: async (q, o) => { const v = prompt(q, (o && o.value) || ''); return v == null ? null : v.trim(); } };   // the house's own questions (../ask.js); the browser's when the town runs on its own
 import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -1065,7 +1067,7 @@ function showShop(msg = '') {
   sc.querySelectorAll('.pick[data-key]').forEach((b) => b.onclick = async () => {
     const key = b.dataset.key, [c, v] = key.split(':'), p = (T.prices?.[c] || {})[v];
     if (p && !SHOP.owned.includes(key)) {
-      if (!confirm(`花 ${p} 个念买下「${lab(c, v)}」？`)) return;
+      if (!(await ask.confirm(`花 ${p} 个念买下「${lab(c, v)}」？`, { ok: '买下', cancel: '再想想' }))) return;
       const j = await shopApi({ buy: key }).catch(() => null); if (!j?.ok) { showShop(`<b style="color:var(--red)">${esc(j?.why || '没连上家里')}</b>`); return; }
       SHOP = j.shop; T.nian = j.nian; nianEl.textContent = '念 ' + j.nian;
     }
