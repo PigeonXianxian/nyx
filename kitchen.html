@@ -14,6 +14,7 @@
   try { document.documentElement.dataset.side = localStorage.getItem("nyx_side") === "moon" ? "moon" : "sun"; } catch (e) { document.documentElement.dataset.side = "sun"; }
 </script>
 <script src="config.js"></script>
+<script src="ask.js"></script>
 <style>
   /* Nyx — Kitchen. Three tabs:
      家里 Home — pots, seasonings, the fridge, what you usually buy; pick what's in the fridge, tap 就这些 to look up a recipe;
@@ -119,6 +120,7 @@
 <div class="dv" id="dv"></div>
 <div class="toast" id="toast"></div>
 <script>
+var ask = window.NyxAsk || { confirm: function(q, o){ return Promise.resolve(confirm(q)); }, prompt: function(q, o){ var v = prompt(q, (o && o.value) || ""); return Promise.resolve(v == null ? null : v.trim()); } };   // the house's own questions (ask.js)
 (function(){
   var C = window.NYX || {}, RELAY = C.relay || "/relay", AI = C.aiName || "AI";
   var SECRET = ""; try{ SECRET = localStorage.getItem("nyx_key") || ""; }catch(_){}
@@ -290,16 +292,16 @@
     }
     if (t.id === "tidy"){ document.body.classList.toggle("edit"); render(); return; }
     if (t.id === "tlAdd"){
-      var what = (prompt("今天吃了什么？") || "").trim();
-      if (what) api("/log", { name:what, ingredients:D.pantry.ingredients.filter(function(x){ return what.indexOf(clean(x)) >= 0; }) }).then(function(d){ D.log = d.log; render(); toast("记下了"); }).catch(function(){ toast("没记上"); });
+      ask.prompt("今天吃了什么？", { placeholder:"一样一样写", ok:"记下", cancel:"算了" }).then(function(what){
+        if (what) api("/log", { name:what, ingredients:D.pantry.ingredients.filter(function(x){ return what.indexOf(clean(x)) >= 0; }) }).then(function(d){ D.log = d.log; render(); toast("记下了"); }).catch(function(){ toast("没记上"); });
+      });
       return;
     }
     var dl = t.closest("[data-del-log]");
-    if (dl){ if (confirm("删掉这一条？")) api("/log", { delete:dl.dataset.delLog }).then(function(d){ D.log = d.log; render(); }); return; }
+    if (dl){ ask.confirm("删掉这一条？", { ok:"删掉", cancel:"留着", danger:true }).then(function(yes){ if (yes) api("/log", { delete:dl.dataset.delLog }).then(function(d){ D.log = d.log; render(); }); }); return; }
     var add = t.closest("[data-add]");
     if (add){
-      var name = (prompt("加点什么？") || "").trim();
-      if (name){ D.pantry[add.dataset.add].push(name); savePantry(); render(); }
+      ask.prompt("加点什么？", { ok:"加上", cancel:"算了" }).then(function(name){ if (name){ D.pantry[add.dataset.add].push(name); savePantry(); render(); } });
       return;
     }
     var chip = t.closest(".chip[data-k]");

@@ -83,6 +83,9 @@
     return h;
   }
 
+  var ask = window.NyxAsk || { confirm: function (q, o) { return Promise.resolve(confirm(q + (o && o.body ? "\n\n" + o.body : ""))); },
+    prompt: function (q, o) { var v = prompt(q, (o && o.value) || ""); return Promise.resolve(v == null ? null : v.trim()); } };   // the house's own questions (ask.js), the browser's if it's missing
+
   window.NyxCC = function (o) {
     var M = null, cmds = FALLBACK.slice(), cmdsAt = 0, $ = function (id) { return document.getElementById(id); };
     var text = o.text, write = document.querySelector("footer.write");
@@ -310,9 +313,11 @@
         case "clear": case "new": o.newWin(); return true;
         case "sessions": case "resume": sessions(); return true;
         case "rename":
-          var t2 = arg || prompt("Name this window:", ""); if (!t2) return true;
-          o.api("/app/window").then(function (w) { if (!w.sid) throw new Error("no window"); return post("/app/cc/sessions/meta", { sid: w.sid, title: t2 }); })
-            .then(function () { o.toast("Named “" + t2 + "”"); }, function (e) { o.toast("Couldn’t name it: " + why(e)); });
+          (arg ? Promise.resolve(arg) : ask.prompt("Name this session", { placeholder: "a title", ok: "name it" })).then(function (t2) {
+            if (!t2) return;
+            o.api("/app/window").then(function (w) { if (!w.sid) throw new Error("no window"); return post("/app/cc/sessions/meta", { sid: w.sid, title: t2 }); })
+              .then(function () { o.toast("Named “" + t2 + "”"); }, function (e) { o.toast("Couldn’t name it: " + why(e)); });
+          });
           return true;
         case "usage": o.openMeter(); return true;
         case "help": help(); return true;
@@ -357,7 +362,7 @@
           '<div class="sb"></div><p class="hint" id="sessNote"></p></div>';
         (document.getElementById("room") || document.body).appendChild(S);
         S.addEventListener("click", onClick);
-        S.addEventListener("change", onChange); wireDrag();
+        wireDrag();
         S.querySelector("input").addEventListener("input", function () { q = this.value.trim().toLowerCase(); render(); });
       }
       S.hidden = false; S.querySelector(".sb").innerHTML = '<p class="none">Looking…</p>'; note("");
@@ -377,8 +382,8 @@
         (w.last_text && w.last_text !== w.title ? '<span class="lx">' + esc(w.last_text) + "</span>" : "") + "</button>" +
         '<button type="button" class="more" data-a="row" aria-label="More for this session" aria-expanded="' + open_ + '"><i></i><i></i><i></i></button>' +
         (open_ ? '<div class="sa">' + (CC() && !w.current && !w.readonly ? '<button type="button" data-a="carry">carry it on here</button>' : "") + '<button type="button" data-a="rename">rename</button>' +
-          '<label class="fl">group <select data-a="file"><option value="">— none —</option>' + groups.map(function (g) { return '<option value="' + esc(g.id) + '"' + (g.id === w.group ? " selected" : "") + ">" + esc(g.name) + "</option>"; }).join("") +
-          '<option value="+">+ a new group…</option></select></label>' + (w.current ? "" : '<button type="button" data-a="arch">' + (w.archived ? "unarchive" : "archive") + "</button>") + "</div>" : "") + "</div>";
+          '<span class="fl"><em>group</em>' + [{ id: "", name: "none" }].concat(groups).map(function (g) { return '<button type="button" data-a="file" data-g="' + esc(g.id) + '"' + ((w.group || "") === g.id ? ' class="on"' : "") + ">" + esc(g.name) + "</button>"; }).join("") +
+          '<button type="button" data-a="file" data-g="+" class="add">+ new</button></span>' + (w.current ? "" : '<button type="button" data-a="arch">' + (w.archived ? "unarchive" : "archive") + "</button>") + "</div>" : "") + "</div>";
     }
     var fine = !(window.matchMedia && matchMedia("(pointer: coarse)").matches);   // anything but a finger: rows can be dragged
     function render() {
@@ -409,27 +414,28 @@
       else if (a === "pick" && w && CC()) { S.hidden = true; o.view(sid); }   // open it: the live one to write in, any other to read
       else if (a === "pick" && w) {
         if (w.current) { S.hidden = true; return; }
-        if (!confirm("Go back to “" + sname(w) + "”? The window in use now closes; it stays here too.")) return;
-        note("Switching…");
-        o.api("/app/window").then(function (d) { return d.sid || ""; }, function () { return ""; }).then(function (before) {
-          return post("/app/window/switch", { sid: sid }).then(function () { S.hidden = true; o.verify(before, "Switched windows."); });
-        }).catch(function (e2) { note("Didn’t switch: " + why(e2)); });
+        ask.confirm("Go back to “" + sname(w) + "”?", { body: "The window in use now closes; it stays here too.", ok: "go back" }).then(function (yes) {
+          if (!yes) return;
+          note("Switching…");
+          o.api("/app/window").then(function (d) { return d.sid || ""; }, function () { return ""; }).then(function (before) {
+            return post("/app/window/switch", { sid: sid }).then(function () { S.hidden = true; o.verify(before, "Switched windows."); });
+          }).catch(function (e2) { note("Didn’t switch: " + why(e2)); });
+        });
       }
       else if (a === "carry" && w) { S.hidden = true; o.view(sid); o.carry(sid, w.elsewhere); }
-      else if (a === "rename" && w) { var t = prompt("Name this session:", w.named ? w.title : (w.title || "")); if (t != null) setMeta(sid, { title: t }); }
+      else if (a === "rename" && w) ask.prompt("Name this session", { value: w.title || "", placeholder: "a title", ok: "name it" }).then(function (t) { if (t != null) setMeta(sid, { title: t }); });
       else if (a === "arch" && w) setMeta(sid, { archived: !w.archived }).then(function () { openRow = null; render(); });
       else if (a === "fold" && g) group({ op: "fold", id: gid, fold: !g.fold });
       else if (a === "showarch") { showArch = !showArch; render(); }
-      else if (a === "gren" && g) { var n = prompt("Rename the group:", g.name); if (n) group({ op: "rename", id: gid, name: n }); }
-      else if (a === "gdel" && g) { if (confirm("Delete the group “" + g.name + "”? Its sessions stay, ungrouped.")) group({ op: "delete", id: gid }); }
-      else if (a === "gnew") { var gn = prompt("A new group, named:", ""); if (gn) group({ op: "new", name: gn }); }
+      else if (a === "gren" && g) ask.prompt("Rename the group", { value: g.name, ok: "rename" }).then(function (n) { if (n) group({ op: "rename", id: gid, name: n }); });
+      else if (a === "gdel" && g) ask.confirm("Delete the group “" + g.name + "”?", { body: "Its sessions stay, ungrouped.", ok: "delete", danger: true }).then(function (yes) { if (yes) group({ op: "delete", id: gid }); });
+      else if (a === "gnew") ask.prompt("A new group", { placeholder: "its name", ok: "make it" }).then(function (gn) { if (gn) group({ op: "new", name: gn }); });
+      else if (a === "file" && w) {   // filing it: one of the groups, none, or a new one made for it
+        var to = b.dataset.g;
+        if (to === "+") ask.prompt("A new group for “" + sname(w) + "”", { placeholder: "its name", ok: "make it" }).then(function (gn) { if (gn) group({ op: "new", name: gn, sids: [sid] }); });
+        else if ((w.group || "") !== to) setMeta(sid, { group: to || null });
+      }
       else if (a === "new" || a === "gnewin") newIn(a === "gnewin" ? g : null);
-    }
-    function onChange(e) {
-      var s = e.target.closest("select[data-a=file]"); if (!s) return;
-      var sid = s.closest(".srow").dataset.sid;
-      if (s.value === "+") { var gn = prompt("A new group, named:", ""); if (!gn) { render(); return; } group({ op: "new", name: gn, sids: [sid] }); return; }
-      setMeta(sid, { group: s.value || null });
     }
     // with a mouse: drag a session onto a group's heading (or "ungrouped") to file it there
     var dragSid = null;
@@ -441,11 +447,13 @@
       S.addEventListener("drop", function (e) { var h = dragSid && e.target.closest && e.target.closest(".gh[data-g]"); if (!h) return; e.preventDefault(); var sid = dragSid, w = find_(sid); dragSid = null; if (w && (w.group || "") !== h.dataset.g) setMeta(sid, { group: h.dataset.g || null }); });
     }
     function newIn(g) {
-      if (!confirm("Open a new window" + (g ? " in “" + g.name + "”" : "") + "? The one in use closes; it stays in this list. " + o.carryNote())) return;
-      note("Opening a new window…");
-      o.api("/app/window").then(function (d) { return d.sid || ""; }, function () { return ""; }).then(function (before) {
-        return post("/app/cc/sessions/new", g ? { group: g.id } : {}).then(function () { note("New window open."); load(); o.verify(before, "New window open."); });
-      }).catch(function (e) { note(/50[024]|fetch|network/i.test(String(e.message)) ? "Starting… check back in a minute." : "Didn’t open: " + why(e)); setTimeout(load, 8000); });
+      ask.confirm("Open a new window" + (g ? " in “" + g.name + "”" : "") + "?", { body: "The one in use closes; it stays in this list. " + o.carryNote(), ok: "open it" }).then(function (yes) {
+        if (!yes) return;
+        note("Opening a new window…");
+        o.api("/app/window").then(function (d) { return d.sid || ""; }, function () { return ""; }).then(function (before) {
+          return post("/app/cc/sessions/new", g ? { group: g.id } : {}).then(function () { note("New window open."); load(); o.verify(before, "New window open."); });
+        }).catch(function (e) { note(/50[024]|fetch|network/i.test(String(e.message)) ? "Starting… check back in a minute." : "Didn’t open: " + why(e)); setTimeout(load, 8000); });
+      });
     }
 
     loadCmds();

@@ -4,6 +4,7 @@
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/400.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/500.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5.2.5/400-italic.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5.2.5/500-italic.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/long-cang@5.2.5/400.css">
 <script src="../config.js"></script>   <!-- the companion's name (NYX.aiName); missing when the town runs on its own, then it is "Companion" -->
+<script src="../ask.js"></script>
 <style>
 /* The gallery as a feed, the "phone" in the gallery: each work is a post — the note on top (==highlights==), the picture under it, a line with the museum;
    your answers thread under it. Same data as the wall: gallery/pieces.json, gallery/notes.json; answers go through /relay/app/memtown/gallery */
@@ -64,6 +65,7 @@ a{color:inherit;text-decoration:none}
 <div class="end">到底了 · 逛到新的再钉</div>
 <div class="box" id="box"></div>
 <div class="toast" id="toast"></div>
+const ask = window.NyxAsk || { confirm: async (q) => confirm(q), prompt: async (q, o) => { const v = prompt(q, (o && o.value) || ''); return v == null ? null : v.trim(); } };   // the house's own questions (../ask.js); the browser's when the town runs on its own
 <script>
 (async () => {
   const AI = (window.NYX && NYX.aiName) || 'Companion', ME = (window.NYX && NYX.meName) || 'Me', SP = (s) => /[\u3400-\u9fff]/.test(s) ? [...s].join(' ') : s;   // space out Chinese names, leave Latin ones
@@ -125,7 +127,7 @@ a{color:inherit;text-decoration:none}
   function rethread(el, only) {
     const id = el.dataset.id;
     if (!only) { el.querySelector('.thread').innerHTML = thread(id); el.querySelector('.c span').textContent = (replies[id] || []).length || ''; }
-    el.querySelectorAll('[data-drop]').forEach((b) => b.onclick = async () => { if (!confirm('删除这条回复？')) return;
+    el.querySelectorAll('[data-drop]').forEach((b) => b.onclick = async () => { if (!(await ask.confirm('删除这条回复？', { ok: '删除', cancel: '留着', danger: true }))) return;
       const j = await api({ method: 'POST', body: JSON.stringify({ id, drop: +b.dataset.drop }) }); if (j?.ok) { replies = j.replies; rethread(el); } });
   }
   feed.querySelectorAll('.post').forEach(wire);

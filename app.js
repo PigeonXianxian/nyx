@@ -11,6 +11,8 @@
   var RELAY = ls("nyx_relay") || HOME, AI = (RELAY !== HOME && ls("nyx_ai")) || C.aiName || "Companion";
   var GROUP = /\/g$/.test(RELAY);   // the group chat: the first companion's relay at /g; nobody's gauge, every answer says who it's from
   var root = document.documentElement, $ = function (id) { return document.getElementById(id); };
+  var ask = window.NyxAsk || { confirm: function (q, o) { return Promise.resolve(confirm(q + (o && o.body ? "\n\n" + o.body : ""))); },   // the house's own questions (ask.js)
+    prompt: function (q, o) { var v = prompt(q, (o && o.value) || ""); return Promise.resolve(v == null ? null : v.trim()); } };
   var key = null, hkey = null, lastId = 0, byId = new Map(), drafts = new Map(), quote = null, cc = null;   // cc: the Claude Code controls (cc.js)
   // CCMODE: the chat is the Claude Code window itself — the page reads its session transcript (GET /app/cc/log, "cc" events)
   // and what you write is typed into it (POST /app/cc/say). view: the session on the page; liveSid: the one the window has open.
@@ -228,11 +230,13 @@
   }
   function carryOn(sid, elsewhere) {   // the window closes its session and opens this one (--resume); the page follows it
     var away = elsewhere ? (elsewhere === "vscode" ? "open in VS Code right now" : "open in another Claude Code right now") : "";
-    if (!confirm((away ? "It is " + away + "; two windows on one session don't see each other's new turns. " : "") + "Carry this session on here? The window in use now closes; it stays in Sessions.")) return;
-    if ($("ro") && !$("ro").hidden) $("ro").querySelector("span").textContent = "Opening it in the window…";
-    var before = liveSid; carrying = true; toast("Opening it in the window…");
-    api("/app/window/switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: sid }) })
-      .then(function () { verifyWin(before, "This session is open here now."); }, function (e2) { carrying = false; toast("Didn't switch: " + e2.message); paintRo(); });
+    ask.confirm("Carry this session on here?", { body: (away ? "It is " + away + "; two windows on one session don't see each other's new turns. " : "") + "The window in use now closes; it stays in Sessions.", ok: "carry it on" }).then(function (yes) {
+      if (!yes) return;
+      if ($("ro") && !$("ro").hidden) $("ro").querySelector("span").textContent = "Opening it in the window…";
+      var before = liveSid; carrying = true; toast("Opening it in the window…");
+      api("/app/window/switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: sid }) })
+        .then(function () { verifyWin(before, "This session is open here now."); }, function (e2) { carrying = false; toast("Didn't switch: " + e2.message); paintRo(); });
+    });
   }
 
   /* ---------- rendering ---------- */
@@ -326,7 +330,7 @@
     if (!bar) {
       bar = document.createElement("div"); bar.id = "selBar";
       bar.innerHTML = '<span class="n"></span><button type="button" class="del danger">Delete</button><button type="button" class="x">Cancel</button>';
-      bar.querySelector(".del").onclick = function () { if (!sel.size) return; if (sel.size > 1 && !confirm("Delete " + sel.size + " messages from this device?")) return; delMsgs(Array.from(sel)); endSel(); };
+      bar.querySelector(".del").onclick = function () { if (!sel.size) return; (sel.size > 1 ? ask.confirm("Delete " + sel.size + " messages?", { body: "From this device only; the relay keeps them.", ok: "delete", danger: true }) : Promise.resolve(true)).then(function (yes) { if (yes) { delMsgs(Array.from(sel)); endSel(); } }); };
       bar.querySelector(".x").onclick = endSel;
       document.querySelector("footer.write").before(bar);
     }
@@ -578,8 +582,8 @@
       var my = e.target.closest("[data-my]"), k = e.target.closest("[data-k]"); pressed = false; if (!my && !k) return;
       lpT = setTimeout(function () {
         pressed = true;
-        if (k && confirm("Remove this kaomoji?")) { var a = loadList(MY_KAO); a.splice(+k.dataset.k, 1); saveList(MY_KAO, a); paint(); }
-        if (my && confirm("Remove this sticker?")) { saveList(MY_STK, loadList(MY_STK).filter(function (x) { return x.id !== my.dataset.my; })); paint(); }
+        if (k) ask.confirm("Remove this kaomoji?", { ok: "remove", danger: true }).then(function (yes) { if (yes) { var a = loadList(MY_KAO); a.splice(+k.dataset.k, 1); saveList(MY_KAO, a); paint(); } });
+        if (my) ask.confirm("Remove this sticker?", { ok: "remove", danger: true }).then(function (yes) { if (yes) { saveList(MY_STK, loadList(MY_STK).filter(function (x) { return x.id !== my.dataset.my; })); paint(); } });
       }, 550);
     });
     ["pointerup", "pointercancel", "pointerleave"].forEach(function (t) { pop.addEventListener(t, function () { clearTimeout(lpT); }); });
@@ -589,9 +593,12 @@
       if (pressed) { pressed = false; return; }
       if (b.dataset.act === "add") inp.click();
       else if (b.dataset.act === "kao") {   // saves what's in the box, or asks
-        var t = text.value.trim(), fromBox = !!t; if (!t) t = (prompt("Save a kaomoji") || "").trim(); if (!t) return;
-        var a = loadList(MY_KAO); if (a.indexOf(t) >= 0) { toast("Already saved"); return; }
-        a.push(t.slice(0, 40)); if (saveList(MY_KAO, a)) { if (fromBox) { text.value = ""; grow(); caret = null; } paint(); toast("Saved"); }
+        var t0 = text.value.trim(), fromBox = !!t0;
+        (t0 ? Promise.resolve(t0) : ask.prompt("Save a kaomoji", { placeholder: "(｡•ᴗ•｡)", ok: "save" })).then(function (t) {
+          if (!t) return;
+          var a = loadList(MY_KAO); if (a.indexOf(t) >= 0) { toast("Already saved"); return; }
+          a.push(t.slice(0, 40)); if (saveList(MY_KAO, a)) { if (fromBox) { text.value = ""; grow(); caret = null; } paint(); toast("Saved"); }
+        });
       }
       else if (b.dataset.e) insert(b.dataset.e);
       else if (b.dataset.k != null) insert(loadList(MY_KAO)[+b.dataset.k] || "");
@@ -601,14 +608,16 @@
     log.addEventListener("click", function (e) {
       pop.hidden = true;
       var im = e.target.closest && e.target.closest(".msg.ai img.stk"); if (!im || root.classList.contains("selecting")) return;
-      if (!confirm("Keep this sticker?")) return;
+      ask.confirm("Keep this sticker?", { ok: "keep it" }).then(function (yes) { if (yes) keepSticker(im); });
+    });
+    function keepSticker(im) {
       fetch(im.currentSrc || im.src).then(function (r) { return r.blob(); }).then(function (bl) {
         return new Promise(function (ok, no) { var r = new FileReader(); r.onload = function () { ok(r.result); }; r.onerror = no; r.readAsDataURL(bl); });
       }).then(function (d) {
         var list = loadList(MY_STK); if (list.some(function (x) { return x.data === d; })) { toast("Already saved"); return; }
         list.unshift({ id: nid(), data: d }); if (saveList(MY_STK, list)) { paint(); toast("Saved"); }
       }).catch(function () { toast("Couldn't save"); });
-    }); })();
+    } })();
   // sending drops the bubble in at once, with blurred local previews of any images still uploading; the message itself
   // goes out once they're up. If an image never makes it, nothing is sent and a tap retries just the missing ones.
   function send() {
@@ -743,14 +752,16 @@
   var carryT = 0;   // a new window is handed the last hours of talk word for word, up to this many characters (two gates, whichever comes first)
   ["mCarryH", "mCarryC"].forEach(function (id) { $(id).addEventListener("input", function () { carryLabels(); clearTimeout(carryT);
     carryT = setTimeout(function () { api("/app/window/carry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hours: +$("mCarryH").value, chars: +$("mCarryC").value }) }).catch(function () {}); }, 500); }); });
-  function winAct(path, ask, done) {
-    if (ask && !confirm(ask)) return;
+  function winAct(path, q, done) {
+    if (q) { ask.confirm(q).then(function (yes) { if (yes) winAct(path, "", done); }); return; }
     $("mWinNote").textContent = "…";
     api(path, { method: "POST" }).then(function (r) { $("mWinNote").textContent = r && r.started === false ? "Sent, but it hasn't visibly started." : done; setTimeout(function () { loadWin(); loadMeter(); }, 2500); })
       .catch(function (e) { $("mWinNote").textContent = /409/.test(e.message) ? "It's busy or waiting on a question, so it did NOT go through. Try again when it has finished." : "Didn't work: " + e.message; });
   }
-  function newWin(ask) {
-    if (!confirm(ask)) return;
+  function newWin(q, body) {
+    ask.confirm(q, { body: body, ok: "open it" }).then(function (yes) { if (yes) newWinGo(); });
+  }
+  function newWinGo() {
     winCheck = true; winResult = null; $("mWinNote").textContent = "…";
     api("/app/window").then(function (d) { return d.sid || ""; }, function () { return winRaw; }).then(function (before) {
       return api("/app/window/new", { method: "POST" }).then(function () { verifyWin(before, "New window open."); }, function (e) {
@@ -761,7 +772,7 @@
     });
   }
   $("mCompact").onclick = function () { winAct("/app/window/compact", "", "Compacting — give it a minute."); };
-  $("mNew").onclick = function () { newWin("Open a new window for " + AI + "? This one closes. " + (+$("mCarryH").value ? "The new one is handed the last " + $("mCarryHV").textContent + " of your talk (up to " + $("mCarryCV").textContent + " characters); the rest comes from memory." : "Nothing is carried over; only memory comes along.") + " You can come back to this one from Windows."); };
+  $("mNew").onclick = function () { newWin("Open a new window for " + AI + "?", "This one closes. " + carryNote() + " You can come back to this one from Sessions."); };
   $("mWins").onclick = function () { if (cc && meterData && meterData.cc) { closeMeter(); cc.sessions(); return; } if (!hold) return; var before = winRaw; api("/app/window").then(function (d) { if (d.sid) before = d.sid; }, function () {});
     hold.windows(function () { verifyWin(before, "Switched windows."); }); };
   function loadMeter() {
@@ -801,12 +812,12 @@
   $("mKeyList").addEventListener("click", function (e) {
     var l = e.target.closest("button[data-lab]");
     if (l) {
-      var cur = l.closest(".k").querySelector("em").textContent, t = prompt("Label for " + l.dataset.lab + " (just for you):", cur === "(no label)" ? "" : cur);
-      if (t != null) keysPost("/app/keys", { name: l.dataset.lab, label: t }, "Label saved.");
+      var cur = l.closest(".k").querySelector("em").textContent;
+      ask.prompt("Label for " + l.dataset.lab, { body: "Just for you.", value: cur === "(no label)" ? "" : cur, ok: "save" }).then(function (t) { if (t != null) keysPost("/app/keys", { name: l.dataset.lab, label: t }, "Label saved."); });
       return;
     }
-    var b = e.target.closest("button[data-del]"); if (!b || !confirm("Remove " + b.dataset.del + "?")) return;
-    keysPost("/app/keys/delete", { name: b.dataset.del }, "Removed " + b.dataset.del + ".");
+    var b = e.target.closest("button[data-del]"); if (!b) return;
+    ask.confirm("Remove " + b.dataset.del + "?", { body: "The companion can't use it after this.", ok: "remove", danger: true }).then(function (yes) { if (yes) keysPost("/app/keys/delete", { name: b.dataset.del }, "Removed " + b.dataset.del + "."); });
   });
   function openMeter() { paintMeter(); paintWin(); $("meter").hidden = false; loadMeter(); loadWin(); loadKeys(); }
   function closeMeter() { $("meter").hidden = true; }

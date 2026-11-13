@@ -27,3 +27,29 @@ input[type="range"]{ accent-color:var(--blue); }
   body.attic::before, body.kitchen::before{ right:1vw; bottom:-3vh; height:96vh; aspect-ratio:2 / 3; background-image:url(draft-day-b.webp); opacity:.4; }
   :root[data-side="moon"] body.attic::before, :root[data-side="moon"] body.kitchen::before{ right:3vw; bottom:7vh; height:auto; width:min(46vw, 760px); aspect-ratio:3 / 2; background-image:url(draft-night-b.webp); opacity:.5; }
 }
+
+/* ── the house's small chrome in the plates' manner: slips of the page's paper, words not pills, one blue ── */
+/* a passing word: a small slip with a blue mark, not a dark pill */
+.toast{ border-radius:2px; padding:9px 16px 9px 29px; background:var(--paper) var(--grain); background-size:180px; color:var(--ink);
+  box-shadow:0 0 0 1px var(--river), 0 8px 24px rgba(16,16,22,.16); font:italic 400 14.5px/1.35 var(--latin); letter-spacing:.04em; white-space:nowrap; }
+.toast::before{ content:""; position:absolute; left:14px; top:50%; width:5px; height:5px; margin-top:-2.5px; border-radius:50%; background:var(--blue); }
+:root[data-side="moon"] .toast{ box-shadow:0 0 0 1px var(--river), 0 8px 24px rgba(0,0,0,.5); }
+/* the menu a long press brings up on a bubble */
+#bubMenu{ padding:0 2px; border:0; border-radius:2px; background:var(--paper) var(--grain); background-size:180px; box-shadow:0 0 0 1px var(--river), 0 10px 28px rgba(16,16,22,.18); }
+#bubMenu button{ padding:10px 12px; border-radius:0; color:var(--ink); font:italic 400 15px/1 var(--latin); letter-spacing:.05em; }
+#bubMenu button + button{ box-shadow:inset 1px 0 0 var(--hair); }
+#bubMenu button:hover, #bubMenu button:active{ background:none; color:var(--blue); }
+#bubMenu .danger, #selBar .danger{ color:var(--accent); }
+/* choosing several messages */
+#selBar{ gap:18px; border-top:1px solid var(--river); font:italic 400 14px/1 var(--latin); letter-spacing:.05em; }
+#selBar button{ padding:6px 2px; border:0; border-radius:0; background:none; color:var(--soft); font:italic 400 15px/1 var(--latin); letter-spacing:.05em; }
+#selBar button.danger{ color:var(--accent); text-decoration:underline 1px; text-underline-offset:5px; }
+/* the hold's sheets (heart, folders, memory): the gauge's paper, not glass */
+.hold, :root[data-side="moon"] .hold{ background:color-mix(in srgb, var(--paper) 58%, transparent); }
+:root[data-side="moon"] .hold{ background:rgba(10,10,14,.5); }
+.hold .sheet, :root[data-side="moon"] .hold .sheet{ border-radius:2px; background:var(--paper) var(--grain); background-size:180px; -webkit-backdrop-filter:none; backdrop-filter:none;
+  box-shadow:0 0 0 1px var(--river), 0 14px 40px rgba(16,16,22,.2); }
+.hold .hh b{ font-family:var(--latin); font-weight:500; font-size:25px; letter-spacing:.03em; }
+.hold .hh small{ letter-spacing:.3em; color:var(--faint); }
+.hold .hh .x, .hold .bk{ font-family:var(--latin); font-size:15.5px; }
+.hold .tabs button.on::after{ background:var(--blue); }
