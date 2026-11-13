@@ -1122,12 +1122,11 @@ def register(app, g, x):
                 continue
             try:
                 sid = str(session_meta().get("sessionId") or "")
+                if sid != last_sid:   # the window opened another session — or closed, or came back (even to the same one): say so
+                    await broadcast(g["app_subs"], {"type": "cc_sid", "sid": sid})
+                    last_sid = sid
                 if not sid:
                     continue
-                if sid != last_sid:
-                    if last_sid:
-                        await broadcast(g["app_subs"], {"type": "cc_sid", "sid": sid})
-                    last_sid = sid
                 L = await asyncio.to_thread(read_log, sid)
                 if not L:
                     continue

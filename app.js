@@ -144,7 +144,8 @@
     clearTimeout(busyT);
     if (GROUP) return;
     if (!key || document.hidden || $("room").hidden) { busyT = setTimeout(pollBusy, 5000); return; }
-    api("/app/busy").then(function (d) { d.at = Date.now(); busy = d; paintState(); if (CCMODE && view === liveSid) typing(d.state === "busy"); }).catch(function () { busy = null; })
+    api("/app/busy").then(function (d) { var was = busy && busy.state; d.at = Date.now(); busy = d; paintState(); if (CCMODE && view === liveSid) typing(d.state === "busy");
+      if (CCMODE && (was === "offline") !== (d.state === "offline")) refreshLive(); }).catch(function () { busy = null; })
       .then(function () { busyT = setTimeout(pollBusy, busy && busy.state === "busy" ? 2500 : 5000); });
   }
   document.addEventListener("visibilitychange", function () { if (!document.hidden) pollBusy(); });
@@ -156,7 +157,7 @@
     fetch(RELAY + "/app/stream", { headers: { "Authorization": "Bearer " + key }, signal: ctl.signal, cache: "no-store" }).then(function (r) {
       if (!r.ok || !r.body) throw new Error("stream " + r.status);
       // a half-written reply from before the drop won't get the rest of its pieces; the finished message comes through catchUp
-      retry = 0; setState(true); drafts.forEach(function (d) { d.el.remove(); }); drafts.clear(); catchUp();
+      retry = 0; setState(true); drafts.forEach(function (d) { d.el.remove(); }); drafts.clear(); catchUp(); refreshLive();
       var rd = r.body.getReader(), dec = new TextDecoder(), buf = "";
       function pump() {
         return rd.read().then(function (c) {
@@ -183,7 +184,7 @@
   function onEvent(ev) {
     if (CCMODE) {
       if (ev.type === "cc") { if (ev.sid === view) (ev.messages || []).forEach(put); return; }
-      if (ev.type === "cc_sid") { var follow = view === liveSid || carrying; carrying = false; liveSid = ev.sid; if (follow) openView(ev.sid); else paintRo(); return; }
+      if (ev.type === "cc_sid") { liveTo(ev.sid || ""); return; }
       if (ev.id != null && ev.from) { if (ev.kind === "term" && ev.meta && ev.meta.note) localCard(ev.text, "", true); return; }   // the relay's own log is not this chat
     }
     if (ev.id != null && ev.from) { put(ev); return; }
@@ -220,8 +221,10 @@
     ro.hidden = !off; text.disabled = !!off; root.classList.toggle("reading", !!off);
     if (!off) return;
     var away = viewInfo.elsewhere ? (viewInfo.elsewhere === "vscode" ? "open in VS Code right now" : "open in another Claude Code right now") : "";
-    ro.innerHTML = '<span>Reading an earlier window' + (away ? " · <b>" + away + "</b>" : "") + ".</span>" +
-      (viewInfo.readonly ? "" : '<button type="button" data-a="go">carry it on here</button>') + '<button type="button" data-a="back">back to the live one</button>';
+    if (carrying) { ro.innerHTML = "<span>Opening it in the window…</span>"; ro.onclick = null; return; }
+    ro.innerHTML = (liveSid ? '<span>Reading an earlier window' + (away ? " · <b>" + away + "</b>" : "") + ".</span>" : "<span>The window isn’t open right now.</span>") +
+      (viewInfo.readonly ? "" : '<button type="button" data-a="go">' + (liveSid ? "carry it on here" : "open it with this session") + "</button>") +
+      (liveSid ? '<button type="button" data-a="back">back to the live one</button>' : "");
     ro.onclick = function (e) {
       var b = e.target.closest("button"); if (!b) return;
       if (b.dataset.a === "back") { openView(liveSid); return; }
@@ -237,14 +240,24 @@
   }
   function openingDone() { var n = log.querySelector(".msg.opening"); if (n) n.remove(); }
   function openingFailed(msg) { carrying = false; openingDone(); toast(msg); }
+  /* which session the window has now (an event, or asked): follow it if we were on the live one or are carrying one on */
+  function liveTo(sid) {
+    if (sid === liveSid && !carrying) { paintRo(); return; }
+    var follow = (view === liveSid || carrying) && sid;
+    liveSid = sid;
+    if (sid) { carrying = false; openingDone(); }
+    if (follow) openView(sid); else paintRo();
+  }
+  function refreshLive() { if (CCMODE) api("/app/cc/where").then(function (w) { liveTo((w && w.sid) || ""); }, function () {}); }
   function carryOn(sid, elsewhere) {   // the window closes its session and opens this one (--resume); the page follows it
+    if (carrying) { toast("Already opening it…"); return; }
     var away = elsewhere ? (elsewhere === "vscode" ? "open in VS Code right now" : "open in another Claude Code right now") : "";
     ask.confirm("Carry this session on here?", { body: (away ? "It is " + away + "; two windows on one session don't see each other's new turns. " : "") + "The window in use now closes; it stays in Sessions.", ok: "carry it on" }).then(function (yes) {
       if (!yes) return;
-      if ($("ro") && !$("ro").hidden) $("ro").querySelector("span").textContent = "Opening it in the window…";
-      var before = liveSid; carrying = true; toast("Opening it in the window…");
+      var before = liveSid; carrying = true; toast("Opening it in the window…"); paintRo();
       api("/app/window/switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: sid }) })
-        .then(function () { verifyWin(before, "This session is open here now."); }, function (e2) { carrying = false; toast("Didn't switch: " + e2.message); paintRo(); });
+        .then(function () { toast("This session is open here now."); refreshLive(); setTimeout(refreshLive, 3000); setTimeout(function () { if (carrying) { carrying = false; refreshLive(); } }, 60000); loadWin(); loadMeter(); },
+          function (e2) { carrying = false; toast(/409/.test(e2.message) ? "It's already opening a window — a moment." : "Didn't switch: " + e2.message); refreshLive(); });
     });
   }
 
@@ -738,7 +751,7 @@
   function verifyWin(before, label) {
     var start = Date.now(), last = "", lastAt = 0;
     winCheck = true; winResult = null; $("mWinNote").textContent = "Checking the window really changed…";
-    function finish(text, same) { winCheck = false; winResult = { text: text, same: same, at: Date.now() }; openingDone(); loadWin(); loadMeter(); paintWin(); toast(text); }
+    function finish(text, same) { winCheck = false; winResult = { text: text, same: same, at: Date.now() }; openingDone(); refreshLive(); loadWin(); loadMeter(); paintWin(); toast(text); }
     (function tick() {
       api("/app/window").then(function (d) { return d; }, function () { return null; }).then(function (d) {
         if (d && d.sid) { last = d.sid; lastAt = d.started_at; }

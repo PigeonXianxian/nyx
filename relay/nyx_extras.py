@@ -32,6 +32,7 @@ import os
 import re
 import secrets
 import shlex
+import shutil
 import sqlite3
 import subprocess
 import time
@@ -790,7 +791,12 @@ def register(app, g):
                 return
 
     async def run_start(cmd, env):
-        """Returns "" when the start command says it worked, otherwise why it didn't."""
+        """Returns "" when the start command says it worked, otherwise why it didn't.
+        Under systemd the window is started in a scope of its own: started straight from here, its tmux would belong to the
+        relay's service, and every restart of the relay (a deploy, an unattended upgrade restarting what uses libc) would
+        take the window down with it."""
+        if os.geteuid() == 0 and Path("/run/systemd/system").is_dir() and shutil.which("systemd-run"):
+            cmd = ["systemd-run", "--scope", "--quiet", "--collect", "--unit", f"nyx-window-{int(time.time())}", "--"] + list(cmd)
         try:
             proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=120, env=env)
         except (subprocess.TimeoutExpired, OSError) as e:

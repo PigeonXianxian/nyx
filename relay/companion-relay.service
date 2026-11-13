@@ -6,6 +6,8 @@ Description=companion relay backend (channel <-> PWA)
 After=network.target
 
 [Service]
+# the Claude Code window the relay starts (tmux) must outlive a restart of the relay: stop only the relay itself
+KillMode=process
 Type=simple
 WorkingDirectory=/root/companion-relay
 EnvironmentFile=/root/companion-relay/relay.env
