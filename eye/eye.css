@@ -59,8 +59,8 @@
 .msg.sel .body{ background:color-mix(in srgb, var(--blue) 12%, transparent); }
 
 /* the postmark between days */
-.day{ display:flex; align-items:center; gap:12px; height:46px; margin:26px 0 4px; padding-left:calc(var(--m) - 22px); text-align:left; font:italic 400 14px/1 var(--latin); letter-spacing:.16em; color:var(--faint); }
-.day::before{ content:""; flex:none; width:88px; height:42px; background:no-repeat left center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 88 42' fill='none' stroke='%235A62D0' stroke-width='1.2'%3E%3Ccircle cx='21' cy='21' r='19'/%3E%3Ccircle cx='21' cy='21' r='14.5'/%3E%3Cpath d='M14 21h14M21 14v14' stroke-width='.8'/%3E%3Cpath d='M44 12q5 -4 10 0t10 0 10 0 10 0M44 18q5 -4 10 0t10 0 10 0 10 0M44 24q5 -4 10 0t10 0 10 0 10 0M44 30q5 -4 10 0t10 0 10 0 10 0'/%3E%3C/svg%3E"); opacity:.85; }
+.day{ display:flex; align-items:center; gap:12px; height:60px; margin:26px 0 4px; padding-left:calc(var(--m) - 30px); text-align:left; font:italic 400 14px/1 var(--latin); letter-spacing:.16em; color:var(--faint); }
+.day::before{ content:""; flex:none; width:128px; height:58px; background:no-repeat left center/contain; background-image:var(--pm, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 88 42' fill='none' stroke='%235A62D0' stroke-width='1.2'%3E%3Ccircle cx='21' cy='21' r='19'/%3E%3Ccircle cx='21' cy='21' r='14.5'/%3E%3Cpath d='M14 21h14M21 14v14' stroke-width='.8'/%3E%3Cpath d='M44 12q5 -4 10 0t10 0 10 0 10 0M44 18q5 -4 10 0t10 0 10 0 10 0M44 24q5 -4 10 0t10 0 10 0 10 0M44 30q5 -4 10 0t10 0 10 0 10 0'/%3E%3C/svg%3E")); opacity:.92; }
 
 /* pictures come as prints */
 .att{ gap:12px; margin:6px 0 6px; }
@@ -136,7 +136,7 @@
 .msg.gap{ margin-top:30px; } .msg.gap .t{ left:6px; top:-17px; font-size:9px; }
 .msg .q{ font-size:.8em; padding-left:8px; }
 .msg .nl{ width:3.5px; height:3.5px; margin:0 .55em .2em; }
-.day{ height:38px; margin:18px 0 2px; font-size:11.5px; } .day::before{ width:72px; height:34px; }
+.day{ height:52px; margin:18px 0 2px; font-size:11.5px; padding-left:calc(var(--m) - 30px); } .day::before{ width:104px; height:47px; }
 .att img{ max-width:min(128px, 38vw); max-height:150px; padding:4px 4px 11px; }
 #typing{ padding:10px 0 0 calc(var(--m) + 8px); gap:4px; } #typing i{ width:3px; height:3px; }
 .write{ padding:2px 18px calc(env(safe-area-inset-bottom) + 52px) 38px; }
@@ -187,7 +187,7 @@
   .msg.gap{ margin-top:calc(var(--u) * 2.1); } .msg.gap .t{ font-size:calc(var(--u) * .62); top:calc(var(--u) * -1.15); }
   .msg .who{ font-size:calc(var(--u) * .82); }
   .msg.think .body{ font-size:calc(var(--u) * .88); }
-  .day{ font-size:calc(var(--u) * .78); height:calc(var(--u) * 2.6); margin:calc(var(--u) * 1.2) 0 2px; }
+  .day{ font-size:calc(var(--u) * .78); height:calc(var(--u) * 3.6); margin:calc(var(--u) * 1.2) 0 2px; padding-left:calc(var(--m) - var(--u) * 1.8); } .day::before{ width:calc(var(--u) * 7.4); height:calc(var(--u) * 3.36); }
   .att img{ max-width:calc(var(--u) * 13); max-height:calc(var(--u) * 14); }
   #typing{ padding:calc(var(--u) * .7) 0 0 calc(var(--m) + var(--u) * .9); gap:5px; } #typing i{ width:4px; height:4px; }
   .write{ margin:0 0 0 calc(var(--lp) + var(--rm)); width:calc(var(--col) + var(--m)); padding:4px 0 clamp(26px, 5vh, 48px) var(--m); }

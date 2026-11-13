@@ -422,7 +422,7 @@
     for (var n = log.lastElementChild; n; n = n.previousElementSibling) if (n.dataset && n.dataset.id && +n.dataset.id < id) { after = n; break; }
     var ref = after ? after.nextSibling : log.firstChild;
     var prevDay = after ? dayOf(after.dataset.ts) : null;
-    if (dayOf(m.ts) !== prevDay) { var dd = document.createElement("div"); dd.className = "day"; dd.textContent = dayLabel(m.ts); log.insertBefore(dd, ref); }
+    if (dayOf(m.ts) !== prevDay) { var dd = document.createElement("div"); dd.className = "day"; dd.textContent = dayLabel(m.ts); if (window.NyxPostmark) NyxPostmark(dd, m.ts); log.insertBefore(dd, ref); }   // a hand-struck postmark (eye/postmark.js)
     else if (after && after.dataset.from === m.from) el.classList.add("cont");
     if (after && dayOf(m.ts) === prevDay && Date.parse(m.ts) - Date.parse(after.dataset.ts) > 9e5) el.classList.add("gap");   // a quarter of an hour of quiet: the time goes in the margin
     log.insertBefore(el, ref);
