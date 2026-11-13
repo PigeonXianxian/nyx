@@ -17,8 +17,10 @@
     cv.className = "plate"; cv.setAttribute("aria-hidden", "true"); host.insertBefore(cv, host.firstChild);
     function frame() {
       timer = 0; if (!alive) return;
-      var r = cv.getBoundingClientRect(), on = r.width > 2 && r.height > 2 && !document.hidden;
-      if (!on) { was = false; timer = setTimeout(frame, 500); return; }
+      // it is constructed when the letter page opens — not again each time the tab or the window comes back to the front
+      var r = cv.getBoundingClientRect(), shown = r.width > 2 && r.height > 2;
+      if (!shown) { was = false; timer = setTimeout(frame, 500); return; }   // the page was left (home): opening it again lays it again
+      if (document.hidden) { timer = setTimeout(frame, 500); return; }       // only out of sight: wait, and carry on where it was
       var now = performance.now(); if (!was) { was = true; seenAt = now; }
       var nw = Math.round(r.width), nh = Math.round(r.height), nd = Math.min(window.devicePixelRatio || 1, 2);
       if (nw !== w || nh !== h || nd !== dpr) { w = nw; h = nh; dpr = nd; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
