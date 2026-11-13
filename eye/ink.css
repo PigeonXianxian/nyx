@@ -1,3 +1,4 @@
+@import url("bars.css");   /* every scrollbar in the house (eye/bars.css) */
 /* 构成 — the palette every page shares: paper, ink, one blue. Load it last. */
 /* ── the palette: paper, ink, one blue ── */
 :root{
