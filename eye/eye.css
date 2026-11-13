@@ -176,7 +176,8 @@
   #room .who b{ font-size:calc(var(--u) * 2.35); letter-spacing:.05em; }
   #room #state{ font-size:calc(var(--u) * .86); }
   #room .who::after{ content:"PL. III   \00b7   LETTERS, BY POST"; display:block; white-space:nowrap; margin-top:calc(var(--u) * 1.5); padding-top:calc(var(--u) * .8); border-top:1px solid var(--river); width:calc(var(--u) * 15); font:400 calc(var(--u) * .68)/1.9 var(--latin); letter-spacing:.3em; color:var(--faint); }
-  #log{ margin:0 0 0 calc(var(--lp) + var(--rm)); width:calc(var(--col) + var(--m)); flex:1 1 auto; padding:clamp(48px, 8vh, 84px) 0 22px 0; }
+  #log{ --m:calc(var(--u) * 2.9); margin:0 0 0 calc(var(--lp) + var(--rm));   /* the same margin as the writing frame below (the phone's 38px would leave the rule short of it) */
+         width:calc(var(--col) + var(--m)); flex:1 1 auto; padding:clamp(48px, 8vh, 84px) 0 22px 0; }
   .msg .body, .msg.ai .body, .msg.me .body{ max-width:100%; font-size:var(--u); line-height:1.86; }
   .msg, .msg.ai, .msg.me{ margin-top:calc(var(--u) * .72); padding-left:calc(var(--m) + var(--u) * .9); } .msg.me{ padding-left:calc(var(--m) + var(--u) * 3.9); }
   .msg.cont{ margin-top:calc(var(--u) * .3); }

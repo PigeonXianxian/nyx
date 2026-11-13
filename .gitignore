@@ -11,3 +11,10 @@ channel/mcp.json
 town/.venv/
 town/.key
 town/.state.json
+# picks and state the relay keeps for this machine's window (relay/nyx_cc.py, channel/start-channel.sh)
+relay/workdir
+relay/.window-prompt.md
+relay/model
+relay/effort_now
+relay/effort_pending
+relay/mode_pick

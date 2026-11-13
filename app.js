@@ -11,7 +11,10 @@
   var RELAY = ls("nyx_relay") || HOME, AI = (RELAY !== HOME && ls("nyx_ai")) || C.aiName || "Companion";
   var GROUP = /\/g$/.test(RELAY);   // the group chat: the first companion's relay at /g; nobody's gauge, every answer says who it's from
   var root = document.documentElement, $ = function (id) { return document.getElementById(id); };
-  var key = null, hkey = null, lastId = 0, byId = new Map(), drafts = new Map(), quote = null;
+  var key = null, hkey = null, lastId = 0, byId = new Map(), drafts = new Map(), quote = null, cc = null;   // cc: the Claude Code controls (cc.js)
+  // CCMODE: the chat is the Claude Code window itself — the page reads its session transcript (GET /app/cc/log, "cc" events)
+  // and what you write is typed into it (POST /app/cc/say). view: the session on the page; liveSid: the one the window has open.
+  var CCMODE = false, view = "", liveSid = "", viewInfo = {}, tools = new Map(), carrying = false;
   var log = $("log"), text = $("text"), sendBtn = $("send");
 
   var paintSide = NyxPaper.paint;
@@ -37,6 +40,7 @@
     closeDrawer();
     if (a.id === "chat") show("room");
     else if (a.apps && hold) hold.folder(a, openApp);
+    else if (a.id === "sessions") { show("room"); openSessions(); }   // pick an earlier conversation (cc.js)
     else if ((a.id === "board" || a.id === "heart") && hold) hold[a.id]();
     else if (a.href) location.href = a.href;
     else if (a.id === "memory" && hold) hold.memory();
@@ -54,6 +58,7 @@
     bedroom: '<path d="M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6"/><path d="M3 18h18M5 10V6.5A1.5 1.5 0 0 1 6.5 5h11A1.5 1.5 0 0 1 19 6.5V10"/><path d="M7 10h4v-2H7zM13 10h4v-2h-4z"/>',
     memory: '<path d="M12 3.5c.8 5 3.5 7.7 8.5 8.5-5 .8-7.7 3.5-8.5 8.5-.8-5-3.5-7.7-8.5-8.5 5-.8 7.7-3.5 8.5-8.5Z"/>',
     board: '<rect x="3.5" y="4" width="17" height="16" rx="2.2"/><path d="M9 4v16M15 4v16"/><path d="M5.5 8h1.8M11 8h1.8M11 11.5h1.8M17 8h1.8"/>',
+    sessions: '<path d="M7 4.5h11.5v13"/><path d="M4.5 7h11.5v13H4.5z"/><path d="M7.5 11h5.5M7.5 14h5.5M7.5 17h3"/>',
     heart: '<path d="M12 20s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.6-7.5 10-7.5 10Z"/><path d="M7 12h2.5l1.2-2.2 2 4.4 1.3-2.2H17"/>',
     kitchen: '<path d="M4 11h16"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M9 6.5c0-1 1-1.5 1-2.5M13 6.5c0-1 1-1.5 1-2.5"/><path d="M12 18v2.5M8.5 20.5h7"/>',
     link: '<path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M17 14v5H5V7h5"/>' };
@@ -137,7 +142,7 @@
     clearTimeout(busyT);
     if (GROUP) return;
     if (!key || document.hidden || $("room").hidden) { busyT = setTimeout(pollBusy, 5000); return; }
-    api("/app/busy").then(function (d) { d.at = Date.now(); busy = d; paintState(); }).catch(function () { busy = null; })
+    api("/app/busy").then(function (d) { d.at = Date.now(); busy = d; paintState(); if (CCMODE && view === liveSid) typing(d.state === "busy"); }).catch(function () { busy = null; })
       .then(function () { busyT = setTimeout(pollBusy, busy && busy.state === "busy" ? 2500 : 5000); });
   }
   document.addEventListener("visibilitychange", function () { if (!document.hidden) pollBusy(); });
@@ -174,6 +179,11 @@
     try { onEvent(JSON.parse(data)); } catch (e) {}
   }
   function onEvent(ev) {
+    if (CCMODE) {
+      if (ev.type === "cc") { if (ev.sid === view) (ev.messages || []).forEach(put); return; }
+      if (ev.type === "cc_sid") { var follow = view === liveSid || carrying; carrying = false; liveSid = ev.sid; if (follow) openView(ev.sid); else paintRo(); return; }
+      if (ev.id != null && ev.from) { if (ev.kind === "term" && ev.meta && ev.meta.note) localCard(ev.text, "", true); return; }   // the relay's own log is not this chat
+    }
     if (ev.id != null && ev.from) { put(ev); return; }
     switch (ev.type) {
       case "typing": typing(ev.active); break;
@@ -181,7 +191,48 @@
     }
   }
   function catchUp() {
+    if (CCMODE) return view ? api("/app/cc/log?sid=" + view + "&after=" + lastId).then(function (d) { (d.messages || []).forEach(put); }).catch(function (e) { if (e.auth) logout(); }) : Promise.resolve();
     return api("/app/history?since=" + lastId + "&limit=200").then(function (d) { (d.messages || []).forEach(put); }).catch(function (e) { if (e.auth) logout(); });
+  }
+  /* ---------- Claude Code mode: which session is on the page ---------- */
+  function ccLog(sid) {
+    return api("/app/cc/log?sid=" + encodeURIComponent(sid || "") + "&tail=200").then(function (d) { view = d.sid || sid; viewInfo = d; return d; });
+  }
+  function openView(sid) {   // show a session: the live one to write in, or any other to read (and carry on here if you like)
+    view = sid; log.innerHTML = ""; byId.clear(); msgs.clear(); tools.clear(); lastId = 0; loadDeleted();
+    return ccLog(sid).then(function (d) { (d.messages || []).forEach(put); earlier(d.more); paintRo(); toBottom(); }).catch(function (e) { toast("Couldn't open it: " + e.message); });
+  }
+  function earlier(more) {   // a "further back" mark at the head of the letter
+    var b = $("earlier"); if (b) b.remove(); if (!more) return;
+    b = document.createElement("button"); b.type = "button"; b.id = "earlier"; b.textContent = "further back";
+    b.onclick = function () {
+      var first = null; byId.forEach(function (el, id) { if (first === null || id < first) first = id; });
+      var h = log.scrollHeight;
+      api("/app/cc/log?sid=" + view + "&before=" + first + "&tail=200").then(function (d) { (d.messages || []).forEach(put); earlier(d.more); log.scrollTop += log.scrollHeight - h; });
+    };
+    log.insertBefore(b, log.firstChild);
+  }
+  function paintRo() {   // reading a session the window doesn't have open: say so, and offer to carry it on here
+    var ro = $("ro"), off = CCMODE && view && view !== liveSid;
+    if (!ro) { ro = document.createElement("div"); ro.id = "ro"; document.querySelector("footer.write").insertBefore(ro, document.querySelector("footer.write .line")); }
+    ro.hidden = !off; text.disabled = !!off; root.classList.toggle("reading", !!off);
+    if (!off) return;
+    var away = viewInfo.elsewhere ? (viewInfo.elsewhere === "vscode" ? "open in VS Code right now" : "open in another Claude Code right now") : "";
+    ro.innerHTML = '<span>Reading an earlier window' + (away ? " · <b>" + away + "</b>" : "") + ".</span>" +
+      (viewInfo.readonly ? "" : '<button type="button" data-a="go">carry it on here</button>') + '<button type="button" data-a="back">back to the live one</button>';
+    ro.onclick = function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.a === "back") { openView(liveSid); return; }
+      carryOn(view, viewInfo.elsewhere);
+    };
+  }
+  function carryOn(sid, elsewhere) {   // the window closes its session and opens this one (--resume); the page follows it
+    var away = elsewhere ? (elsewhere === "vscode" ? "open in VS Code right now" : "open in another Claude Code right now") : "";
+    if (!confirm((away ? "It is " + away + "; two windows on one session don't see each other's new turns. " : "") + "Carry this session on here? The window in use now closes; it stays in Sessions.")) return;
+    if ($("ro") && !$("ro").hidden) $("ro").querySelector("span").textContent = "Opening it in the window…";
+    var before = liveSid; carrying = true; toast("Opening it in the window…");
+    api("/app/window/switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: sid }) })
+      .then(function () { verifyWin(before, "This session is open here now."); }, function (e2) { carrying = false; toast("Didn't switch: " + e2.message); paintRo(); });
   }
 
   /* ---------- rendering ---------- */
@@ -190,7 +241,7 @@
   function rich(s) {
     var short = C.home === "eye" && (s || "").length < 60 && ((s || "").match(/\n/g) || []).length === 1;   // 构成: one break in a short line is a pause, drawn as a blue dot
     return esc(s || "")
-      .replace(STK, function (all, name) { return C.stickers ? '<img class="stk" alt="' + name + '" src="' + C.stickers + encodeURIComponent(name) + '.png" data-n="' + encodeURIComponent(name) + '">' : all; }).replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"，。！？）]/g, function (u) { return '<a href="' + u + '" target="_blank" rel="noopener">' + u + "</a>"; }).replace(/\n/g, short ? '<i class="nl"></i>' : "<br>");
+      .replace(STK, function (all, name) { return C.stickers ? '<img class="stk" alt="' + name + '" src="' + C.stickers + encodeURIComponent(name) + '.png" data-n="' + encodeURIComponent(name) + '">' : all; }).replace(/https?:\/\/[^\s<\u3000-\u9fff\uff00-\uffef]+[^\s<.,;:!?)\]'"，。！？）\u3000-\u9fff\uff00-\uffef]/g, function (u) { return '<a href="' + u + '" target="_blank" rel="noopener">' + u + "</a>"; }).replace(/\n/g, short ? '<i class="nl"></i>' : "<br>");
   }
   function hm(ts) { var d = new Date(ts); return isNaN(d) ? "" : String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
   function dayOf(ts) { var d = new Date(ts); return isNaN(d) ? "" : d.toDateString(); }
@@ -219,7 +270,7 @@
   var EXT = [".png", ".gif", ".jpg", ".webp"];
   function stkFallback(im) { var i = 0; im.onerror = function () { if (++i < EXT.length) im.src = C.stickers + im.dataset.n + EXT[i]; else im.replaceWith(document.createTextNode("[" + decodeURIComponent(im.dataset.n) + "]")); }; }
   /* ---------- local delete: hides messages on this device only, the relay keeps them ---------- */
-  function delKey() { return "nyx_deleted:" + RELAY; }
+  function delKey() { return "nyx_deleted:" + RELAY + (CCMODE ? ":" + view : ""); }
   var deleted = new Set(), msgs = new Map();
   function loadDeleted() { deleted = new Set(); try { (JSON.parse(ls(delKey()) || "[]") || []).forEach(function (k) { deleted.add(String(k)); }); } catch (e) {} }
   loadDeleted();
@@ -296,16 +347,22 @@
   var MARK_SENT = '<i class="mark" aria-label="sent"><svg viewBox="0 0 12 12"><path d="M8.6 2.1A4.3 4.3 0 1 0 9.9 8.4 3.5 3.5 0 0 1 8.6 2.1Z"/></svg></i>';
   var MARK_WAIT = '<i class="mark wait" aria-label="sending"><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="3.6"/></svg></i>';
   function build(m) {
-    var me = m.from === "human", kind = m.kind || "reply", el = document.createElement("div");
-    el.className = "msg " + (me ? "me" : "ai") + (kind === "thinking" ? " think" : kind === "act" ? " act" : "");
+    var me = m.from === "human", kind = m.kind || "reply", el = document.createElement("div"), note = kind === "term" && m.meta && m.meta.note;
+    if (kind === "note") { kind = "term"; note = true; }
+    el.className = "msg " + (me ? "me" : "ai") + (kind === "thinking" ? " think" : kind === "act" ? " act" : kind === "cmd" ? " cmd" : kind === "term" ? " term" + (note ? " note" : "") : kind === "tool" ? " tool" : "");
     el.dataset.id = m.id; el.dataset.from = m.from; el.dataset.ts = m.ts;
     var q = m.meta && m.meta.quote, inner = q ? '<span class="q">' + esc((q.who ? q.who + "  " : "") + (q.text || "")) + "</span>" : "";
     var who = !me && m.meta && m.meta.speaker; if (who) inner = '<span class="who">' + esc(who) + "</span>" + inner;
     if (kind === "thinking") inner += '<details><summary>thinking…</summary>' + rich(m.text) + "</details>";
+    else if (kind === "cmd") inner += '<span class="pr">❯</span>' + esc(m.text);   // a command typed into the window from here (cc.js)
+    else if (kind === "tool") inner += '<button type="button" class="tl"><i></i><b>' + esc((m.meta && m.meta.tool) || "tool") + "</b>" + (m.text ? "<span>" + esc(m.text) + "</span>" : "") + '</button><pre class="res" hidden></pre>';   // a tool call; its result folds in under it
+    else if (kind === "reply" && CCMODE && window.NyxCC && NyxCC.md) inner += NyxCC.md(m.text);   // Claude's words are markdown
+    else if (kind === "term") inner += note ? '<span class="nt">' + esc(m.text) + "</span>"   // …and what the window printed back
+      : '<span class="th">' + (m.meta && m.meta.local ? "" : m.meta && m.meta.dialog ? "window · " : "terminal · ") + "/" + esc((m.meta && m.meta.cmd) || "") + "</span><pre>" + esc(m.text) + "</pre>";
     else {
       var atts = (m.meta && m.meta.attachments) || [];
       if (atts.length) inner += '<div class="att">' + atts.map(function (a, i) { return a.kind === "image" ? '<img data-i="' + i + '" alt="">' : '<span class="file" data-i="' + i + '">' + esc(a.name || "file") + "</span>"; }).join("") + "</div>";
-      inner += rich(m.text);
+      inner += me && /^\/[A-Za-z0-9][\w:-]*/.test(m.text || "") ? rich(m.text).replace(/^\/[A-Za-z0-9][\w:-]*/, function (c) { return '<b class="cmdn">' + c + "</b>"; }) : rich(m.text);   // a /skill sent to the companion
       if (C.stickers && !atts.length && String(m.text || "").replace(STK, "").trim() === "" && STK.test(m.text || "")) el.classList.add("only-stk");
       if (!String(m.text || "").trim() && atts.length === 1 && /^sticker-/.test(atts[0].name || "")) el.classList.add("only-stk", "stk-att");   // your own sticker went up as a picture; show it like a sticker
       STK.lastIndex = 0;
@@ -328,14 +385,24 @@
   function put(m) {
     if (!m || m.id == null) return;
     var id = +m.id; if (id > lastId) lastId = id;
+    if (m.kind === "result") {   // a tool's result goes under its call, folded
+      var t = tools.get(m.meta && m.meta.tid); if (!t) return;
+      var pre = t.querySelector(".res"); pre.textContent = m.text || "(nothing)"; t.classList.add("done"); if (m.meta.error) t.classList.add("err");
+      return;
+    }
     if (m.meta && m.meta.stream_id) dropDraft(m.meta.stream_id + ":" + (m.kind === "thinking" ? "thinking" : "reply"));
     var p = null;
-    if (m.from === "human") { p = log.querySelector('.msg.pending[data-text="' + CSS.escape(m.text || "") + '"]'); if (p) p.remove(); }
+    if (m.from === "human") {
+      p = log.querySelector('.msg.pending[data-text="' + CSS.escape(m.text || "") + '"]');
+      if (!p && CCMODE && (m.kind === "user" || m.kind === "cmd")) p = log.querySelector(".msg.pending");   // the window may add a quote or file paths to it
+      if (p) p.remove();
+    }
     if (deleted.has(String(m.id))) return;
     msgs.set(id, m);
     var el = build(m), old = byId.get(id), stick = nearBottom();
     // the real copy of a just-sent image fetches it back from the relay; borrow the local preview so the bubble isn't blank meanwhile
     if (p) { var lp = p.querySelectorAll(".att img"), np = el.querySelectorAll(".att img"); for (var j = 0; j < np.length && j < lp.length; j++) if (lp[j].src && !np[j].getAttribute("src")) np[j].src = lp[j].src; }
+    if (m.kind === "tool" && m.meta && m.meta.tid) { tools.set(m.meta.tid, el); el.querySelector(".tl").onclick = function () { var r = el.querySelector(".res"); r.hidden = !r.hidden; el.classList.toggle("open", !r.hidden); }; }
     if (old) { old.replaceWith(el); byId.set(id, el); return; }
     byId.set(id, el);
     var after = null; // walk back to the last message older than this one
@@ -361,6 +428,17 @@
     if (nearBottom(160)) toBottom();
   }
   function dropDraft(k) { var d = drafts.get(k); if (d) { d.el.remove(); drafts.delete(k); } }
+  /* for cc.js: a command on its way into the window (the relay's copy replaces it), a failed one, a card only this page sees */
+  function ghost(t, label) {
+    var el = build({ id: "", from: "human", kind: "cmd", text: t, ts: new Date().toISOString(), meta: {} });
+    el.classList.add("pending"); el.dataset.text = t; el.querySelector(".t").textContent = label || "";
+    log.appendChild(el); keepTyping(); toBottom(); return el;
+  }
+  function failGhost(el, label, t) {
+    el.classList.remove("pending"); el.classList.add("failed"); el.querySelector(".t").textContent = label + " · tap to put it back";
+    el.onclick = function () { el.remove(); text.value = t; grow(); text.focus(); };
+  }
+  function localCard(t, cmd, note) { var el = build({ id: "", from: "ai", kind: "term", text: t, ts: new Date().toISOString(), meta: { cmd: String(cmd || "").replace(/^\//, ""), local: true, note: !!note } }); log.appendChild(el); keepTyping(); toBottom(); }
 
   // typing flickers on and off while the companion thinks; hiding the dots at once makes the log jump, so let them linger a moment
   var typingEl = null, typingOffT = 0;
@@ -385,7 +463,9 @@
   // on a phone Enter is a new line and the send button sends; with a keyboard Enter sends and Shift+Enter breaks the line
   var touchInput = window.matchMedia && matchMedia("(pointer: coarse)").matches;
   if (touchInput) text.setAttribute("enterkeyhint", "enter");
+  text.addEventListener("input", function () { if (cc) cc.input(); });
   text.addEventListener("keydown", function (e) {
+    if (cc && cc.key(e)) return;   // the / list is open: arrows, Tab, Enter and Esc are its
     // never while an input method is still composing (Chinese, Japanese…)
     if (e.key === "Enter" && !e.shiftKey && !touchInput && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); }
   });
@@ -533,6 +613,8 @@
   // goes out once they're up. If an image never makes it, nothing is sent and a tap retries just the missing ones.
   function send() {
     var t = text.value.trim(); if ((!t && !tray.length) || !key) return;
+    if (CCMODE && view !== liveSid) { toast("This is an earlier window — carry it on here first"); return; }
+    if (cc && !tray.length && t.charAt(0) === "/" && cc.slash(t)) { text.value = ""; grow(); return; }   // a / command the page or the window takes (cc.js)
     var items = tray.slice(), q = quote;
     tray = []; trayEl.innerHTML = ""; trayEl.hidden = true;
     text.value = ""; grow(); setQuote(null);
@@ -541,7 +623,7 @@
     pending.querySelectorAll(".att img[data-i]").forEach(function (im) { var x = items[+im.dataset.i]; if (x && x.local) im.src = x.local; });
     pending.classList.add("pending"); pending.dataset.text = t; log.appendChild(pending); keepTyping(); toBottom();
     function mark(state, label, onTap) { pending.classList.remove("pending", "failed"); pending.classList.add(state); if (label) pending.querySelector(".t").textContent = label; pending.onclick = onTap || null; }
-    function fail(e) { mark("failed", e && e.auth ? "key rejected" : "not sent — tap to retry", function () { pending.remove(); text.value = t; grow(); send(); }); if (e && e.auth) logout(); }
+    function fail(e) { mark("failed", e && e.auth ? "key rejected" : "not sent" + (CCMODE && e && e.message && !/HTTP/.test(e.message) ? ": " + e.message : "") + " — tap to retry", function () { pending.remove(); text.value = t; grow(); send(); }); if (e && e.auth) logout(); }
     function missing() { return items.some(function (x) { return x.file && !x.done; }); }
     function retry() {
       mark("pending"); pending.querySelector(".t").innerHTML = hm(new Date().toISOString()) + MARK_WAIT;
@@ -554,6 +636,9 @@
       var atts = items.filter(function (x) { return x.done; }).map(function (x) { return x.done; });
       if (!t && !atts.length) { fail(); return; }
       var body = { text: t, side: root.dataset.side }; if (q) body.quote = q; if (atts.length) body.attachments = atts;
+      if (CCMODE) return api("/app/cc/say", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })   // typed into the window as a prompt
+        .then(function (r) { if (r && r.queued) pending.querySelector(".t").textContent = "queued — after this turn"; typing(true); setTimeout(pollBusy, 1500); })
+        .catch(function (e) { fail(/409/.test(e.message) ? { message: "it's waiting on a question at the terminal" } : e); });
       return api("/app/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
         .then(function () { setTimeout(catchUp, 1500); }).catch(fail);   // the stream normally echoes it; this is the safety net
     }
@@ -575,7 +660,7 @@
     var m = meterData, orb = $("orb");
     orb.hidden = false; $("fan").querySelector('[data-k="gauge"]').hidden = !m;   // the board and the heart are there even before a meter
     if (!m) { orb.querySelector(".a1").setAttribute("stroke-dasharray", "0 100"); orb.querySelector(".a2").setAttribute("stroke-dasharray", "0 100"); $("orbNum").textContent = "\u00b7"; return; }
-    var ls = m.limits || [], wide = ls[ls.length - 1], narrow = ls.length > 1 ? ls[0] : null;
+    var ls = m.limits || [], wide = ls.filter(function (l) { return /^(weekly_all|seven_day)$/.test(l.key); })[0] || ls[ls.length - 1], narrow = ls.length > 1 ? ls[0] : null;
     orb.querySelector(".a1").setAttribute("stroke-dasharray", (pct(wide && wide.used) || 0) + " 100");
     orb.querySelector(".a2").setAttribute("stroke-dasharray", (pct(narrow ? narrow.used : m.context && m.context.used_pct) || 0) + " 100");
     $("orbNum").textContent = wide && wide.used != null ? pct(wide.used) : "·";
@@ -592,6 +677,7 @@
     $("mModel").textContent = (m.model && (m.model.name || m.model.id)) || AI;
     $("mPlan").textContent = [m.backend, m.plan].filter(Boolean).join(" · ");
     $("mRings").innerHTML = (m.limits || []).map(ringHTML).join("") || '<p class="none">no usage limits reported</p>';
+    $("mAsOf").textContent = m.limits_at ? "as Claude Code reported at " + whenReset(m.limits_at) : m.limits_stale || (m.cc && m.limits && m.limits.length) ? "from the status line — may be old" : "";
     var c = m.context || {}, cv = pct(c.used_pct);
     $("mCtx").hidden = cv == null;
     $("mCtx").querySelector("b").style.width = (cv || 0) + "%";
@@ -600,10 +686,11 @@
     var actual = m.model && m.model.id, live = m.model_applies === "live";
     var listed = (m.models || []).some(function (x) { return x.id === actual; });
     var cur = (pin && pin.id) || (live && listed ? actual : m.chosen || actual);
-    $("mList").innerHTML = (m.models || []).map(function (x) {
-      return '<button type="button" data-id="' + esc(x.id) + '"' + (x.id === cur ? ' class="on"' : "") + ">" + esc(x.name || x.id) + "</button>";
+    $("mList").innerHTML = (m.models || []).filter(function (x) { return !x.more || x.id === cur; }).map(function (x) {   // older models: in the strip's picker
+      return '<button type="button" data-id="' + esc(x.id) + '"' + (x.id === cur ? ' class="on"' : "") + ' title="' + esc(x.desc || "") + '">' + esc(x.id === "default" ? "Default" : x.name || x.id) + "</button>";
     }).join("");
-    $("mNote").textContent = pin ? pin.note : live ? "A new pick applies right away." :
+    if (cc) cc.meter(m);
+    $("mNote").textContent = pin ? pin.note : m.cc ? (m.pending && m.pending.model ? "→ " + m.pending.model + " once it has finished this turn." : "Applies right away, to this window only.") : live ? "A new pick applies right away." :
       m.model_applies === "next" ? "A new pick applies from the next message." :
       m.model_applies === "restart" ? "A new pick applies the next time the session starts." : "";
   }
@@ -633,7 +720,7 @@
   function verifyWin(before, label) {
     var start = Date.now(), last = "", lastAt = 0;
     winCheck = true; winResult = null; $("mWinNote").textContent = "Checking the window really changed…";
-    function finish(text, same) { winCheck = false; winResult = { text: text, same: same, at: Date.now() }; loadWin(); loadMeter(); paintWin(); }
+    function finish(text, same) { winCheck = false; winResult = { text: text, same: same, at: Date.now() }; loadWin(); loadMeter(); paintWin(); toast(text); }
     (function tick() {
       api("/app/window").then(function (d) { return d; }, function () { return null; }).then(function (d) {
         if (d && d.sid) { last = d.sid; lastAt = d.started_at; }
@@ -647,7 +734,8 @@
       });
     })();
   }
-  function loadWin() { return api("/app/window").then(function (d) { win = d; winRaw = d.sid || ""; paintWin(); }).catch(function () { win = null; winRaw = ""; paintWin(); }); }
+  function loadWin() { if (GROUP) return Promise.resolve(); return api("/app/window").then(function (d) { win = d; winRaw = d.sid || ""; paintWin(); if (cc) cc.paint(); }).catch(function () { win = null; winRaw = ""; paintWin(); }); }
+  function carryNote() { return +$("mCarryH").value ? "It is handed the last " + $("mCarryHV").textContent + " of your talk (up to " + $("mCarryCV").textContent + " characters); the rest comes from memory." : "Nothing is carried over; only memory comes along."; }
   var lineT = 0;
   $("mLine").addEventListener("input", function () { var k = +this.value; $("mLineV").textContent = k ? k + "k" : "none";
     clearTimeout(lineT); lineT = setTimeout(function () { api("/app/window/line", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ line_k: k }) }).then(loadWin).catch(function () {}); }, 500); });
@@ -674,11 +762,11 @@
   }
   $("mCompact").onclick = function () { winAct("/app/window/compact", "", "Compacting — give it a minute."); };
   $("mNew").onclick = function () { newWin("Open a new window for " + AI + "? This one closes. " + (+$("mCarryH").value ? "The new one is handed the last " + $("mCarryHV").textContent + " of your talk (up to " + $("mCarryCV").textContent + " characters); the rest comes from memory." : "Nothing is carried over; only memory comes along.") + " You can come back to this one from Windows."); };
-  $("mWins").onclick = function () { if (!hold) return; var before = winRaw; api("/app/window").then(function (d) { if (d.sid) before = d.sid; }, function () {});
+  $("mWins").onclick = function () { if (cc && meterData && meterData.cc) { closeMeter(); cc.sessions(); return; } if (!hold) return; var before = winRaw; api("/app/window").then(function (d) { if (d.sid) before = d.sid; }, function () {});
     hold.windows(function () { verifyWin(before, "Switched windows."); }); };
   function loadMeter() {
     if (!key || GROUP) return Promise.resolve();
-    return api("/app/meter").then(function (d) { meterData = d; paintOrb(); if (!$("meter").hidden) { paintMeter(); paintWin(); } }).catch(function () { meterData = null; paintOrb(); });
+    return api("/app/meter").then(function (d) { meterData = d; paintOrb(); if (cc) cc.paint(d); if (!$("meter").hidden) { paintMeter(); paintWin(); } }).catch(function () { meterData = null; paintOrb(); });
   }
   /* keys for the companion's environment (relay/nyx_keys.py): a value goes in once and never comes back to the page */
   var KEY_HINT = $("mKeyNote").textContent;
@@ -726,6 +814,7 @@
   $("mList").addEventListener("click", function (e) {
     var b = e.target.closest("button[data-id]"); if (!b) return;
     $("mNote").textContent = "…";
+    if (cc && meterData && meterData.cc) { cc.setModel(b.dataset.id).then(function () { setTimeout(loadMeter, 1200); }); return; }
     function pinModel(id, note) { modelPin = { id: id, note: note, until: Date.now() + 60000 }; paintMeter(); setTimeout(loadMeter, 1500); }
     api("/app/model", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: b.dataset.id }) })
       .then(function (r) {
@@ -753,7 +842,8 @@
       else fan(!$("fan").classList.contains("open"));
     });
   })();
-  // tap the ball: three fan out to its left — the gauge, the board, the heart
+  function openSessions() { if (cc) cc.sessions(); else if (hold) hold.windows(); }
+  // tap the ball: three fan out to its left — the gauge, sessions, the heart
   function fan(open) {
     var f = $("fan"), orb = $("orb");
     if (open) { f.style.right = (parseFloat(getComputedStyle(orb).right) + 58) + "px"; f.style.bottom = (parseFloat(getComputedStyle(orb).bottom) + 4) + "px"; }
@@ -761,7 +851,7 @@
   }
   $("fan").addEventListener("click", function (e) {
     var b = e.target.closest("[data-k]"); if (!b) return; fan(false);
-    if (b.dataset.k === "gauge") openMeter(); else if (hold) hold[b.dataset.k]();
+    if (b.dataset.k === "gauge") openMeter(); else if (b.dataset.k === "sessions") openSessions(); else if (hold) hold[b.dataset.k]();
   });
   document.addEventListener("pointerdown", function (e) { if ($("fan").classList.contains("open") && !e.target.closest("#fan, #orb")) fan(false); });
   setInterval(function () { if (!document.hidden && !$("room").hidden) loadMeter(); }, 60000);
@@ -788,6 +878,10 @@
   function enter(k) {
     hkey = k; key = RELAY === HOME ? k : (ls("nyx_chat_key") || k);
     return (RELAY === HOME ? Promise.resolve() : hapi("/app/status")).then(function () {
+      return GROUP ? null : api("/app/cc/where").catch(function (e) { if (e.auth && RELAY === HOME) throw e; return null; });   // an older relay has no /app/cc: the letter as before
+    }).then(function (w) {
+      CCMODE = !!(w && w.chat === "cc"); root.classList.toggle("ccmode", CCMODE);
+      if (CCMODE) { liveSid = w.sid || ""; return liveSid ? ccLog(liveSid) : { messages: [] }; }
       return latest().catch(function (e) { if (e.auth && RELAY !== HOME) { backHome(); return latest(); } throw e; });
     }).then(function (d) {
       try { localStorage.setItem("nyx_key", k); } catch (e) {}
@@ -796,9 +890,16 @@
         if (hit && hit.key !== k) { hit.key = k; localStorage.setItem("nyx_contacts", JSON.stringify(cl)); }
       } catch (e) {}
       $("gate").hidden = true; $("aiName").textContent = AI;
-      log.innerHTML = ""; byId.clear(); msgs.clear(); lastId = 0; loadDeleted();
-      (d.messages || []).forEach(put); openStream(); loadMeter();
+      log.innerHTML = ""; byId.clear(); msgs.clear(); tools.clear(); lastId = 0; loadDeleted();
+      (d.messages || []).forEach(put); if (CCMODE) { earlier(d.more); paintRo(); } openStream(); loadMeter();
       if (!hold && window.NyxHold) hold = NyxHold(hapi, { me: ME, chat: api });
+      if (!cc && window.NyxCC && !GROUP) cc = NyxCC({ api: api, text: text, grow: grow, send: send, put: put, toast: toast, openMeter: openMeter, reload: function () { loadMeter(); loadWin(); },
+        name: function () { return AI; }, used: function () { return win && win.used; }, ghost: ghost, fail: failGhost, local: localCard, verify: verifyWin,
+        ccmode: function () { return CCMODE; }, view: function (sid) { openView(sid); }, carry: carryOn, viewing: function () { return view; },
+        newWin: function () { $("mNew").onclick(); }, carryNote: carryNote, compact: function () {
+          api("/app/window/compact", { method: "POST" }).then(function (r) { toast(r && r.started === false ? "Sent; it hasn't visibly started" : "Compacting — give it a minute"); setTimeout(loadWin, 30000); },
+            function (e) { toast(/409/.test(e.message) ? "Busy — compact once it has finished" : "Didn't compact: " + e.message); }); } });
+      loadWin();
       pollBusy();
       if (!home) makeHome();
       show(location.hash === "#chat" ? "room" : "home");
@@ -809,7 +910,7 @@
     try { localStorage.removeItem("nyx_key"); } catch (e) {}
     $("room").hidden = true; $("home").hidden = true; $("gate").hidden = false;
   }
-  $("gateTitle").textContent = C.title || "Nyx";
+  $("gateTitle").textContent = C.title || "Nyx"; document.title = C.title || document.title;
   $("gateForm").onsubmit = function (e) {
     e.preventDefault(); var k = $("gateKey").value.trim(); if (!k) return;
     $("gateErr").textContent = "";

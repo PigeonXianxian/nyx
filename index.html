@@ -6,7 +6,7 @@
 <link rel="apple-touch-icon" href="icon-180.png"><link rel="icon" href="icon-192.png"><link rel="manifest" href="manifest.webmanifest">   <!-- the night tree -->
 
 <meta name="theme-color" content="#ECE9E2">
-<title>Nyx</title>
+<title>PigeonXian</title>
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/400.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/500.min.css" rel="stylesheet">
 <link href="fonts/source-serif-4.css" rel="stylesheet">
@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="eye/ink.css">
 <link rel="stylesheet" href="eye/eye.css">
+<link rel="stylesheet" href="cc.css">
 </head>
 <body>
 <div id="paper" aria-hidden="true"></div>
@@ -27,7 +28,7 @@
 <section id="gate" hidden>
   <div class="gate-in">
     <div class="mark" aria-hidden="true"></div>
-    <h1 id="gateTitle">Nyx</h1>
+    <h1 id="gateTitle">PigeonXian</h1>
     <p>Enter the key your relay was set up with.</p>
     <form id="gateForm" autocomplete="off">
       <input id="gateKey" type="password" placeholder="relay key" spellcheck="false">
@@ -63,27 +64,30 @@
 
   <main id="log" aria-live="polite"></main>
 
-  <button class="orb" id="orb" type="button" aria-label="Gauge, board and heart" hidden>
+  <button class="orb" id="orb" type="button" aria-label="Gauge, sessions and heart" hidden>
     <svg viewBox="0 0 40 40" aria-hidden="true"><circle class="tk" cx="20" cy="20" r="16"/><circle class="a1" cx="20" cy="20" r="16" pathLength="100"/><circle class="tk" cx="20" cy="20" r="11"/><circle class="a2" cx="20" cy="20" r="11" pathLength="100"/></svg>
     <b id="orbNum"></b>
   </button>
   <div class="fan" id="fan" aria-hidden="true">
     <button type="button" data-k="heart" aria-label="Heart"><svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.6-7.5 10-7.5 10Z"/><path d="M7 12h2.5l1.2-2.2 2 4.4 1.3-2.2H17"/></svg><span>Heart</span></button>
-    <button type="button" data-k="board" aria-label="Yard"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2.2"/><path d="M9 4v16M15 4v16"/><path d="M5.5 8h1.8M11 8h1.8M11 11.5h1.8M17 8h1.8"/></svg><span>Board</span></button>
+    <button type="button" data-k="sessions" aria-label="Sessions"><svg viewBox="0 0 24 24"><path d="M7 4.5h11.5v13"/><path d="M4.5 7h11.5v13H4.5z"/><path d="M7.5 11h5.5M7.5 14h5.5M7.5 17h3"/></svg><span>Sessions</span></button>
     <button type="button" data-k="gauge" aria-label="Gauge"><svg viewBox="0 0 24 24"><path d="M4.5 16a7.5 7.5 0 1 1 15 0"/><path d="M12 16l3.5-4.5"/><circle cx="12" cy="16" r="1.2"/></svg><span>Gauge</span></button>
   </div>
   <div class="meter" id="meter" hidden>
     <div class="sheet" role="dialog" aria-label="Model, usage and context">
       <div class="mh"><span id="mModel"></span><em id="mPlan"></em></div>
       <div class="rings" id="mRings"></div>
+      <p class="asof" id="mAsOf"></p>
       <div class="ctx" id="mCtx"><span>context</span><i><b></b></i><em></em></div>
       <div class="models"><span>model</span><div id="mList"></div><p id="mNote"></p></div>
+      <div class="models eff" id="mEffort" hidden><span>effort</span><div></div><p></p></div>
+      <div class="models mds" id="mMode" hidden><span>permission</span><div></div><p></p></div>
       <div class="win" id="mWin" hidden>
         <div class="ln"><span>line</span><input type="range" id="mLine" min="0" max="900" step="20" value="0" aria-label="Context line"><em id="mLineV">none</em></div>
         <p class="hint">Past the line, it saves to memory first, then compacts once it's quiet. All the way left: no line.</p>
         <div class="ln"><span>carry</span><input type="range" id="mCarryH" min="0" max="12" step="0.5" value="2" aria-label="Hours a new window takes along"><em id="mCarryHV">2h</em></div>
         <div class="ln"><span>up to</span><input type="range" id="mCarryC" min="2000" max="40000" step="2000" value="12000" aria-label="Most characters a new window takes along"><em id="mCarryCV">12k</em></div>
-        <div class="acts"><button type="button" id="mCompact">Compact now</button><button type="button" id="mNew">New window</button><button type="button" id="mWins">Windows</button></div>
+        <div class="acts"><button type="button" id="mCompact">Compact now</button><button type="button" id="mNew">New window</button><button type="button" id="mWins">Sessions</button></div>
         <p class="hint" id="mWinNote"></p>
       </div>
       <div class="keys" id="mKeys" hidden>
@@ -134,6 +138,7 @@
 <script src="eye/moons.js"></script>
 <script src="eye/night.js"></script>
 <script src="eye/home.js"></script>
+<script src="cc.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

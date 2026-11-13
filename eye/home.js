@@ -586,7 +586,7 @@
       sel = ((Math.round(goal) % N) + N) % N; selT = { from: selA, to: goal, t0: performance.now() }; put("gou_sel", String(sel)); kick();
     }
     function go(a) {
-      var isChat = a.id === "chat";
+      var isChat = a.id === "chat" || a.id === "sessions";   // both go in through the ring: Sessions opens over the letter page
       if (isChat || a.href) through(function () { if (a.href) ss("gou_back", "1"); openApp(a); });
       else openApp(a);
     }

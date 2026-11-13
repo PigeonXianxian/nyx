@@ -5,7 +5,7 @@ window.NYX = {
   relay: "/relay",
   aiName: "Companion",
   meName: "Me",
-  title: "Nyx",
+  title: "PigeonXian",
   // home: "eye" (构成: the eye by day, the well by night), "ink" (the river poster) or "tree" (NyxTree). Each device can switch in the drawer; this is the default.
   home: "eye",
   // treePhoto: a picture laid under the tree on the night side, pressed dark, e.g. "photos/forest.jpg". Leave null for none.
@@ -17,15 +17,15 @@ window.NYX = {
   // the home poster: one block per entry, biggest first. id "chat" opens the chat; anything else needs an href.
   // art: tokens | context | clusters | sampling | beam | gelu | loss (left out = picked in order)
   apps: [
-    // Chat opens a dial of two, as on the plates: 进入 goes in; 联系人 is everyone you talk to
+    // Chat opens a dial, as on the plates: 进入 goes in; 会话 picks an earlier conversation; 联系人 is everyone you talk to
     { id: "chat", en: "Chat", zh: "聊天", art: "tokens", apps: [
       { id: "chat", en: "Enter", zh: "进入", d: "去说话" },
+      { id: "sessions", en: "Sessions", zh: "会话", d: "过去的对话，分组放好" },   // every Claude Code session here (cc.js): open one, file it in a group
       { id: "contacts", en: "Contacts", zh: "联系人", d: "跟谁说话，点谁连谁", href: "contacts.html" }] },
     // a folder: one block on the home page, a small heading with its rooms in the drawer; d is the one line under each room in the folder sheet
     { id: "hold", en: "Hold", zh: "底舱", art: "beam", apps: [
       { id: "memory", en: "Memory", zh: "记忆", d: "写进记忆库的那些" },        // add href: "<your Ombre-Brain / Memory Galaxy address>" once it's set up
       { id: "town", en: "Town", zh: "小镇", d: "一个主题一栋房子，一条记忆一扇窗", href: "town/index.html" },   // the memory town: one house per topic, one window per memory (town/, relay/nyx_town.py)
-      { id: "board", en: "Yard", zh: "船坞", d: "它手上在修什么，几只小机各领各的活" },
       { id: "heart", en: "Heart", zh: "心脏", d: "它的人设和后台，只读" }] },
     { id: "listen", en: "Listen", zh: "一起听", href: "listen.html", art: "sampling" },
     { id: "life", en: "Life", zh: "生活", art: "context", apps: [

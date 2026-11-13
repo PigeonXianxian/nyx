@@ -75,7 +75,22 @@ HEART_REDACT = re.compile(r"((?:sk|ghp|gho|xox[bp]|AIza)[-_A-Za-z0-9]{12,})|((?:
 # --- Window: the Claude Code session in tmux, and how to start it again (the systemd unit's ExecStart) ---
 TMUX = os.environ.get("RELAY_TMUX_SESSION", "companion")
 COMPANION_UNIT = Path(os.environ.get("RELAY_COMPANION_UNIT", "/etc/systemd/system/nyx-companion.service"))
-CLAUDE_PROJECT = Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(COMPANION_DIR))
+def _work_dir():
+    """Where the window runs. The persona and memory stay in COMPANION_DIR; the window itself can run elsewhere — e.g.
+    /root, the folder VS Code opens, so both list the same Claude Code sessions (RELAY_WORK_DIR, or a `workdir` file in
+    the relay's data dir; channel/start-channel.sh reads the same file)."""
+    w = os.environ.get("RELAY_WORK_DIR", "")
+    if not w:
+        try:
+            w = (Path(os.environ.get("RELAY_DB", str(Path(__file__).parent / "relay.db"))).parent / "workdir").read_text().strip()
+        except OSError:
+            w = ""
+    return Path(w) if w and Path(w).is_dir() else COMPANION_DIR
+
+
+WORK_DIR = _work_dir()
+CHAT_MODE = "cc" if WORK_DIR != COMPANION_DIR else "companion"   # cc: the page shows the window's own transcript (nyx_cc.py)
+CLAUDE_PROJECT = Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(WORK_DIR))
 QUIET_SEC = 45          # after the memory note, compact once the AI has answered and been quiet this long
 WATCH_LOCK = Path(os.environ.get("RELAY_WATCH_LOCK", "/tmp/window-watch.lock"))   # held while the window restarts, so a window watcher sharing this flock can't start a second one
 STARTUP_PROMPT = "Teach auto mode about your environment"
@@ -438,14 +453,20 @@ def register(app, g):
         check_auth(request)
         return {"agents": await asyncio.to_thread(agents_now)}
 
+    cc = {}   # nyx_cc.py, mounted at the end: live limits, the full model list, effort and mode
+
     @app.get("/app/meter")
     async def meter_get(request: Request):
         check_auth(request)
         m = current_meter()
+        if not m and backend() != "codex" and cc.get("enrich"):
+            m = {"backend": "claude", "limits": [], "models": [], "model_applies": "live", "ts": time.time()}   # no status line yet: Claude Code can still answer
         if not m:
             raise HTTPException(status_code=503, detail="nothing reported yet")
         if m.get("model_applies") == "live":
             m = await asyncio.to_thread(window_meter, m)
+            if cc.get("enrich"):
+                m = await cc["enrich"](m)
         try:
             m["chosen"] = model_file.read_text(encoding="utf-8").strip() or None
         except Exception:
@@ -1059,7 +1080,7 @@ def register(app, g):
         return None
 
     EFFORT_FILE, EFFORT_PENDING = data_dir / "effort_now", data_dir / "effort_pending"   # last effort level typed in / one waiting for an idle moment
-    EFFORT_RE = re.compile(r"\u25cf\s*(low|medium|high|xhigh|max)\s*\u00b7\s*/effort")   # the badge on the pane, it fades after a while
+    EFFORT_RE = re.compile(r"[\u25cf\u25c9\u25cb\u25ce\u2022]\s*(low|medium|high|xhigh|max)\s*\u00b7\s*/effort")   # the badge on the pane, it fades after a while
     WAIT_DEBOUNCE = 45      # auto mode shows a confirm box for a few seconds before it lets the command through; only a box that stays is "waiting"
     wait_since = {"t": None}
 
@@ -1273,3 +1294,7 @@ def register(app, g):
                 ksave(d)
                 return {"ok": True, "recipe": r}
         raise HTTPException(status_code=404, detail="no such recipe")
+
+    # ---- the chat page's Claude Code controls: live limits, models, effort, mode, / commands, sessions in groups ----
+    import nyx_cc
+    cc.update(nyx_cc.register(app, g, {**globals(), **locals()}))
