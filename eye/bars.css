@@ -1,0 +1,18 @@
+/* 构成 — every scrollbar in the house, the page's own and every box's: not a grey gutter with arrows but the plates' marks —
+   a faint hairline for the track, a short blue rule riding on it for where you are, a little heavier under the pointer.
+   Places that hide their scrollbar on purpose (the letter, a strip of shelves) still do: their own rule is more particular.
+   Colours come from the page (--hair, --blue), with the day's as a fallback where a page has none of its own. */
+::-webkit-scrollbar{ width:11px; height:11px; background:transparent; }
+::-webkit-scrollbar-button{ display:none; width:0; height:0; }
+::-webkit-scrollbar-corner{ background:transparent; }
+::-webkit-scrollbar-track{ background:linear-gradient(var(--hair, rgba(27,27,32,.15)), var(--hair, rgba(27,27,32,.15))) center / 1px 100% no-repeat; }
+::-webkit-scrollbar-track:horizontal{ background-size:100% 1px; }
+::-webkit-scrollbar-thumb{ min-height:26px; min-width:26px; border:0; border-radius:0; background:linear-gradient(var(--blue, #2933C4), var(--blue, #2933C4)) center / 2px 100% no-repeat; }
+::-webkit-scrollbar-thumb:horizontal{ background-size:100% 2px; }
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active{ background-size:3px 100%; }
+::-webkit-scrollbar-thumb:horizontal:hover, ::-webkit-scrollbar-thumb:horizontal:active{ background-size:100% 3px; }
+/* the writing box: its rule stands clear of the words */
+textarea::-webkit-scrollbar-track{ margin:4px 0; }
+@supports not selector(::-webkit-scrollbar){   /* Firefox draws no shapes here: the thinnest bar, in the blue */
+  html, *{ scrollbar-width:thin; scrollbar-color:var(--blue, #2933C4) transparent; }
+}

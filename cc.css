@@ -219,20 +219,9 @@
 .sess .srow.open{ background:color-mix(in srgb, var(--blue) 6%, transparent); }
 .sess .srow.open .st, .sess .srow.open .sa{ background:none; }
 
-/* scrollbars in the sheets and cards: not a grey gutter but the page's own marks — a hairline rule for the track,
-   a short blue rule riding on it for where you are (a little heavier under the pointer) */
-:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar{ width:11px; height:11px; background:transparent; }
-:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar-button{ display:none; }
-:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar-corner{ background:transparent; }
-:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar-track{ margin:10px 0; background:linear-gradient(var(--hair), var(--hair)) center / 1px 100% no-repeat; }
-:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar-track:horizontal{ margin:0 10px; background-size:100% 1px; }
-:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar-thumb{ min-height:26px; min-width:26px; border-radius:0; background:linear-gradient(var(--blue), var(--blue)) center / 2px 100% no-repeat; }
-:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar-thumb:horizontal{ background-size:100% 2px; }
-:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar-thumb:hover{ background-size:3px 100%; }
-:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar-thumb:horizontal:hover{ background-size:100% 3px; }
-@supports not selector(::-webkit-scrollbar){   /* Firefox: no shapes to draw with, so the thinnest bar, in the blue */
-  :is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code, .msg .body .tbw){ scrollbar-width:thin; scrollbar-color:var(--blue) transparent; }
-}
+/* scrollbars in the sheets and cards: drawn by eye/bars.css; here only, the rule stands clear of the sheet's top and foot */
+:is(.sess .sb, .slip, .meter .sheet, .msg.term pre, .msg.tool .res, .msg .body pre.code)::-webkit-scrollbar-track{ margin:10px 0; }
+:is(.msg.term pre, .msg .body pre.code, .msg .body .tbw)::-webkit-scrollbar-track:horizontal{ margin:0 10px; }
 .sess .sb{ margin-right:8px; }   /* the rule stands a little in from the sheet's edge, not doubling it */
 
 /* the gauge's sliders: a measure — a hairline and a short blue mark on it — not the browser's knob */
