@@ -251,3 +251,16 @@
 .sess .gbox.drop > .gh::after{ background:var(--blue); } .sess .gbox.drop > .gh .gn{ color:var(--blue); }
 .msg.opening .nt{ animation:openingBreath 1.6s ease-in-out infinite; }
 @keyframes openingBreath{ 50%{ opacity:.45; } }
+
+/* files dragged over the letter: the writing frame lights, and says where they'll go */
+.dropping footer.write .line{ border-color:var(--blue); background:color-mix(in srgb, var(--blue) 6%, transparent); }
+.dropping footer.write .line::after{ content:"let go to put them on the tray"; position:absolute; right:12px; top:-1.6em; font:italic 400 13px/1 var(--latin); letter-spacing:.06em; color:var(--blue); pointer-events:none; }
+footer.write .line{ position:relative; }
+/* the tray: prints waiting to go, each with a small ink cross to take it off */
+.tray{ padding:9px 0 10px 16px; gap:12px; }
+.tray .it{ overflow:visible; width:58px; height:58px; border-radius:1px; background-color:#F5F3EE; box-shadow:0 1px 5px rgba(20,20,26,.2); transform:rotate(-1.2deg); font:italic 11.5px/1.2 var(--latin); color:var(--soft); padding:4px; box-sizing:border-box; word-break:break-all; }
+.tray .it:nth-child(even){ transform:rotate(1deg); }
+:root[data-side="moon"] .tray .it{ background-color:#E4E1DA; color:#5C5B58; }
+.tray .it button{ top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:var(--paper); color:var(--ink); box-shadow:0 0 0 1px var(--river); font:400 13px/18px var(--latin); }
+.tray .it button:hover{ color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+.tray .it.up::after{ background:color-mix(in srgb, var(--paper) 50%, transparent); }
