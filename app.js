@@ -524,17 +524,43 @@
     return it.job;
   }
   $("clip").onclick = function () { $("file").click(); };
-  $("file").onchange = function () {
-    Array.prototype.forEach.call(this.files, function (f) {
+  // files into the tray: from the paperclip, pasted (a screenshot, a copied file), or dropped on the page
+  function addFiles(files) {
+    Array.prototype.forEach.call(files || [], function (f) {
+      if (!f || !f.size && !f.type) return;
+      if (!f.name || /^image\.(png|jpe?g|gif|webp)$/i.test(f.name)) {   // a screenshot has no name of its own
+        var ext = ((f.type || "").split("/")[1] || "png").replace("jpeg", "jpg"), d = new Date();
+        try { f = new File([f], "pasted-" + d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0") + "-" + String(d.getHours()).padStart(2, "0") + String(d.getMinutes()).padStart(2, "0") + String(d.getSeconds()).padStart(2, "0") + "." + ext, { type: f.type }); } catch (e) {}
+      }
       var it = { name: f.name, done: null, el: document.createElement("div") };
-      it.el.className = "it up"; it.el.innerHTML = '<button type="button" aria-label="Remove">×</button>' + (f.type.indexOf("image/") ? esc(f.name.slice(0, 14)) : "");
-      if (!f.type.indexOf("image/")) { it.local = URL.createObjectURL(f); it.el.style.backgroundImage = "url(" + it.local + ")"; }
+      it.el.className = "it up"; it.el.innerHTML = '<button type="button" aria-label="Remove">×</button>' + ((f.type || "").indexOf("image/") ? esc(f.name.slice(0, 14)) : "");
+      if (!(f.type || "").indexOf("image/")) { it.local = URL.createObjectURL(f); it.el.style.backgroundImage = "url(" + it.local + ")"; }
       it.el.querySelector("button").onclick = function () { tray = tray.filter(function (x) { return x !== it; }); it.el.remove(); trayEl.hidden = !tray.length; };
       trayEl.appendChild(it.el); trayEl.hidden = false; tray.push(it);
       it.file = f; it.job = prep(f).then(function (ff) { it.file = ff; return upload(it); });
     });
-    this.value = "";
-  };
+  }
+  $("file").onchange = function () { addFiles(this.files); this.value = ""; };
+  function clipFiles(dt) {   // the files a paste or a drop carries (some browsers only give them as items)
+    if (!dt) return [];
+    var fs = Array.prototype.slice.call(dt.files || []);
+    if (!fs.length && dt.items) Array.prototype.forEach.call(dt.items, function (i) { if (i.kind === "file") { var f = i.getAsFile(); if (f) fs.push(f); } });
+    return fs;
+  }
+  text.addEventListener("paste", function (e) {
+    var fs = clipFiles(e.clipboardData); if (!fs.length) return;   // only words: pasted as words
+    e.preventDefault(); addFiles(fs); toast(fs.length > 1 ? fs.length + " files on the tray" : /^image\//.test(fs[0].type || "") ? "Picture on the tray" : "File on the tray");
+  });
+  // dropping files anywhere on the letter page puts them on the tray; the writing frame shows where they'll go
+  (function () {
+    var room = $("room"), depth = 0;
+    function hasFiles(e) { var t = e.dataTransfer && e.dataTransfer.types; return !!t && Array.prototype.indexOf.call(t, "Files") >= 0; }
+    function lit(on) { root.classList.toggle("dropping", on); }
+    room.addEventListener("dragenter", function (e) { if (!hasFiles(e)) return; e.preventDefault(); depth++; lit(true); });
+    room.addEventListener("dragover", function (e) { if (!hasFiles(e)) return; e.preventDefault(); try { e.dataTransfer.dropEffect = "copy"; } catch (x) {} });
+    room.addEventListener("dragleave", function (e) { if (!hasFiles(e)) return; if (--depth <= 0) { depth = 0; lit(false); } });
+    room.addEventListener("drop", function (e) { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; lit(false); if (CCMODE && view !== liveSid) { toast("This is an earlier window — carry it on here first"); return; } addFiles(clipFiles(e.dataTransfer)); text.focus(); });
+  })();
   /* emoji & stickers: emoji go into the text, a sticker is sent on its own straight away */
   var EMO = "😀😂🥹😭🥺😳😌😏🙃🤔😴🤤😤😵‍💫🫠🤍🖤💛🧡🔥✨🌙☀️👀🙏👍👏🫶🤝🦀🍜☕️".match(/\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic}\uFE0F?)*/gu) || [];
   /* Your own stickers and kaomoji live on this device (nyx_stickers: [{id, data}], nyx_kaomoji: ["…"]) and share one grid
