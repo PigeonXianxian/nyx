@@ -278,6 +278,20 @@
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric", weekday: "short" });
   }
 
+  function size(n) { return n == null ? "" : n < 1024 ? n + " B" : n < 1048576 ? Math.round(n / 1024) + " KB" : (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + " MB"; }
+  function attHTML(atts) {
+    return '<div class="att">' + atts.map(function (a, i) {
+      return a.kind === "image" ? '<img data-i="' + i + '" alt="' + esc(a.name || "") + '" title="' + esc(a.name || "") + '">'
+        : '<span class="file" data-i="' + i + '" role="button" tabindex="0"><i></i><b>' + esc(a.name || "file") + "</b><small>" + (a.size != null ? size(a.size) + " \u00b7 " : "") + "download</small></span>";
+    }).join("") + "</div>";
+  }
+  // a file from the relay (an upload, or the outbox) to the device: fetched with the key, saved under its own name
+  function download(url, name) {
+    toast("Fetching " + (name || "the file") + "…");
+    fetch(url, { headers: { "Authorization": "Bearer " + key } }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.blob(); })
+      .then(function (b) { var u = URL.createObjectURL(b), l = document.createElement("a"); l.href = u; l.download = name || "file"; document.body.appendChild(l); l.click(); l.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 60000); toast("Saved " + (name || "the file")); },
+        function (e) { toast("Couldn't fetch it: " + e.message); });
+  }
   // uploads sit behind the key, so images are fetched with the header and shown from a local blob (the key never goes in a URL)
   var blobs = new Map();
   function blobOf(url) {
@@ -288,8 +302,8 @@
     el.querySelectorAll(".att [data-i]").forEach(function (n) {
       var a = atts[+n.dataset.i]; if (!a || !a.url) return;
       if (n.tagName === "IMG") { blobOf(a.url).then(function (u) { n.src = u; n.onload = function () { if (nearBottom(300)) toBottom(); }; }).catch(function () { n.alt = "image unavailable"; });
-        n.onclick = function () { var z = document.createElement("div"); z.id = "zoom"; z.innerHTML = '<img src="' + n.src + '">'; z.onclick = function () { z.remove(); }; document.body.appendChild(z); }; }
-      else n.onclick = function () { blobOf(a.url).then(function (u) { var l = document.createElement("a"); l.href = u; l.download = a.name || "file"; l.click(); }); };
+        n.onclick = function () { var z = document.createElement("div"); z.id = "zoom"; z.innerHTML = '<img src="' + n.src + '"><button type="button" class="save">save</button>'; z.onclick = function (ev) { if (ev.target.closest(".save")) { download(a.url, a.name || "picture"); return; } z.remove(); }; document.body.appendChild(z); }; }
+      else n.onclick = function () { download(a.url, a.name); };
     });
   }
   // a sticker may be .png, .gif, .jpg or .webp — try them in turn, then fall back to the bracketed name
@@ -375,7 +389,7 @@
   function build(m) {
     var me = m.from === "human", kind = m.kind || "reply", el = document.createElement("div"), note = kind === "term" && m.meta && m.meta.note;
     if (kind === "note") { kind = "term"; note = true; }
-    el.className = "msg " + (me ? "me" : "ai") + (kind === "thinking" ? " think" : kind === "act" ? " act" : kind === "cmd" ? " cmd" : kind === "term" ? " term" + (note ? " note" : "") : kind === "tool" ? " tool" : "");
+    el.className = "msg " + (me ? "me" : "ai") + (kind === "thinking" ? " think" : kind === "act" ? " act" : kind === "cmd" ? " cmd" : kind === "term" ? " term" + (note ? " note" : "") : kind === "tool" ? " tool" : kind === "file" ? " file" : "");
     el.dataset.id = m.id; el.dataset.from = m.from; el.dataset.ts = m.ts;
     var q = m.meta && m.meta.quote, inner = q ? '<span class="q">' + esc((q.who ? q.who + "  " : "") + (q.text || "")) + "</span>" : "";
     var who = !me && m.meta && m.meta.speaker; if (who) inner = '<span class="who">' + esc(who) + "</span>" + inner;
@@ -383,11 +397,12 @@
     else if (kind === "cmd") inner += '<span class="pr">❯</span>' + esc(m.text);   // a command typed into the window from here (cc.js)
     else if (kind === "tool") inner += '<button type="button" class="tl"><i></i><b>' + esc((m.meta && m.meta.tool) || "tool") + "</b>" + (m.text ? "<span>" + esc(m.text) + "</span>" : "") + '</button><pre class="res" hidden></pre>';   // a tool call; its result folds in under it
     else if (kind === "reply" && CCMODE && window.NyxCC && NyxCC.md) inner += NyxCC.md(m.text);   // Claude's words are markdown
+    else if (kind === "file") inner += '<span class="fh">for you</span>' + attHTML((m.meta && m.meta.attachments) || []) + (m.text ? (window.NyxCC && NyxCC.md ? NyxCC.md(m.text) : rich(m.text)) : "");   // a file handed over (hand_over)
     else if (kind === "term") inner += note ? '<span class="nt">' + esc(m.text) + "</span>"   // …and what the window printed back
       : '<span class="th">' + (m.meta && m.meta.local ? "" : m.meta && m.meta.dialog ? "window · " : "terminal · ") + "/" + esc((m.meta && m.meta.cmd) || "") + "</span><pre>" + esc(m.text) + "</pre>";
     else {
       var atts = (m.meta && m.meta.attachments) || [];
-      if (atts.length) inner += '<div class="att">' + atts.map(function (a, i) { return a.kind === "image" ? '<img data-i="' + i + '" alt="">' : '<span class="file" data-i="' + i + '">' + esc(a.name || "file") + "</span>"; }).join("") + "</div>";
+      if (atts.length) inner += attHTML(atts);
       inner += me && /^\/[A-Za-z0-9][\w:-]*/.test(m.text || "") ? rich(m.text).replace(/^\/[A-Za-z0-9][\w:-]*/, function (c) { return '<b class="cmdn">' + c + "</b>"; }) : rich(m.text);   // a /skill sent to the companion
       if (C.stickers && !atts.length && String(m.text || "").replace(STK, "").trim() === "" && STK.test(m.text || "")) el.classList.add("only-stk");
       if (!String(m.text || "").trim() && atts.length === 1 && /^sticker-/.test(atts[0].name || "")) el.classList.add("only-stk", "stk-att");   // your own sticker went up as a picture; show it like a sticker
@@ -911,7 +926,7 @@
   }
   $("fan").addEventListener("click", function (e) {
     var b = e.target.closest("[data-k]"); if (!b) return; fan(false);
-    if (b.dataset.k === "gauge") openMeter(); else if (b.dataset.k === "sessions") openSessions(); else if (hold) hold[b.dataset.k]();
+    if (b.dataset.k === "gauge") openMeter(); else if (b.dataset.k === "sessions") openSessions(); else if (b.dataset.k === "files") { if (cc) cc.files(); } else if (hold) hold[b.dataset.k]();
   });
   document.addEventListener("pointerdown", function (e) { if ($("fan").classList.contains("open") && !e.target.closest("#fan, #orb")) fan(false); });
   setInterval(function () { if (!document.hidden && !$("room").hidden) loadMeter(); }, 60000);
@@ -955,7 +970,7 @@
       if (!hold && window.NyxHold) hold = NyxHold(hapi, { me: ME, chat: api });
       if (!cc && window.NyxCC && !GROUP) cc = NyxCC({ api: api, text: text, grow: grow, send: send, put: put, toast: toast, openMeter: openMeter, reload: function () { loadMeter(); loadWin(); },
         name: function () { return AI; }, used: function () { return win && win.used; }, ghost: ghost, fail: failGhost, local: localCard, verify: verifyWin,
-        ccmode: function () { return CCMODE; }, view: function (sid) { openView(sid); }, carry: carryOn, viewing: function () { return view; },
+        ccmode: function () { return CCMODE; }, view: function (sid) { openView(sid); }, carry: carryOn, viewing: function () { return view; }, download: download, size: size,
         opening: opening, openingFailed: openingFailed,
         newWin: function () { $("mNew").onclick(); }, carryNote: carryNote, compact: function () {
           api("/app/window/compact", { method: "POST" }).then(function (r) { toast(r && r.started === false ? "Sent; it hasn't visibly started" : "Compacting — give it a minute"); setTimeout(loadWin, 30000); },
