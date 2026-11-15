@@ -34,7 +34,7 @@
   var FALLBACK = [   // what the page can do even before the relay has said which commands there are
     ["model", "[model]", "Pick the model"], ["effort", "[low|medium|high|xhigh|max]", "How hard it thinks"], ["mode", "[ask|edits|plan|auto]", "Permission mode"],
     ["compact", "", "Summarise the window so far to free up context"], ["new", "", "A new window"], ["sessions", "", "All windows, in groups"],
-    ["rename", "<title>", "Name this window"], ["usage", "", "Limits: 5 hours, the week, per model"], ["help", "", "What the slash commands do"]
+    ["rename", "<title>", "Name this window"], ["files", "", "Files handed over to you, to download"], ["usage", "", "Limits: 5 hours, the week, per model"], ["help", "", "What the slash commands do"]
   ].map(function (c) { return { name: c[0], hint: c[1], desc: c[2], kind: "here" }; });
 
   /* Claude's words are markdown: set them as a letter would — fenced code as a ruled block, headings in small capitals,
@@ -320,6 +320,7 @@
           });
           return true;
         case "usage": o.openMeter(); return true;
+        case "files": files(); return true;
         case "help": help(); return true;
       }
       return false;
@@ -465,8 +466,48 @@
     }
 
 
+    /* ---------- files: everything handed over to you (the relay's outbox), by day; tap one to save it ---------- */
+    var F = null, fl = [];
+    function files() {
+      close(); if (S) S.hidden = true;
+      if (!F) {
+        F = document.createElement("div"); F.className = "meter sess files"; F.id = "files"; F.hidden = true;
+        F.innerHTML = '<div class="sheet" role="dialog" aria-label="Files"><div class="sh2"><b>Files</b><small>文件</small><button type="button" class="x">Done</button></div>' +
+          '<div class="sb"></div><p class="hint" id="filesNote"></p></div>';
+        (document.getElementById("room") || document.body).appendChild(F);
+        F.addEventListener("click", function (e) {
+          if (e.target === F || e.target.closest(".x")) { F.hidden = true; return; }
+          var b = e.target.closest("[data-a]"); if (!b) return;
+          var f = fl[+b.closest("[data-i]").dataset.i]; if (!f) return;
+          if (b.dataset.a === "get") o.download(f.url, f.name);
+          else if (b.dataset.a === "rm") ask.confirm("Remove “" + f.name + "”?", { body: "It is deleted from the outbox on the server.", ok: "remove", danger: true }).then(function (yes) {
+            if (yes) post("/app/outbox/remove", { path: f.outbox }).then(loadFiles, function (e2) { F.querySelector("#filesNote").textContent = "Didn’t remove it: " + why(e2); });
+          });
+        });
+      }
+      F.hidden = false; F.querySelector(".sb").innerHTML = '<p class="none">Looking…</p>'; F.querySelector("#filesNote").textContent = "";
+      loadFiles();
+    }
+    function loadFiles() {
+      return o.api("/app/outbox").then(function (d) {
+        fl = d.files || [];
+        var h = "", last = null;
+        fl.forEach(function (f, i) {
+          var day = /^\d{4}-\d{2}-\d{2}\//.test(f.outbox) ? f.outbox.slice(0, 10) : "loose";
+          if (day !== last) { h += '<div class="gh"><span class="gn"><i></i>' + esc(day === "loose" ? "elsewhere in the outbox" : fileDay(day)) + "</span></div>"; last = day; }
+          h += '<div class="frow" data-i="' + i + '"><button type="button" class="ft" data-a="get"><i class="fi' + (f.kind === "image" ? " pic" : "") + '"></i><span class="tt">' + esc(f.name) +
+            '</span><span class="mt">' + esc(o.size(f.size)) + " \u00b7 " + esc(when(f.mtime)) + (f.outbox.indexOf("/") > 10 ? " \u00b7 " + esc(f.outbox.slice(0, f.outbox.lastIndexOf("/"))) : "") + '</span></button>' +
+            '<button type="button" class="fx" data-a="get">download</button><button type="button" class="fx rm" data-a="rm">remove</button></div>';
+        });
+        F.querySelector(".sb").innerHTML = h || '<p class="none">Nothing handed over yet. When ' + esc(o.name()) + ' finishes a file for you, it lands here — and in the chat, as a card to download.</p>';
+        F.querySelector("#filesNote").textContent = d.dir ? "Kept on the server in " + d.dir + "." : "";
+      }, function (e) { F.querySelector(".sb").innerHTML = '<p class="none">Couldn’t get the list: ' + esc(why(e)) + "</p>"; });
+    }
+    function fileDay(d) { var t = new Date(d + "T12:00:00"), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1);
+      return t.toDateString() === n.toDateString() ? "today" : t.toDateString() === y.toDateString() ? "yesterday" : t.toLocaleDateString(undefined, { month: "short", day: "numeric", weekday: "short" }); }
+
     loadCmds();
-    return { paint: paint, meter: meter, input: input, key: key, slash: slash, sessions: sessions, close: close, setModel: setModel };
+    return { paint: paint, meter: meter, input: input, key: key, slash: slash, sessions: sessions, files: files, close: close, setModel: setModel };
   };
   window.NyxCC.md = md;
 })();

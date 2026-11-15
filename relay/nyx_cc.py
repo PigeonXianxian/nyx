@@ -60,6 +60,7 @@ HERE = {
     "sessions": ("", "All windows, in groups: open, rename, file, archive"),
     "resume": ("", "Go back to an earlier window"),
     "rename": ("<title>", "Name this window"),
+    "files": ("", "Files handed over to you, to download"),
     "usage": ("", "Limits: 5 hours, the week, per model"),
     "help": ("", "What the slash commands do"),
 }
@@ -919,7 +920,8 @@ def register(app, g, x):
             c = "\n".join((b.get("text") or "") if b.get("type") == "text" else "[image]" for b in c if isinstance(b, dict))
         return ANSI.sub("", str(c or ""))[:4000]
 
-    def parse_lines(lines, base):
+    def parse_lines(lines, base, memo=None):
+        memo = memo if memo is not None else {}
         out, last_cmd = [], [""]
         for i, line in enumerate(lines):
             if not line.strip():
@@ -987,7 +989,14 @@ def register(app, g, x):
                     for j, b in enumerate(c):
                         if not isinstance(b, dict):
                             continue
-                        if b.get("type") == "tool_result":
+                        if b.get("type") == "tool_result" and b.get("tool_use_id") in memo:   # a file handed over: a card to download it
+                            h, rt = memo.pop(b.get("tool_use_id")), result_text(b.get("content"))
+                            m = re.search(r"handed over: (.+?) \((\d+) bytes\)", rt)
+                            if m and not b.get("is_error"):
+                                add("file", "ai", h.get("note") or "", j, attachments=[outbox_att(m.group(1), int(m.group(2)))])
+                            else:
+                                add("note", "ai", "couldn’t hand over " + Path(h.get("path") or "a file").name + ": " + rt[:200], j)
+                        elif b.get("type") == "tool_result":
                             add("result", "ai", result_text(b.get("content")), j, tid=b.get("tool_use_id"), error=bool(b.get("is_error")))
                         elif b.get("type") == "text" and not str(b.get("text") or "").startswith("<system-reminder>"):
                             texts.append(b.get("text") or "")
@@ -1008,6 +1017,8 @@ def register(app, g, x):
                         add("reply", "ai", str(inp.get("text") or ""), j, via="reply")
                     elif name.endswith("companion__react"):
                         add("note", "ai", "reacted " + str(inp.get("emoji") or ""), j)
+                    elif name.endswith("companion__hand_over"):   # shown when its result comes, as the file itself
+                        memo[b.get("id")] = {"path": str(inp.get("path") or ""), "note": str(inp.get("note") or "")}
                     else:
                         add("tool", "ai", tool_line(name, inp), j, tool=name.replace("mcp__", "").replace("__", " · "), tid=b.get("id"))
         return out
@@ -1022,11 +1033,11 @@ def register(app, g, x):
         if not L or L["f"] != f:
             if len(logs) > 6:
                 logs.pop(next(iter(logs)))
-            L = logs[sid] = {"f": f, "off": 0, "lines": 0, "msgs": []}
+            L = logs[sid] = {"f": f, "off": 0, "lines": 0, "msgs": [], "memo": {}}
         try:
             size = f.stat().st_size
             if size < L["off"]:   # rewritten: start again
-                L.update(off=0, lines=0, msgs=[])
+                L.update(off=0, lines=0, msgs=[], memo={})
             if size > L["off"]:
                 with f.open("rb") as fh:
                     fh.seek(L["off"])
@@ -1034,7 +1045,7 @@ def register(app, g, x):
                 cut = chunk.rfind(b"\n") + 1   # only whole lines
                 if cut:
                     lines = chunk[:cut].decode("utf-8", "ignore").split("\n")[:-1]
-                    L["msgs"].extend(parse_lines(lines, L["lines"]))
+                    L["msgs"].extend(parse_lines(lines, L["lines"], L["memo"]))
                     L["lines"] += len(lines)
                     L["off"] += cut
         except OSError:
@@ -1149,5 +1160,92 @@ def register(app, g, x):
                 continue
 
     g.setdefault("NYX_STARTUP", []).append(log_watch)
+
+    # ---------------- the outbox: files the companion hands over, for the page to download ----------------
+    # The window gives a file with its hand_over tool (channel/server.ts): the bytes come here, so it works wherever the
+    # window runs. They are kept under ~/outbox/<day>/ (RELAY_OUTBOX); anything put there by hand shows up too. Only what is
+    # inside the outbox can be downloaded, and only with the key.
+    OUTBOX = Path(os.environ.get("RELAY_OUTBOX", str(Path.home() / "outbox")))
+    OUT_MAX = int(os.environ.get("RELAY_OUTBOX_MAX_BYTES", str(1024 ** 3)))
+    PICTURE = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+
+    def outbox_att(rel, size=None):
+        from urllib.parse import quote
+        name = rel.rsplit("/", 1)[-1]
+        return {"kind": "image" if Path(name).suffix.lower() in PICTURE else "file", "name": name, "size": size,
+                "url": g.get("PUBLIC_PREFIX", "") + "/app/outbox/" + quote(rel), "outbox": rel}
+
+    def outbox_file(rel):
+        root = OUTBOX.resolve()
+        p = (root / rel).resolve()
+        if p == root or root not in p.parents or not p.is_file() or p.name.startswith("."):
+            raise HTTPException(status_code=404, detail="no such file in the outbox")
+        return p
+
+    @app.post("/channel/outbox")
+    async def channel_outbox(request: Request, name: str = "", note: str = ""):
+        """The window hands a file over: the body is the file. In the letter (companion mode) it also goes out as a message."""
+        check_auth(request)
+        nm = re.sub(r"[\x00-\x1f/\\]", "", Path(str(name)).name).strip().lstrip(".")[:180] or "file"
+        day = OUTBOX / datetime.now().strftime("%Y-%m-%d")
+        day.mkdir(parents=True, exist_ok=True)
+        stem, ext = os.path.splitext(nm)
+        dest, k = day / nm, 2
+        while dest.exists():
+            dest, k = day / f"{stem} ({k}){ext}", k + 1
+        tmp, size = day / ("." + dest.name + ".part"), 0
+        try:
+            with tmp.open("wb") as fh:
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > OUT_MAX:
+                        raise HTTPException(status_code=413, detail="too big for the outbox")
+                    fh.write(chunk)
+            if not size:
+                raise HTTPException(status_code=400, detail="empty file")
+            tmp.replace(dest)
+        finally:
+            if tmp.exists():
+                tmp.unlink()
+        rel = dest.relative_to(OUTBOX).as_posix()
+        att = outbox_att(rel, size)
+        if CHAT_MODE != "cc":   # the letter shows the relay's own messages; in cc mode the transcript shows the hand-over
+            msg = save_message("out", "reply", note.strip()[:2000], {"attachments": [att], "ts": now_iso()})
+            await broadcast(g["app_subs"], app_payload(msg))
+        return {"ok": True, "path": rel, "size": size, "name": dest.name, "url": att["url"]}
+
+    @app.get("/app/outbox")
+    async def outbox_list(request: Request):
+        check_auth(request)
+
+        def scan():
+            out = []
+            if OUTBOX.is_dir():
+                for p in OUTBOX.rglob("*"):
+                    if p.is_file() and not any(x.startswith(".") for x in p.relative_to(OUTBOX).parts):
+                        st = p.stat()
+                        out.append({**outbox_att(p.relative_to(OUTBOX).as_posix(), st.st_size),
+                                    "mtime": datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()})
+            out.sort(key=lambda f: f["mtime"], reverse=True)
+            return out[:500]
+        return {"files": await asyncio.to_thread(scan), "dir": str(OUTBOX)}
+
+    @app.get("/app/outbox/{rel:path}")
+    async def outbox_get(request: Request, rel: str):
+        from fastapi.responses import FileResponse
+        check_auth(request)
+        p = outbox_file(rel)
+        return FileResponse(str(p), filename=p.name)
+
+    @app.post("/app/outbox/remove")
+    async def outbox_remove(request: Request):
+        check_auth(request)
+        p = outbox_file(str((await request.json()).get("path") or ""))
+        p.unlink()
+        try:
+            p.parent.rmdir()   # a day with nothing left in it
+        except OSError:
+            pass
+        return {"ok": True}
 
     return {"enrich": enrich, "state": state}
