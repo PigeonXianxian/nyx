@@ -1182,6 +1182,10 @@ def register(app, g, x):
             raise HTTPException(status_code=404, detail="no such file in the outbox")
         return p
 
+    # a look at a file without downloading it: slides, documents, sheets and PDFs set as pages (nyx_proof.py)
+    import nyx_proof
+    proof = nyx_proof.register(app, check_auth, OUTBOX, outbox_file, g.get("PUBLIC_PREFIX", ""))
+
     @app.post("/channel/outbox")
     async def channel_outbox(request: Request, name: str = "", note: str = ""):
         """The window hands a file over: the body is the file. In the letter (companion mode) it also goes out as a message."""
@@ -1209,6 +1213,7 @@ def register(app, g, x):
                 tmp.unlink()
         rel = dest.relative_to(OUTBOX).as_posix()
         att = outbox_att(rel, size)
+        proof["warm"](dest)
         if CHAT_MODE != "cc":   # the letter shows the relay's own messages; in cc mode the transcript shows the hand-over
             msg = save_message("out", "reply", note.strip()[:2000], {"attachments": [att], "ts": now_iso()})
             await broadcast(g["app_subs"], app_payload(msg))

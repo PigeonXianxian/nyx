@@ -1,0 +1,174 @@
+/* 构成 — the proof (proof.js): a file looked at without downloading it. The page lies in a pencil frame with crop marks and a
+   register mark, as a printer's proof would; its number goes under it in the plates' numerals; under a deck, its notes.
+   Phone: a sheet over the letter. Wide screen: beside the letter, which moves left to make room (and, where the screen is
+   not wide enough for the plate as well, the plate goes, as a leaf is turned). */
+
+/* ── a file card that can be looked at: the first page on it as a small print ── */
+.msg .att .file.pv{ grid-template-columns:auto minmax(0, 1fr); }
+.msg .att .file .th{ grid-row:1 / 3; position:relative; display:block; height:42px; width:auto; aspect-ratio:16 / 9; justify-self:center; margin:1px 2px 1px 0; padding:2px; box-sizing:content-box;
+  background:#F5F3EE; box-shadow:0 1px 4px rgba(20,20,26,.2); transform:rotate(-1.2deg); }
+:root[data-side="moon"] .msg .att .file .th{ background:#E4E1DA; }
+.msg .att .file .th img{ display:block; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .4s; }
+.msg .att .file .th.ld img{ opacity:1; }
+.msg .att .file .th.now img{ transition:none; }
+.msg .att .file .th:not(.ld)::after{ content:""; position:absolute; left:50%; top:50%; width:12px; height:15px; margin:-7.5px 0 0 -6px; box-shadow:inset 0 0 0 1px var(--faint); clip-path:polygon(0 0, 68% 0, 100% 26%, 100% 100%, 0 100%); }
+.msg .att .file.flat .pc{ display:none; }
+.msg .att .file u{ text-decoration:none; color:var(--faint); }
+.msg .att .file u:hover, .msg .att .file u:focus-visible{ color:var(--blue); text-decoration:underline 1px; text-underline-offset:3px; }
+.msg .att .file.pv:hover small{ color:var(--faint); }
+.msg .att .file.pv:hover u[data-a="view"]{ color:var(--blue); }
+.msg .att .file.on{ box-shadow:0 0 0 1px var(--blue), 0 2px 8px rgba(16,16,22,.08); }
+.msg .att .file.on u[data-a="view"]::after{ content:" \2192"; }
+
+/* ── the proof: by default (a phone) a sheet over the letter ── */
+#proof{ position:fixed; left:0; right:0; top:0; bottom:0; z-index:8; display:flex; flex-direction:column; box-sizing:border-box;
+  padding:calc(env(safe-area-inset-top) + 10px) 0 calc(env(safe-area-inset-bottom) + 10px); color:var(--ink);
+  background:var(--paper) var(--grain); background-size:180px; opacity:0; transform:translateY(18px);
+  transition:opacity .3s ease, transform .45s cubic-bezier(.2,.7,.2,1); }
+#proof[hidden]{ display:none; }
+#proof.in{ opacity:1; transform:none; }
+
+.pf-h{ flex:none; display:flex; align-items:baseline; gap:14px; margin:0 16px; padding:8px 0 10px; border-bottom:1px solid var(--river); }
+.pf-t{ flex:1 1 auto; min-width:0; display:flex; align-items:baseline; gap:10px; }
+.pf-t small{ flex:none; font:400 10px/1 var(--latin); letter-spacing:.32em; text-transform:uppercase; color:var(--faint); }
+.pf-n{ min-width:0; font:italic 500 17px/1.3 var(--latin); letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pf-v{ flex:none; display:flex; gap:9px; }
+.pf-v:empty{ display:none; }
+.pf-v button{ border:0; background:none; padding:2px 0 3px; font:italic 400 14px/1 var(--latin); letter-spacing:.06em; color:var(--faint); cursor:pointer; }
+.pf-v button:hover{ color:var(--ink); }
+.pf-v button.on{ color:var(--blue); box-shadow:inset 0 -1px 0 var(--blue); }
+.pf-acts{ flex:none; display:flex; align-items:baseline; gap:16px; }
+.pf-w{ border:0; background:none; padding:3px 0; font:italic 400 15px/1 var(--latin); letter-spacing:.05em; color:var(--blue); cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.pf-w:hover, .pf-w:focus-visible{ text-decoration:underline 1px; text-underline-offset:4px; }
+.pf-x{ color:var(--soft); }
+.pf-big{ display:none; }
+/* a phone: put away on the left, as a back would be */
+@media (max-width:999px), (max-aspect-ratio:5/4){
+  .pf-h{ flex-wrap:wrap; row-gap:4px; }
+  .pf-t{ flex:1 1 0; }
+  .pf-acts{ display:contents; }
+  .pf-x{ order:-1; }
+  .pf-v{ order:5; flex-basis:100%; }
+}
+
+.pf-stage{ --pp:22px; position:relative; flex:1 1 auto; min-height:0; }
+.pf-track{ position:absolute; inset:0; display:flex; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x mandatory; scrollbar-width:none; overscroll-behavior-x:contain; touch-action:pan-x; }
+.pf-track::-webkit-scrollbar{ display:none; }
+.pf-track.zoomed{ overflow:hidden; touch-action:none; }
+.pf-pg{ flex:0 0 100%; box-sizing:border-box; margin:0; padding:var(--pp); display:flex; align-items:center; justify-content:center; overflow:hidden; scroll-snap-align:center; scroll-snap-stop:always; }
+.pf-pg img{ display:block; flex:none; background:color-mix(in srgb, var(--ink) 5%, transparent); transform-origin:center; -webkit-user-select:none; user-select:none; -webkit-user-drag:none; }
+.pf-pg.ld img{ background:#FBFAF7; box-shadow:0 1px 5px rgba(16,16,22,.16); animation:pfIn .45s ease both; }
+.pf-pg.bad img{ background:none; box-shadow:inset 0 0 0 1px var(--hair); }
+:root[data-side="moon"] .pf-pg.ld img{ filter:brightness(.9); box-shadow:0 1px 8px rgba(0,0,0,.5); }
+@keyframes pfIn{ from{ opacity:0; } to{ opacity:1; } }
+.pf-frame{ position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; }
+.pf-frame.drawn{ animation:pfDraw 1s cubic-bezier(.45,.05,.2,1) .15s both; }
+@keyframes pfDraw{ from{ clip-path:inset(0 100% 0 0); } to{ clip-path:inset(0 0 0 0); } }
+.pf-ar{ display:none; }
+.pf-msg{ position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); padding:0 28px; text-align:center; }
+.pf-msg[hidden]{ display:none; }
+.pf-msg p{ margin:0 0 10px; font:italic 400 17px/1.6 var(--latin); letter-spacing:.04em; color:var(--soft); }
+.pf-msg.wait p::after{ content:""; display:inline-block; width:4px; height:4px; margin:0 0 .2em 9px; border-radius:50%; background:var(--blue); vertical-align:middle; animation:pfBreath 1.2s ease-in-out infinite; }
+@keyframes pfBreath{ 0%, 100%{ opacity:.25; transform:scale(.8); } 50%{ opacity:1; transform:scale(1.15); } }
+
+.pf-folio{ flex:none; display:flex; justify-content:center; align-items:baseline; gap:7px; min-height:14px; padding:2px 0 6px; font:400 12px/1 var(--latin); letter-spacing:.16em; color:var(--faint); }
+.pf-folio em{ font-style:italic; font-size:1.25em; color:var(--ink); }
+.pf-folio small{ margin-left:12px; font-style:italic; letter-spacing:.06em; }
+.pf-strip{ display:none; }
+
+.pf-notes{ flex:none; margin:2px 16px 0; border-top:1px solid var(--hair); }
+.pf-notes[hidden]{ display:none; }
+.pf-nh{ display:flex; align-items:baseline; gap:10px; width:100%; padding:10px 0 6px; border:0; background:none; text-align:left; color:var(--faint); cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.pf-nh small{ font:400 10px/1 var(--latin); letter-spacing:.32em; text-transform:uppercase; }
+.pf-nh span{ font:400 11.5px/1 var(--serif); letter-spacing:.12em; }
+.pf-nh::after{ content:""; margin:0 4px 0 auto; width:6px; height:6px; border-left:1px solid currentColor; border-top:1px solid currentColor; transform:translateY(2px) rotate(45deg); transition:transform .3s; }
+.pf-notes.open .pf-nh::after{ transform:translateY(-2px) rotate(225deg); }
+.pf-nt{ max-height:3.5em; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; font:400 13.5px/1.75 var(--serif); color:var(--soft);
+  -webkit-mask-image:linear-gradient(#000 35%, transparent); mask-image:linear-gradient(#000 35%, transparent); transition:max-height .35s ease; }
+.pf-notes.open .pf-nt{ max-height:42vh; overflow-y:auto; padding-bottom:8px; -webkit-mask-image:none; mask-image:none; }
+.pf-nt.none{ font:italic 400 14px/1.6 var(--latin); color:var(--faint); }
+
+/* text: a note, a table or some code, set on a sheet in the frame */
+.pf-tx .pf-sheet{ flex:none; box-sizing:border-box; overflow:auto; padding:22px 24px 28px; background:color-mix(in srgb, var(--paper) 55%, #fff); box-shadow:0 1px 5px rgba(16,16,22,.14);
+  font:400 14px/1.8 var(--serif); color:var(--ink); overscroll-behavior:contain; }
+:root[data-side="moon"] .pf-tx .pf-sheet{ background:color-mix(in srgb, var(--paper) 90%, #fff); box-shadow:0 1px 8px rgba(0,0,0,.5); }
+.pf-sheet pre.code{ margin:0; font:400 12.5px/1.7 var(--mono); white-space:pre; tab-size:4; counter-reset:ln; }
+.pf-sheet pre.code .l{ display:block; padding-left:4.2em; text-indent:-4.2em; }
+.pf-sheet pre.code .l::before{ counter-increment:ln; content:counter(ln); display:inline-block; width:3em; margin-right:1.2em; text-indent:0; text-align:right; color:var(--faint); font-size:.86em; }
+.pf-sheet pre.code.plain{ white-space:pre-wrap; }
+.pf-sheet table.tb{ border-collapse:collapse; font-size:13px; line-height:1.5; }
+.pf-sheet table.tb th{ padding:.2em 1.2em .4em 0; border-bottom:1px solid var(--river); text-align:left; font:italic 500 14px/1.4 var(--latin); letter-spacing:.05em; color:var(--soft); white-space:nowrap; }
+.pf-sheet table.tb td{ padding:.34em 1.2em .34em 0; border-bottom:1px solid var(--hair); vertical-align:top; }
+.pf-sheet .md code{ padding:0 .25em; font:400 .86em/1 var(--mono); background:color-mix(in srgb, var(--ink) 6%, transparent); border-radius:1px; }
+.pf-sheet .md pre.code, .pf-sheet .md pre.tb{ display:block; margin:.5em 0; padding:.55em 0 .55em .9em; border-left:1px solid var(--blue); font:400 12px/1.55 var(--mono); color:var(--soft); white-space:pre; overflow-x:auto; counter-reset:none; }
+.pf-sheet .md pre.tb{ border-left-color:var(--river); }
+.pf-sheet .md .h{ display:block; margin:.8em 0 .2em; font-family:var(--latin); font-style:italic; font-weight:500; letter-spacing:.04em; }
+.pf-sheet .md .h1{ font-size:1.5em; } .pf-sheet .md .h2{ font-size:1.28em; } .pf-sheet .md .h3, .pf-sheet .md .h4{ font-size:1.1em; }
+.pf-sheet .md .li{ display:block; position:relative; padding-left:calc(1.3em + var(--d, 0) * 1.2em); }
+.pf-sheet .md .li i{ position:absolute; left:calc(var(--d, 0) * 1.2em); font-style:normal; color:var(--blue); }
+.pf-sheet .md .bq{ display:block; padding-left:.8em; border-left:1px solid var(--river); color:var(--soft); }
+.pf-sheet .md hr{ border:0; height:1px; margin:.8em 0; background:var(--hair); }
+.pf-sheet .md .pg{ display:block; height:.6em; }
+.pf-sheet .md .tbw{ max-width:100%; overflow-x:auto; margin:.5em 0; }
+.pf-sheet .md a{ color:var(--accent); text-underline-offset:3px; }
+
+/* ── a wide screen: the proof beside the letter ── */
+@media (min-width:1000px) and (min-aspect-ratio:5/4){
+  #room{ --pg:clamp(28px, 2.4vw, 56px); --pfe:cubic-bezier(.32,.08,.16,1); transition:background-position .75s var(--pfe);
+    --cl:calc(var(--lp) + var(--pg)); --cw:calc(min(var(--col), var(--u) * 30) + var(--m)); }   /* where the letter goes while there is a proof */
+  #room #log, #room .write{ transition:margin-left .75s var(--pfe), width .75s var(--pfe); }
+  #room > canvas.plate, #room .who{ transition:opacity .45s ease, transform .75s var(--pfe); }
+  #room .orb{ transition:right .75s var(--pfe); } #room::after{ transition:right .75s var(--pfe); }
+  /* where there is room for all three, the plate stays and the letter moves up to the fold */
+  #room.proofing #log, #room.proofing .write{ margin-left:var(--cl); width:var(--cw); }
+  #room.proofing .msg:nth-child(7n+3)::after{ right:calc(var(--pg) * -.5); }
+  #room.proofing .orb{ right:24px; } #room.proofing::after{ right:21px; }
+
+  #proof{ position:absolute; z-index:3; left:calc(var(--cl) + var(--cw) + var(--pg)); right:76px; top:clamp(44px, 7.5vh, 80px); bottom:clamp(24px, 4.6vh, 46px);
+    padding:0; background:none; transform:translateX(5vw); transition:opacity .5s ease .18s, transform .8s var(--pfe) .08s; }
+  #proof.in{ transform:none; }
+  .pf-h{ margin:0; padding:0 0 calc(var(--u) * .55); gap:calc(var(--u) * .9); }
+  .pf-t small{ font-size:calc(var(--u) * .56); }
+  .pf-n{ font-size:calc(var(--u) * 1.08); }
+  .pf-v button{ font-size:calc(var(--u) * .78); }
+  .pf-w{ font-size:calc(var(--u) * .84); }
+  .pf-big{ display:inline; }
+  .pf-stage{ --pp:38px; }
+  .pf-track{ overflow-x:hidden; scroll-snap-type:none; touch-action:auto; }
+  .pf-pg img{ cursor:zoom-in; }
+  .pf-pg.fitw{ align-items:flex-start; overflow-y:auto; }
+  .pf-pg.fitw img{ cursor:zoom-out; }
+  .pf-ar{ display:block; position:absolute; top:50%; width:30px; height:64px; margin-top:-32px; padding:0; border:0; background:none; font:300 calc(var(--u) * 2.2)/1 var(--latin); color:var(--soft); opacity:0; transition:opacity .25s, color .2s; cursor:pointer; }
+  .pf-prev{ left:0; } .pf-next{ right:0; }
+  .pf-stage:hover .pf-ar{ opacity:.75; }
+  .pf-ar:hover{ color:var(--blue); opacity:1; }
+  .pf-ar:disabled, .one .pf-ar{ visibility:hidden; }
+  .pf-folio{ font-size:calc(var(--u) * .66); padding:0 0 calc(var(--u) * .5); }
+  .pf-strip{ display:flex; flex:none; gap:14px; overflow-x:auto; overflow-y:hidden; padding:6px 8px 12px; }
+  .one .pf-strip{ display:none; }
+  .pf-th{ flex:none; padding:2px; border:0; background:#F5F3EE; box-shadow:0 1px 4px rgba(20,20,26,.18); cursor:pointer; transform:rotate(-.7deg); transition:transform .2s, box-shadow .2s; }
+  .pf-th:nth-child(even){ transform:rotate(.6deg); }
+  :root[data-side="moon"] .pf-th{ background:#E4E1DA; }
+  .pf-th img{ display:block; height:calc(var(--u) * 2.7); min-width:calc(var(--u) * 2); opacity:.78; transition:opacity .2s; }
+  .pf-th:hover{ transform:translateY(-2px) rotate(0); } .pf-th:hover img, .pf-th.on img{ opacity:1; }
+  .pf-th.on{ box-shadow:0 0 0 1px var(--blue), 0 2px 8px rgba(20,20,26,.18); }
+  .pf-notes{ margin:0; }
+  .pf-nh{ padding:calc(var(--u) * .6) 0 calc(var(--u) * .3); cursor:default; }
+  .pf-nh small{ font-size:calc(var(--u) * .56); } .pf-nh span{ font-size:calc(var(--u) * .62); }
+  .pf-nh::after{ display:none; }
+  .pf-nt, .pf-notes.open .pf-nt{ height:min(20vh, calc(var(--u) * 7.6)); max-height:none; overflow-y:auto; box-sizing:border-box; -webkit-mask-image:none; mask-image:none; font-size:calc(var(--u) * .78); padding-right:10px; }
+  .pf-nt.none{ font-size:calc(var(--u) * .8); }
+  .pf-tx .pf-sheet{ font-size:calc(var(--u) * .82); padding:calc(var(--u) * 1.4) calc(var(--u) * 1.6); }
+  .pf-sheet pre.code{ font-size:calc(var(--u) * .68); }
+  /* enlarged: the proof over the whole spread */
+  #proof.full{ position:fixed; left:0; right:0; top:0; bottom:0; z-index:8; padding:24px clamp(28px, 4vw, 72px) 18px; background:var(--paper) var(--grain); background-size:180px; transition:none; }
+  .msg .att .file .th{ height:calc(var(--u) * 2.6); }
+}
+/* where the screen is not wide enough for the plate as well: the plate goes, as a leaf is turned, and the letter takes the
+   left-hand page; the fold moves to between the letter and the proof */
+@media (min-width:1000px) and (max-width:2399.98px) and (min-aspect-ratio:5/4){
+  #room{ --cl:clamp(40px, 4vw, 84px); --cw:calc(min(var(--u) * 30, 40vw - var(--m)) + var(--m)); }
+  #room.proofing{ background-position:calc(var(--cl) + var(--cw) + var(--pg) / 2) 0; }
+  #room.proofing > canvas.plate{ opacity:0; transform:translateX(-7vw); }
+  #room.proofing .who{ opacity:0; transform:translateX(-3vw); pointer-events:none; }
+}

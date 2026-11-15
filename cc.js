@@ -466,7 +466,7 @@
     }
 
 
-    /* ---------- files: everything handed over to you (the relay's outbox), by day; tap one to save it ---------- */
+    /* ---------- files: everything handed over to you (the relay's outbox), by day; tap one to look at it (proof.js), or save it ---------- */
     var F = null, fl = [];
     function files() {
       close(); if (S) S.hidden = true;
@@ -480,6 +480,7 @@
           var b = e.target.closest("[data-a]"); if (!b) return;
           var f = fl[+b.closest("[data-i]").dataset.i]; if (!f) return;
           if (b.dataset.a === "get") o.download(f.url, f.name);
+          else if (b.dataset.a === "view") { F.hidden = true; o.proof(f); }
           else if (b.dataset.a === "rm") ask.confirm("Remove “" + f.name + "”?", { body: "It is deleted from the outbox on the server.", ok: "remove", danger: true }).then(function (yes) {
             if (yes) post("/app/outbox/remove", { path: f.outbox }).then(loadFiles, function (e2) { F.querySelector("#filesNote").textContent = "Didn’t remove it: " + why(e2); });
           });
@@ -495,9 +496,10 @@
         fl.forEach(function (f, i) {
           var day = /^\d{4}-\d{2}-\d{2}\//.test(f.outbox) ? f.outbox.slice(0, 10) : "loose";
           if (day !== last) { h += '<div class="gh"><span class="gn"><i></i>' + esc(day === "loose" ? "elsewhere in the outbox" : fileDay(day)) + "</span></div>"; last = day; }
-          h += '<div class="frow" data-i="' + i + '"><button type="button" class="ft" data-a="get"><i class="fi' + (f.kind === "image" ? " pic" : "") + '"></i><span class="tt">' + esc(f.name) +
+          var pk = o.proofKind ? o.proofKind(f.name) : "";
+          h += '<div class="frow' + (pk ? " pv" : "") + '" data-i="' + i + '"><button type="button" class="ft" data-a="' + (pk ? "view" : "get") + '"><i class="fi' + (f.kind === "image" ? " pic" : "") + '"></i><span class="tt">' + esc(f.name) +
             '</span><span class="mt">' + esc(o.size(f.size)) + " \u00b7 " + esc(when(f.mtime)) + (f.outbox.indexOf("/") > 10 ? " \u00b7 " + esc(f.outbox.slice(0, f.outbox.lastIndexOf("/"))) : "") + '</span></button>' +
-            '<button type="button" class="fx" data-a="get">download</button><button type="button" class="fx rm" data-a="rm">remove</button></div>';
+            (pk ? '<button type="button" class="fx" data-a="view">view</button>' : "") + '<button type="button" class="fx" data-a="get">download</button><button type="button" class="fx rm" data-a="rm">remove</button></div>';
         });
         F.querySelector(".sb").innerHTML = h || '<p class="none">Nothing handed over yet. When ' + esc(o.name()) + ' finishes a file for you, it lands here — and in the chat, as a card to download.</p>';
         F.querySelector("#filesNote").textContent = d.dir ? "Kept on the server in " + d.dir + "." : "";

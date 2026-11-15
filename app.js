@@ -33,6 +33,7 @@
   var APPS = (C.apps && C.apps.length ? C.apps : [{ id: "chat", en: "Chat", zh: "聊天" }]), home = null;
   function show(which) {
     $("home").hidden = which !== "home"; $("room").hidden = which !== "room";
+    if (which !== "room" && proof) proof.close();
     if (which === "home") { $("glyph").textContent = root.dataset.side === "moon" ? "\u263E" : "\u2609"; home.refresh(); }
     if (which === "room") { toBottom(); }
     try { history.replaceState(null, "", which === "room" ? "#chat" : "#"); } catch (e) {}
@@ -183,11 +184,11 @@
   }
   function onEvent(ev) {
     if (CCMODE) {
-      if (ev.type === "cc") { if (ev.sid === view) (ev.messages || []).forEach(put); return; }
+      if (ev.type === "cc") { if (ev.sid === view) (ev.messages || []).forEach(function (m) { put(m); fresh(m); }); return; }
       if (ev.type === "cc_sid") { liveTo(ev.sid || ""); return; }
       if (ev.id != null && ev.from) { if (ev.kind === "term" && ev.meta && ev.meta.note) localCard(ev.text, "", true); return; }   // the relay's own log is not this chat
     }
-    if (ev.id != null && ev.from) { put(ev); return; }
+    if (ev.id != null && ev.from) { put(ev); fresh(ev); return; }
     switch (ev.type) {
       case "typing": typing(ev.active); break;
       case "reply_delta": case "thinking_delta": draft(ev); break;
@@ -281,8 +282,10 @@
   function size(n) { return n == null ? "" : n < 1024 ? n + " B" : n < 1048576 ? Math.round(n / 1024) + " KB" : (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + " MB"; }
   function attHTML(atts) {
     return '<div class="att">' + atts.map(function (a, i) {
-      return a.kind === "image" ? '<img data-i="' + i + '" alt="' + esc(a.name || "") + '" title="' + esc(a.name || "") + '">'
-        : '<span class="file" data-i="' + i + '" role="button" tabindex="0"><i></i><b>' + esc(a.name || "file") + "</b><small>" + (a.size != null ? size(a.size) + " \u00b7 " : "") + "download</small></span>";
+      if (a.kind === "image") return '<img data-i="' + i + '" alt="' + esc(a.name || "") + '" title="' + esc(a.name || "") + '">';
+      var pk = a.outbox && window.NyxProof ? NyxProof.kind(a.name) : "";   // one that was handed over can be looked at first (proof.js)
+      return '<span class="file' + (pk ? " pv" : "") + '" data-i="' + i + '"' + (a.outbox ? ' data-ob="' + esc(a.outbox) + '"' : "") + ' role="button" tabindex="0">' + (pk === "pages" ? '<span class="th"><img alt=""></span>' : "<i></i>") +
+        "<b>" + esc(a.name || "file") + "</b><small>" + (pk === "pages" ? '<span class="pc"></span>' : "") + (a.size != null ? size(a.size) + " \u00b7 " : "") + (pk ? '<u data-a="view">view</u> \u00b7 <u data-a="get">download</u>' : "download") + "</small></span>";
     }).join("") + "</div>";
   }
   // a file from the relay (an upload, or the outbox) to the device: fetched with the key, saved under its own name
@@ -298,13 +301,22 @@
     if (!blobs.has(url)) blobs.set(url, fetch(url, { headers: { "Authorization": "Bearer " + key } }).then(function (r) { if (!r.ok) throw 0; return r.blob(); }).then(URL.createObjectURL));
     return blobs.get(url);
   }
+  // the proof: a file handed over, looked at here without downloading it (proof.js)
+  var proof = window.NyxProof ? NyxProof({ api: api, blob: blobOf, download: download, size: size, toast: toast,
+    md: function (t) { return window.NyxCC && NyxCC.md ? NyxCC.md(t) : esc(t); } }) : null;
+  function fresh(m) { if (proof && m && m.meta && m.meta.attachments) m.meta.attachments.forEach(function (a) { proof.arrived(a); }); }   // a new version of the open file
   function wireAtts(el, atts) {
     el.querySelectorAll(".att [data-i]").forEach(function (n) {
       var a = atts[+n.dataset.i]; if (!a || !a.url) return;
       if (n.tagName === "IMG") { blobOf(a.url).then(function (u) { n.src = u; n.onload = function () { if (nearBottom(300)) toBottom(); }; }).catch(function () { n.alt = "image unavailable"; });
         n.onclick = function () { var z = document.createElement("div"); z.id = "zoom"; z.innerHTML = '<img src="' + n.src + '"><button type="button" class="save">save</button>'; z.onclick = function (ev) { if (ev.target.closest(".save")) { download(a.url, a.name || "picture"); return; } z.remove(); }; document.body.appendChild(z); }; }
-      else n.onclick = function () { download(a.url, a.name); };
+      else {
+        n.onclick = function (ev) { if (proof && n.classList.contains("pv") && !ev.target.closest('[data-a="get"]')) proof.open(a); else download(a.url, a.name); };
+        n.onkeydown = function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); n.onclick(ev); } };
+        if (proof && n.classList.contains("pv")) proof.card(n, a);
+      }
     });
+    if (proof && proof.isOpen()) proof.marks();
   }
   // a sticker may be .png, .gif, .jpg or .webp — try them in turn, then fall back to the bracketed name
   var EXT = [".png", ".gif", ".jpg", ".webp"];
@@ -971,6 +983,7 @@
       if (!cc && window.NyxCC && !GROUP) cc = NyxCC({ api: api, text: text, grow: grow, send: send, put: put, toast: toast, openMeter: openMeter, reload: function () { loadMeter(); loadWin(); },
         name: function () { return AI; }, used: function () { return win && win.used; }, ghost: ghost, fail: failGhost, local: localCard, verify: verifyWin,
         ccmode: function () { return CCMODE; }, view: function (sid) { openView(sid); }, carry: carryOn, viewing: function () { return view; }, download: download, size: size,
+        proof: function (f) { if (proof) proof.open(f); }, proofKind: function (n) { return proof ? NyxProof.kind(n) : ""; },
         opening: opening, openingFailed: openingFailed,
         newWin: function () { $("mNew").onclick(); }, carryNote: carryNote, compact: function () {
           api("/app/window/compact", { method: "POST" }).then(function (r) { toast(r && r.started === false ? "Sent; it hasn't visibly started" : "Compacting — give it a minute"); setTimeout(loadWin, 30000); },

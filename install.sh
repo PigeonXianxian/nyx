@@ -72,6 +72,10 @@ case "$CONSENT" in person|chat) ;; *) echo "--consent must be person or chat"; e
 say "1/7 System packages"
 sudo apt-get update -qq
 sudo apt-get install -y -qq git curl rsync python3 python3-venv tmux debian-keyring debian-archive-keyring apt-transport-https gnupg >/dev/null
+# proofs (relay/nyx_proof.py): slides, documents and PDFs handed over are looked at on the page without downloading them —
+# LibreOffice sets them as a PDF, poppler as pictures; the fonts stand in for the Office ones a server doesn't have
+sudo apt-get install -y -qq --no-install-recommends libreoffice-impress-nogui libreoffice-writer-nogui libreoffice-calc-nogui poppler-utils \
+  fonts-noto-cjk fonts-noto-cjk-extra fonts-crosextra-carlito fonts-crosextra-caladea >/dev/null || echo "  (no LibreOffice: files can still be downloaded, just not looked at first)"
 if ! command -v caddy >/dev/null; then
   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt | sudo tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
