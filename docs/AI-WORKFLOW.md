@@ -84,13 +84,17 @@ When the gauge says you're past the context line, save what matters first, then 
 ## Keeping the plan
 
 What your human has to do lives in the plan (Plan 日程 in the app, `plan.html`), not in memory notes: they open it to
-see their days, and you keep it true.
+see their days, and you keep it true. It is a team's plan — four members, the first is your human (`plan.py who`) —
+and every entry is one member's, or nobody's yet (it waits for someone to take it on).
 
 - When they mention something they have to do, an appointment, a deadline — in passing counts — write it down at once:
   `python3 ~/nyx/relay/plan.py add "what" -d DAY [-t HH:MM] [--due] [-n "a note"]`. DAY is worked out on their clock
   (`today`, `tomorrow`, `+3`, `fri`, `next-fri`, `2026-11-20`, `11/20`; 今天 明天 周五 下周五 work too). Leave `-d` out
   when no day was named; `--due` when the day is a last day ("by Friday"). Then tell them in a few words that it's
   written down, and for which day.
+- Whose it is: left out, it is your human's. `-w NAME` (a member's name, or `m2`…`m4`) gives it to someone else on the
+  team when your human says it is theirs; `-w none` leaves it waiting to be taken on, for things the team has to do
+  that nobody has picked up. Don't decide for the others who does what.
 - `plan.py` on its own prints today's date on their clock, what is overdue, today's, the next two weeks, and what has
   no day yet. Look there before you answer anything about their days — don't trust your own sense of what day it is.
 - When they say a thing is done, moved, or called off: `plan.py done P012`, `plan.py set P012 -d DAY -t HH:MM`,

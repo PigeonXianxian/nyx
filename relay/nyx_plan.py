@@ -1,16 +1,19 @@
-"""Plan (日程): what your human has to do, day by day.
+"""Plan (日程): what is to be done, day by day — by your human, and by the three they work with.
 
-  GET  /app/plan[?rev=N]   {rev, items, today, tz}   — {rev, same: true, today} when nothing changed since rev N
-  POST /app/plan           {title, note?, date?, time?, due?, by?}               → the new entry
-  POST /app/plan/<id>      {title?, note?, date?, time?, due?, done?} | {delete: true}   → the entry | {ok}
+  GET  /app/plan[?rev=N]   {rev, items, members, today, tz}   — {rev, same: true, today} when nothing changed since rev N
+  POST /app/plan           {title, note?, date?, time?, due?, owner?, by?}               → the new entry
+  POST /app/plan/<id>      {title?, note?, date?, time?, due?, owner?, done?} | {delete: true}   → the entry | {ok}
+  POST /app/plan/members   {names: {m2: "…", …}}   what each of the four is called          → {members, rev}
 
+It is a team's plan: four members (m1 is your human; names are theirs to change), and every entry is either one
+member's (`owner`: they took it on) or nobody's yet ("": it waits to be taken on).
 An entry: {id "P012", title, note, date "YYYY-MM-DD" ("" = no day yet), time "HH:MM" ("" = no hour), due (the date
-is the last day for it, not the day itself), done, done_at, by (who wrote it down), ts, updated}.
+is the last day for it, not the day itself), owner ("m1"…"m4" or ""), done, done_at, by (who wrote it down), ts, updated}.
 Kept in plan.json next to the relay's database (RELAY_PLAN_FILE to put it elsewhere).
 
-The page is plan.html. The companion writes here from the terminal with relay/plan.py: what its human says they have
-to do goes into the plan, not into memory notes. The "right now" card (nyx_now.py) carries what is coming up, one
-line, so the companion knows the next days without asking.
+The page is plan.html; who is looking is chosen there, on each device. The companion writes here from the terminal
+with relay/plan.py: what its human says they have to do goes into the plan, not into memory notes. The "right now"
+card (nyx_now.py) carries what is coming up for its human, one line, so the companion knows the next days without asking.
 Mounted from app.py with `nyx_plan.register(app, globals())`.
 
 This file is part of the Nyx relay, a modified version of Tidal Echo, and is
@@ -28,6 +31,8 @@ from fastapi import HTTPException, Request
 
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 FILE = None          # set in register()
+IDS = ("m1", "m2", "m3", "m4")
+HUMAN = ""           # how the relay calls its human: the first member's name until they change it
 DATE_RE, TIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$"), re.compile(r"^\d{1,2}:\d{2}$")
 
 
@@ -75,14 +80,27 @@ def a_time(s) -> str:
     raise HTTPException(status_code=400, detail="time must be HH:MM")
 
 
+def an_owner(v) -> str:
+    v = clip(v, 4)
+    if v and v not in IDS:
+        raise HTTPException(status_code=400, detail="owner must be m1…m4, or empty for nobody yet")
+    return v
+
+
 def load() -> dict:
+    d = None
     try:
         d = json.loads(FILE.read_text(encoding="utf-8"))
-        if isinstance(d, dict) and isinstance(d.get("items"), list):
-            return d
     except Exception:
         pass
-    return {"rev": 0, "items": []}
+    if not (isinstance(d, dict) and isinstance(d.get("items"), list)):
+        d = {"rev": 0, "items": []}
+    names = {m.get("id"): clip(m.get("name"), 12) for m in d.get("members") or [] if isinstance(m, dict)}
+    d["members"] = [{"id": i, "name": names.get(i) or dflt} for i, dflt in zip(IDS, (HUMAN or "甲", "乙", "丙", "丁"))]
+    for it in d["items"]:
+        if it.get("owner") not in IDS:
+            it["owner"] = "" if "owner" in it else "m1"   # written down before there was a team: it was the human's
+    return d
 
 
 def save(d: dict) -> None:
@@ -109,7 +127,8 @@ def card_line(z=None, days=7, cap=8) -> str:
     if FILE is None:
         return ""
     t = today(z)
-    items = [it for it in load()["items"] if not it.get("done") and it.get("date")]
+    every = [it for it in load()["items"] if not it.get("done")]
+    items = [it for it in every if it.get("date") and it.get("owner") == "m1"]   # the human's own
     late = [it for it in items if it["date"] < t.isoformat()]
     parts, n = ([f"overdue {len(late)}"] if late else []), 0
     for k in range(days + 1):
@@ -121,12 +140,16 @@ def card_line(z=None, days=7, cap=8) -> str:
         name = "today" if k == 0 else "tomorrow" if k == 1 else f"{DAYS[d.weekday()]} {d.month}/{d.day}"
         parts.append(name + " — " + ", ".join(((it["time"] + " ") if it.get("time") else "") + clip(it["title"], 40)
                                                + (" (last day)" if it.get("due") else "") for it in on))
+    open_ = sum(1 for it in every if not it.get("owner"))
+    if open_:
+        parts.append(f"{open_} waiting for someone on the team to take")
     return ("plan · " + " · ".join(parts)) if parts else ""
 
 
 def register(app, g):
-    global FILE
+    global FILE, HUMAN
     check_auth, now_iso, human = g["check_auth"], g["now_iso"], g.get("HUMAN_NAME", "")
+    HUMAN = clip(human, 12)
     FILE = Path(os.environ.get("RELAY_PLAN_FILE") or Path(g["DB_PATH"]).parent / "plan.json")
     lock, log = asyncio.Lock(), g.get("log")
 
@@ -140,7 +163,7 @@ def register(app, g):
         d = load()
         if rev == d.get("rev", 0):
             return {"rev": rev, "same": True, **head()}
-        return {"rev": d.get("rev", 0), "items": d["items"], **head()}
+        return {"rev": d.get("rev", 0), "items": d["items"], "members": d["members"], **head()}
 
     @app.post("/app/plan")
     async def plan_add(request: Request):
@@ -149,16 +172,29 @@ def register(app, g):
         title = clip(b.get("title"), 200)
         if not title:
             raise HTTPException(status_code=400, detail="title required")
-        when, hour = a_date(b.get("date")), a_time(b.get("time"))
+        when, hour, owner = a_date(b.get("date")), a_time(b.get("time")), an_owner(b.get("owner"))
         async with lock:
             d = load()
             no = max([it.get("no", 0) for it in d["items"]] + [0]) + 1
             it = {"id": f"P{no:03d}", "no": no, "title": title, "note": clip(b.get("note"), 2000), "date": when, "time": hour,
-                  "due": bool(b.get("due")) and bool(when), "done": False, "done_at": "",
+                  "due": bool(b.get("due")) and bool(when), "owner": owner, "done": False, "done_at": "",
                   "by": clip(b.get("by") or human, 20), "ts": now_iso(), "updated": now_iso()}
             d["items"].append(it)
             save(d)
         return {**it, "rev": d["rev"]}
+
+    @app.post("/app/plan/members")
+    async def plan_members(request: Request):
+        check_auth(request)
+        b = await request.json()
+        names = b.get("names") if isinstance(b.get("names"), dict) else {}
+        async with lock:
+            d = load()
+            for m in d["members"]:
+                if clip(names.get(m["id"]), 12):
+                    m["name"] = clip(names[m["id"]], 12)
+            save(d)
+        return {"members": d["members"], "rev": d["rev"]}
 
     @app.post("/app/plan/{pid}")
     async def plan_edit(request: Request, pid: str):
@@ -186,6 +222,8 @@ def register(app, g):
                 it["time"] = a_time(b["time"])
             if "due" in b:
                 it["due"] = bool(b["due"])
+            if "owner" in b:
+                it["owner"] = an_owner(b["owner"])
             if not it["date"]:
                 it["due"] = False
             if "done" in b and bool(b["done"]) != bool(it.get("done")):

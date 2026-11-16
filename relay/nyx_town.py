@@ -261,43 +261,6 @@ def register(app, g):
             d["nian"] += gain; _save(d)
         return {"ok": True, "gain": gain, "nian": d["nian"]}
 
-    @app.post("/app/memtown/cook")
-    async def memtown_cook(request: Request):
-        """厨房（10/20）：田里熟的挑一到三样下锅。用掉的格子今天就不能再卖了；头一回做出来的菜给 6 个念，之后每做一次给 1 个。"""
-        g["check_auth"](request)
-        body = await request.json()
-        ids = [str(x)[:160] for x in (body.get("ids") or [])][:3]
-        name = str(body.get("name", ""))[:40].strip()
-        species = [str(x)[:24] for x in (body.get("species") or [])][:3]
-        form = str(body.get("form", "plain"))[:12]
-        form = form if form in ("plain", "cake", "stand", "sundae", "bento", "pizza") else "plain"
-        plate = []   # 她摆的那盘：每块是哪样、在哪、转了多少；按摆的先后存，回放时能叠回去
-        for p in (body.get("plate") or [])[:80]:
-            try:
-                plate.append({"k": str(p["k"])[:16], "x": round(max(-3, min(3, float(p["x"]))), 3), "z": round(max(-3, min(3, float(p["z"]))), 3), "r": round(float(p["r"]) % 6.2832, 2), **({"y": round(max(-1, min(3, float(p["y"]))), 3)} if "y" in p else {}), **({"s": int(p["s"]) % 100000} if "s" in p else {})})   # y 叠多高、s 那块料长什么样
-            except Exception:
-                continue
-        if not ids or not name:
-            return {"ok": False, "why": "没东西下锅"}
-        async with lock:
-            d = _st(); now = time.time()
-            if any(now - d["sold"].get(i, 0) <= 86400 for i in ids):
-                return {"ok": False, "why": "有一样今天已经收过了", "nian": d["nian"]}
-            for i in ids:
-                d["sold"][i] = now
-            dish = d["dishes"].get(name)
-            gain = 1 if dish else 6
-            d["dishes"][name] = {"count": (dish or {}).get("count", 0) + 1, "first": (dish or {}).get("first", int(now)), "last": int(now), "species": species, "form": form}
-            d["dishes"][name]["mems"] = ids   # 这一盘用的是哪几条记忆，端给小机的时候它尝得出来
-            if dish and dish.get("fed"):
-                d["dishes"][name]["fed"] = dish["fed"]
-            if plate:
-                d["dishes"][name]["plate"] = plate
-            elif dish and dish.get("plate"):
-                d["dishes"][name]["plate"] = dish["plate"]
-            d["nian"] += gain; _save(d)
-        return {"ok": True, "gain": gain, "nian": d["nian"], "new": not dish, "dishes": d["dishes"]}
-
     @app.post("/app/memtown/shop")
     async def memtown_shop(request: Request):
         """她的店：{buy: "wall:豆沙"} 花念买下；{set: {type, dec, sign}} 换上（只能换买过的或者不要钱的）。"""
@@ -333,21 +296,6 @@ def register(app, g):
                 sign = sign if sign[0] else None
             shop.update(type=typ, dec=dec or shop["dec"], sign=sign); _save(d)
         return {"ok": True, "nian": d["nian"], "shop": shop}
-
-    @app.post("/app/memtown/feed")
-    async def memtown_feed(request: Request):
-        """端给小机吃（10/20）：记一笔，回这盘的料是哪几条记忆。真正的「尝」在聊天里，前端用她的名义递一句过去。"""
-        g["check_auth"](request)
-        body = await request.json()
-        name = str(body.get("name", ""))[:40]
-        async with lock:
-            d = _st(); dish = d["dishes"].get(name)
-            if not dish:
-                return {"ok": False, "why": "菜谱里没有这道"}
-            dish["fed"] = int(dish.get("fed", 0)) + 1; dish["lastFed"] = int(time.time()); _save(d)
-        stars = {s["id"]: s for s in ((_cache["data"] or {}).get("stars") or [])}
-        mems = [{"id": i, "title": stars[i]["title"], "topic": stars[i].get("topic")} for i in dish.get("mems", []) if i in stars]
-        return {"ok": True, "dish": dish, "mems": mems}
 
     @app.post("/app/memtown/species")
     async def memtown_species(request: Request):

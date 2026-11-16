@@ -2,12 +2,16 @@
 """The plan (日程), from the server's terminal — for the AI: what your human has to do, written down as they say it.
 
   python3 ~/nyx/relay/plan.py                         today's date on their clock, then what is overdue, today's,
-                                                      the next two weeks, and what has no day yet
+                                                      the next two weeks, what has no day yet, and what waits to be taken
   python3 ~/nyx/relay/plan.py ls [--days N] [--done]  the same, further ahead / with what is done
-  python3 ~/nyx/relay/plan.py add "what" [-d DAY] [-t HH:MM] [--due] [-n "a note"]
-  python3 ~/nyx/relay/plan.py set P012 [-d DAY|none] [-t HH:MM|none] [--title "…"] [-n "…"] [--due 1|0]
+  python3 ~/nyx/relay/plan.py add "what" [-d DAY] [-t HH:MM] [--due] [-n "a note"] [-w WHO]
+  python3 ~/nyx/relay/plan.py set P012 [-d DAY|none] [-t HH:MM|none] [--title "…"] [-n "…"] [--due 1|0] [-w WHO]
   python3 ~/nyx/relay/plan.py done P012 [P013 …]      (undo P012 takes it back)
   python3 ~/nyx/relay/plan.py rm P012                 only what was written down by mistake, or what they call off
+  python3 ~/nyx/relay/plan.py who                     the four of the team (name m2 "小王" changes what one is called)
+
+It is a team's plan: four members, m1 is your human. WHO is whose it is: left out, it is your human's ("me"); a
+member's name or m1…m4 gives it to them; "none" leaves it waiting for someone on the team to take (待认领).
 
 DAY is worked out on their clock, not this machine's:  today · tomorrow · +3 · fri (the coming Friday, today counts)
 · next-fri (Friday of next week) · 2026-11-20 · 11-20 · 11/20 — 今天 明天 后天 周五 下周五 11月20日 work as well.
@@ -103,6 +107,22 @@ def a_day(s, today):
     sys.exit(f"can't read the day {s!r} — try today, tomorrow, +3, fri, next-fri, 2026-11-20, 11/20 or none")
 
 
+def a_who(s, members):
+    """WHO as typed → a member's id ('' for nobody yet)."""
+    s = (s or "me").strip()
+    low = s.lower()
+    if low in ("none", "no", "-", "pool", "nobody", "待认领", "没人", "无"):
+        return ""
+    if low in ("me", "我", "human"):
+        return "m1"
+    if low in ("1", "2", "3", "4"):
+        return "m" + low
+    for m in members:
+        if low in (m["id"], m["name"].lower()):
+            return m["id"]
+    sys.exit(f"nobody on the team is called {s!r} — the four are: " + ", ".join(f"{m['id']} {m['name']}" for m in members) + "; or none")
+
+
 def a_time(s):
     s = (s or "").strip()
     if s.lower() in ("", "none", "no", "-", "无"):
@@ -119,6 +139,9 @@ def label(d, today):
     return (name + " · " if name else "") + f"{DAYS[d.weekday()].capitalize()} {d.isoformat()}"
 
 
+NAMES = {}   # member id → name, filled by whatever was fetched last
+
+
 def line(it, today=None, show_day=False):
     day = ""
     if show_day and it.get("date"):
@@ -126,6 +149,7 @@ def line(it, today=None, show_day=False):
     out = f"  {it['id']}  {day}{it.get('time') or '  ·  '}  {it['title']}"
     if it.get("due"):
         out += "  (last day)"
+    out += "  [" + (NAMES.get(it.get("owner")) or "waiting to be taken") + "]"
     if it.get("done"):
         out += "  ✓"
     if it.get("note"):
@@ -139,6 +163,7 @@ def order(it):
 
 def show(days=14, done=False):
     d = call("/app/plan")
+    NAMES.update({m["id"]: m["name"] for m in d.get("members", [])})
     today = date.fromisoformat(d["today"])
     print(f"their today: {label(today, today).split(' · ')[-1]}" + (f"  ({d['tz']})" if d.get("tz") else "  (UTC — no time zone in now.md)"))
     items = sorted(d.get("items", []), key=order)
@@ -166,6 +191,9 @@ def show(days=14, done=False):
         print("\nno day yet")
         for it in loose:
             print(line(it))
+    waiting = sum(1 for it in open_ if not it.get("owner"))
+    if waiting:
+        print(f"\n{waiting} of these wait for someone on the team to take ([waiting to be taken]).")
     if done:
         gone = sorted((it for it in items if it.get("done")), key=lambda it: it.get("done_at") or "", reverse=True)[:30]
         if gone:
@@ -181,19 +209,30 @@ def main():
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("ls"); p.add_argument("--days", type=int, default=14); p.add_argument("--done", action="store_true")
     p = sub.add_parser("add"); p.add_argument("title"); p.add_argument("-d", "--day", default=""); p.add_argument("-t", "--time", default="")
-    p.add_argument("-n", "--note", default=""); p.add_argument("--due", action="store_true"); p.add_argument("--who", default=WHO)
+    p.add_argument("-n", "--note", default=""); p.add_argument("--due", action="store_true"); p.add_argument("-w", "--who", default="me"); p.add_argument("--by", default=WHO)
     p = sub.add_parser("set"); p.add_argument("id"); p.add_argument("-d", "--day"); p.add_argument("-t", "--time"); p.add_argument("--title")
-    p.add_argument("-n", "--note"); p.add_argument("--due", choices=("0", "1"))
+    p.add_argument("-n", "--note"); p.add_argument("--due", choices=("0", "1")); p.add_argument("-w", "--who")
+    sub.add_parser("who"); p = sub.add_parser("name"); p.add_argument("id"); p.add_argument("name")
     p = sub.add_parser("done"); p.add_argument("id", nargs="+")
     p = sub.add_parser("undo"); p.add_argument("id", nargs="+")
     p = sub.add_parser("rm"); p.add_argument("id")
     a = ap.parse_args()
     if a.cmd in (None, "ls"):
         return show(getattr(a, "days", 14), getattr(a, "done", False))
-    if a.cmd in ("add", "set"):
-        today = date.fromisoformat(call("/app/plan?rev=-2")["today"])
-    if a.cmd == "add":
-        it = call("/app/plan", {"title": a.title, "note": a.note, "date": a_day(a.day, today), "time": a_time(a.time), "due": a.due, "by": a.who})
+    got = call("/app/plan?rev=-2")
+    today, members = date.fromisoformat(got["today"]), got.get("members", [])
+    NAMES.update({m["id"]: m["name"] for m in members})
+    if a.cmd == "who":
+        for m in members:
+            print(f"  {m['id']}  {m['name']}" + ("   (your human)" if m["id"] == "m1" else ""))
+    elif a.cmd == "name":
+        mid = a_who(a.id, members)
+        if not mid or not a.name.strip():
+            sys.exit("name m2 \"what they are called\"")
+        for m in call("/app/plan/members", {"names": {mid: a.name.strip()}})["members"]:
+            print(f"  {m['id']}  {m['name']}")
+    elif a.cmd == "add":
+        it = call("/app/plan", {"title": a.title, "note": a.note, "date": a_day(a.day, today), "time": a_time(a.time), "due": a.due, "owner": a_who(a.who, members), "by": a.by})
         print("written down" + (": " + label(date.fromisoformat(it["date"]), today) if it["date"] else " (no day yet)")); print(line(it))
     elif a.cmd == "set":
         b = {}
@@ -202,8 +241,9 @@ def main():
         if a.title is not None: b["title"] = a.title
         if a.note is not None: b["note"] = a.note
         if a.due is not None: b["due"] = a.due == "1"
+        if a.who is not None: b["owner"] = a_who(a.who, members)
         if not b:
-            sys.exit("nothing to change: give -d, -t, --title, -n or --due")
+            sys.exit("nothing to change: give -d, -t, --title, -n, --due or -w")
         it = call(f"/app/plan/{a.id.upper()}", b)
         print("changed" + (": " + label(date.fromisoformat(it["date"]), today) if it["date"] else " (no day yet)")); print(line(it))
     elif a.cmd in ("done", "undo"):

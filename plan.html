@@ -21,7 +21,6 @@
     window.NYX_PLAN_EARLY.catch(function () {});
   })(); } catch (e) {}
 </script>
-<link rel="preload" as="image" href="eye/moon.webp">   <!-- every day has its moon, and every thing to do is ticked with one -->
 <link rel="stylesheet" href="eye/ink.css">
 <link rel="stylesheet" href="plan.css">
 </head>
@@ -30,32 +29,40 @@
 <svg id="drops" aria-hidden="true" hidden></svg>
 
 <div class="plx" id="plx">
-  <!-- the band, in the other side's ground: the room's name, and the sky of the days — each day's moon riding one dotted track (plan.js lays it; it is pulled along by hand) -->
-  <header class="band" id="band">
-    <canvas class="sky" id="sky" aria-hidden="true"></canvas>
-    <div class="b-top">
+  <!-- the corner block, as on the home: the room's name, and who is looking (one of the four) -->
+  <header class="title" id="title">
+    <div class="tb">
       <button class="back" id="back" type="button" aria-label="回到首页"><i class="sw"></i></button>
       <h1 class="ttl"><b>Plan</b><small>日程</small></h1>
       <p class="b-date" id="bDate"></p>
-      <div class="b-go"><button type="button" id="goPrev" aria-label="往前一周" title="往前一周"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button><button type="button" id="goToday">今天</button><button type="button" id="goNext" aria-label="往后一周" title="往后一周"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button></div>
     </div>
-    <p class="b-month" id="bMonth"></p>
-    <div class="heads" id="heads"></div>
+    <div class="iam" id="iam"></div>
   </header>
 
-  <!-- the days, one column each (a wide screen shows a week of them; a phone one at a time) -->
-  <main class="strip" id="strip">
-    <div class="leaf" aria-hidden="true"></div>   <!-- far behind the days, a leaf of the sketchbook: the cathedral -->
-    <div class="cols" id="cols"></div>
-  </main>
+  <!-- the days, across the head of the sheet: each day's moon riding one dotted track (plan.js lays it; it is pulled along by hand); under it the heavy rule the four lanes hang from -->
+  <div class="head" id="band">
+    <canvas class="sky" id="sky" aria-hidden="true"></canvas>
+    <p class="b-month" id="bMonth"></p>
+    <div class="b-go"><button type="button" id="goPrev" aria-label="往前一周" title="往前一周"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button><button type="button" id="goToday">今天</button><button type="button" id="goNext" aria-label="往后一周" title="往后一周"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button></div>
+    <p class="loose-h">没定日子<i>Someday</i></p>
+    <div class="heads" id="heads"></div>
+  </div>
 
-  <!-- beside the days: a line to write on, and what has no column of its own — what is overdue, what has no day yet, what lies further on, what is done -->
+  <!-- the board: a column a day, a lane a person (a wide screen shows a week; a phone one day at a time, the four under one another) -->
+  <main class="strip" id="strip"><div class="cols" id="cols"></div></main>
+
+  <!-- beside the board: a line to write on, and what is in nobody's lane — what waits to be taken on, what is overdue, what lies further on, what is done -->
   <aside class="side" id="side">
-    <form class="jot" id="jot" autocomplete="off"><input id="jotIn" type="text" maxlength="200" placeholder="记一件事…" aria-label="记一件事" enterkeyhint="done"><button type="submit">记下</button></form>
+    <form class="jot" id="jot" autocomplete="off"><input id="jotIn" type="text" maxlength="200" placeholder="记一件待办…" aria-label="记一件待办" enterkeyhint="done"><button type="submit">记下</button></form>
     <p class="hint" id="jotHint"></p>
     <div id="lists"></div>
     <p class="foot" id="foot"></p>
   </aside>
+
+  <!-- the four: each one's lane begins here, with what they have taken on that has no day yet -->
+  <div class="who" id="who"></div>
+
+  <i class="plumb" id="plumb" aria-hidden="true"></i>   <!-- today: the plumb line hangs down its column (plan.js moves it with the days) -->
 </div>
 
 <div class="toast" id="toast" role="status"></div>
