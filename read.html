@@ -13,6 +13,16 @@
 <script>
   try { document.documentElement.dataset.side = localStorage.getItem("nyx_side") === "moon" ? "moon" : "sun"; } catch (e) { document.documentElement.dataset.side = "sun"; }
 </script>
+<script>
+  /* ask for the sheet at once, while the rest of the page is still on its way (read.js picks these up) */
+  try { (function () {
+    var k = localStorage.getItem("nyx_key"), h = location.hash || "#today", m = h.match(/^#today(?:\/(\d{4}-\d{2}-\d{2}))?$/); if (!k) return;
+    var get = function (p) { return fetch("/relay/app/read/" + p, { headers: { "Authorization": "Bearer " + k }, cache: "no-store" }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw d; return d; }); }); };
+    if (m) window.NYX_READ_EARLY = { brief: "briefs" + (m[1] ? "?date=" + m[1] : ""), b: get("briefs" + (m[1] ? "?date=" + m[1] : "")), r: get("recommendations") };
+    else if (h === "#shelf") window.NYX_READ_EARLY = { list: get("articles?limit=30&offset=0&filter=all") };
+    if (window.NYX_READ_EARLY) for (var x in window.NYX_READ_EARLY) if (window.NYX_READ_EARLY[x] && window.NYX_READ_EARLY[x].catch) window.NYX_READ_EARLY[x].catch(function () {});
+  })(); } catch (e) {}
+</script>
 <link rel="stylesheet" href="eye/ink.css">
 <link rel="stylesheet" href="read.css">
 </head>
@@ -20,29 +30,45 @@
 <div id="paper" aria-hidden="true"></div>
 <svg id="drops" aria-hidden="true" hidden></svg>
 
-<!-- the reading room: the day's sheet, the shelf, what was kept -->
-<main class="rd" id="rd">
-  <header class="rh">
-    <button class="back" id="back" type="button" aria-label="回去"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-    <div class="ttl"><b>Read</b><small>一起读</small></div>
-    <nav class="tabs" id="tabs">
-      <a href="#today" data-v="today"><i>Today</i><small>今日</small></a>
-      <a href="#shelf" data-v="shelf"><i>Shelf</i><small>书架</small></a>
-      <a href="#kept" data-v="kept"><i>Kept</i><small>收藏</small></a>
+<div class="rdx" id="rdx">
+  <!-- the spine: the room's name, the day, where to go. On a wide screen it is the dark left page; on a phone, the head of the sheet. -->
+  <aside class="spine" id="spine">
+    <header class="sp-top">
+      <button class="back" id="back" type="button" aria-label="回到首页"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h1 class="ttl"><b>Read</b><small>一起读</small></h1>
+    </header>
+    <div class="sp-day" id="spDay" aria-hidden="true"></div>
+    <nav class="sp-nav" id="spNav" aria-label="去哪里">
+      <a href="#today" data-v="today"><i>Today</i><b>今日</b><small id="nToday"></small></a>
+      <a href="#shelf" data-v="shelf"><i>Shelf</i><b>书架</b><small id="nShelf"></small></a>
+      <a href="#kept" data-v="kept"><i>Kept</i><b>收藏</b><small id="nKept"></small></a>
     </nav>
-  </header>
-  <section class="view" id="view" aria-live="polite"></section>
-</main>
+    <div class="sp-cal" id="spCal"></div>
+    <footer class="sp-foot" id="spFoot"></footer>
+  </aside>
 
-<!-- one article, open -->
-<article class="ar" id="ar" hidden>
-  <header class="ah">
-    <button class="back" id="aback" type="button" aria-label="回到书架"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-    <span class="prog" id="prog"></span>
-    <nav class="tools" id="tools"></nav>
-  </header>
-  <div class="sheet" id="sheet"></div>
-</article>
+  <main class="stage" id="stage">
+    <!-- looking: the day's sheet, the shelf, what was kept -->
+    <section class="browse" id="browse" tabindex="-1"><div class="view" id="view" aria-live="polite"></div></section>
+
+    <!-- reading: the list stays beside the sheet -->
+    <section class="reading" id="reading" hidden>
+      <nav class="rail" id="rail" aria-label="这一叠"></nav>
+      <article class="ar" id="ar" tabindex="-1">
+        <header class="ah" id="ah">
+          <button class="shut" id="aback" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>回去</span></button>
+          <span class="step"><button type="button" id="prev" aria-label="上一篇"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><button type="button" id="next" aria-label="下一篇"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span>
+          <span class="prog" id="prog"></span>
+          <nav class="tools" id="tools"></nav>
+        </header>
+        <div class="page">
+          <div class="sheet" id="sheet"></div>
+          <nav class="toc" id="toc" aria-label="这一篇的段落"></nav>
+        </div>
+      </article>
+    </section>
+  </main>
+</div>
 
 <div class="toast" id="toast" role="status"></div>
 

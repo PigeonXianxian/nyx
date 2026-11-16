@@ -14,19 +14,31 @@ carries the page's requests to it, so that the house's own key is the one key:
   POST  /app/read/articles/<id>/original/resolve     a Xiaohongshu note's present address
   GET   /app/read/sources · /categories · /status
   POST  /app/read/collect                     look for new things now
+  GET   /app/read/cover/<id>                  the article's first figure, made small (WebP, at most 720 px wide)
 
 Anything else is refused here. The library is reached on loopback with its proxy secret (read from its own
 config, never copied elsewhere); its answers are passed back as they are.
 
+A cover is fetched from the address the library recorded for that article (https only, a public address, at most
+12 MB), made small once by relay/cover_shrink.py (the system's Python and Pillow) and kept on disk
+(~/.cache/nyx-read-covers, RELAY_READ_COVERS). An article without a usable figure answers 404 and is not tried
+again for six hours.
+
 Part of the Nyx relay, a modified Tidal Echo, GNU AGPL v3.
 """
+import asyncio
+import ipaddress
 import json
 import os
 import re
+import socket
+import time
+from pathlib import Path
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from fastapi import HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 
 CONFIG = os.environ.get("RELAY_READING_CONFIG", "/root/repo/moben/.config/reading.json")
 ID = r"[A-Za-z0-9_-]{1,128}"
@@ -66,6 +78,110 @@ def register(app, check_auth):
             state["client"] = httpx.AsyncClient(verify=False, timeout=httpx.Timeout(25.0, connect=5.0))
         return state["base"], state["token"], state["client"]
 
+    # ---- covers: the first figure of an article, small, for the cards (registered before the catch-all below) ----
+    covers = Path(os.environ.get("RELAY_READ_COVERS", str(Path.home() / ".cache" / "nyx-read-covers")))
+    shrinker = Path(__file__).with_name("cover_shrink.py")
+    making, gate = {}, asyncio.Semaphore(2)
+
+    def public_https(url):
+        """https, and every address the host resolves to is a public one."""
+        u = urlsplit(url)
+        if u.scheme != "https" or not u.hostname or u.username or u.password:
+            return False
+        try:
+            infos = socket.getaddrinfo(u.hostname, u.port or 443, type=socket.SOCK_STREAM)
+        except OSError:
+            return False
+        return bool(infos) and all(ipaddress.ip_address(i[4][0]).is_global for i in infos)
+
+    async def fetch_image(url, page):
+        agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
+        headers = {"User-Agent": agent, "Accept": "image/webp,image/png,image/jpeg,image/*;q=0.8"}
+        if isinstance(page, str) and page.startswith("https://"):
+            headers["Referer"] = page   # the figure is asked for as the article's own page asks for it
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=8.0), follow_redirects=False, headers=headers) as web:
+            for _ in range(4):   # each hop of a redirect is checked like the first address
+                if not await asyncio.get_running_loop().run_in_executor(None, public_https, url):
+                    return None
+                async with web.stream("GET", url) as r:
+                    if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
+                        url = urljoin(url, r.headers["location"])
+                        continue
+                    if r.status_code != 200:
+                        return None
+                    data = bytearray()
+                    async for chunk in r.aiter_bytes():
+                        data += chunk
+                        if len(data) > 12 * 1024 * 1024:
+                            return None
+                    return bytes(data)
+        return None
+
+    async def make_cover(aid, out, none):
+        base, token, client = library()
+        raws = []
+        try:
+            r = await client.get(f"{base}/api/articles/{aid}", headers={"X-Reading-Proxy-Token": token}, timeout=25.0)
+            article = r.json() if r.status_code == 200 else {}
+            # the article's first few figures: the fullest of them makes the cover (cover_shrink.py chooses)
+            urls = [b.get("url") for b in (article.get("blocks") or []) if isinstance(b, dict) and b.get("type") == "image"
+                    and isinstance(b.get("url"), str) and b["url"].startswith("https://")][:4] if article.get("cover") else []
+            async with gate:
+                for i, url in enumerate(urls):
+                    data = await fetch_image(url, article.get("url"))
+                    if data:
+                        raw = out.with_suffix(f".raw{i}")
+                        raw.write_bytes(data)
+                        raws.append(raw)
+                if raws:
+                    proc = await asyncio.create_subprocess_exec("/usr/bin/python3", "-I", str(shrinker), str(out), *[str(p) for p in raws],
+                                                                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                    try:
+                        await asyncio.wait_for(proc.wait(), timeout=60)
+                    except asyncio.TimeoutError:
+                        proc.kill()
+        except (httpx.HTTPError, OSError, ValueError):
+            pass   # the card simply goes without a picture
+        finally:
+            for raw in raws:
+                raw.unlink(missing_ok=True)
+        if not out.exists():
+            none.write_text(str(int(time.time())))
+
+    def cover_job(aid):
+        """The making of this article's cover, started if it is neither made, nor known to be wanting, nor under way."""
+        covers.mkdir(parents=True, exist_ok=True)
+        out, none = covers / f"{aid}.webp", covers / f"{aid}.none"
+        if out.exists() or (none.exists() and time.time() - none.stat().st_mtime < 6 * 3600):
+            return out, None
+        job = making.get(aid)
+        if job is None:
+            job = making[aid] = asyncio.ensure_future(make_cover(aid, out, none))
+            job.add_done_callback(lambda _f: making.pop(aid, None))
+        return out, job
+
+    def warm(body):
+        try:
+            d = json.loads(body)
+        except ValueError:
+            return
+        cards = (d.get("items") or []) + (d.get("daily") or []) + (d.get("weekly") or []) if isinstance(d, dict) else []
+        for c in cards:
+            if isinstance(c, dict) and c.get("cover") and isinstance(c.get("id"), str) and re.fullmatch(ID, c["id"]):
+                cover_job(c["id"])
+
+    @app.get("/app/read/cover/{aid}")
+    async def read_cover(aid: str, request: Request):
+        check_auth(request)
+        if not re.fullmatch(ID, aid):
+            raise HTTPException(status_code=404, detail="no such article")
+        out, job = cover_job(aid)
+        if job is not None:
+            await asyncio.shield(job)
+        if not out.exists():
+            raise HTTPException(status_code=404, detail="no cover")
+        return FileResponse(out, media_type="image/webp", headers={"Cache-Control": "private, max-age=604800"})
+
     @app.api_route("/app/read/{path:path}", methods=["GET", "POST", "PATCH"])
     async def read_any(path: str, request: Request):
         check_auth(request)
@@ -86,6 +202,8 @@ def register(app, check_auth):
                                      timeout=120.0 if SLOW.match(path) else 25.0)
         except httpx.HTTPError:
             raise HTTPException(status_code=502, detail="the reading library did not answer")
+        if request.method == "GET" and r.status_code == 200 and path in ("articles", "recommendations"):
+            warm(r.content)   # the cards just handed out: have their covers made before they are asked for
         return Response(content=r.content, status_code=r.status_code,
                         media_type=r.headers.get("content-type", "application/json; charset=utf-8"),
                         headers={"Cache-Control": "no-store"})
