@@ -95,6 +95,7 @@ Optional, for the other rooms:
 | GET/POST | `/app/board`, `/app/board/<id>` | the Yard (船坞), the engineering board in the Hold; the AI uses `relay/board.py` (`next`, `claim`, `note`, `done`); its routine is in [`docs/AI-WORKFLOW.md`](docs/AI-WORKFLOW.md) |
 | GET | `/app/heart`, `/app/heart/file?path=` | read-only: `~/companion/CLAUDE.md` or `AGENTS.md`, `~/companion/memory/*.md`, the relay code; keys are blanked |
 | GET/POST | `/app/window`, `/app/window/{line,compact,new,switch}`, `/app/window/list` | the gauge's lower half: the context line (past it the AI saves to memory, then the window compacts), compact now, a new window, old windows. Claude Code through tmux; Codex through the bridge (`/app/window/cmd`) |
+| GET/POST | `/app/plan`, `/app/plan/<id>` | Plan (日程, `plan.html`): what you have to do, day by day — `{title, note, date, time, due, done}`. Your companion writes down what you mention in the chat with `relay/plan.py` (`add`, `set`, `done`, `rm`; days are worked out on your clock); you write on the page. The "right now" card carries what is coming up |
 | GET/POST | `/app/kitchen`, `/app/kitchen/{pantry,ask,recipe,photo,photo/comment,log,cooked}` | the Kitchen: pantry, recipes the AI writes, photos of what you made, a timeline of meals |
 | GET/POST | `/app/keys`, `/app/keys/delete` | the bottom of the gauge: API keys for the companion's environment. Values go in and never come back (the list shows your label, the name and the last four characters); see **Keys** below |
 
@@ -163,7 +164,7 @@ It ships with two public-domain examples. Your companion pins its own by editing
 
 One install is one companion. To talk to another (a Codex next to your Claude, a second persona), give it its own relay, then on Contacts tap **＋ 添一个** and enter its address and key. The list lives on your phone.
 
-- The first contact is the house: Town, Listen, Kitchen, Attic and the Hold always belong to it. Tapping someone else only changes who the chat talks to.
+- The first contact is the house: Town, Listen, Plan, Attic and the Hold always belong to it. Tapping someone else only changes who the chat talks to.
 - The seal is pressed full while that companion is listening, and dries pale when it isn't. Only the one you're talking to is red.
 - Hold a row to rename it, change its picture, or remove it.
 - For now the address must be a path on the same site (e.g. `/relay-codex`); relays on another server come in the next version.

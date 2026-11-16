@@ -62,9 +62,11 @@ Memory comes in layers; use whichever is installed.
 1. **Files**, always there: small `.md` notes in `~/companion/memory/`, one topic per file. Your human can read them in
    the Heart.
    One of them is special: `memory/now.md`, the "right now" card. A `Time zone:` line, a `Place:` line and a few
-   `- ` lines on where your human is and what's coming up. The relay puts it on top of their messages (a short time
-   line every time, the whole card after an hour of quiet or when you change it), so you know their clock and
-   where they are even right after a compact. Change it the moment something changes; delete lines once they're past.
+   `- ` lines on where your human is and what is going on around them. The relay puts it on top of their messages
+   (a short time line every time, the whole card after an hour of quiet or when you change it), so you know their
+   clock and where they are even right after a compact. Change it the moment something changes; delete lines once
+   they're past. What they have to *do* is not kept here: that goes in the plan (below), and the card brings one
+   line of it along.
 2. **Ombre-Brain**, if it's connected as an MCP server: the memory proper. Write to it with your own words.
 3. **Memory Galaxy** sits on top of Ombre-Brain as a way to look at it. Nothing extra to write.
 
@@ -79,13 +81,31 @@ wrong, or miss something they care about? If yes, write it down; if not, let it 
 
 When the gauge says you're past the context line, save what matters first, then let the window compact.
 
+## Keeping the plan
+
+What your human has to do lives in the plan (Plan 日程 in the app, `plan.html`), not in memory notes: they open it to
+see their days, and you keep it true.
+
+- When they mention something they have to do, an appointment, a deadline — in passing counts — write it down at once:
+  `python3 ~/nyx/relay/plan.py add "what" -d DAY [-t HH:MM] [--due] [-n "a note"]`. DAY is worked out on their clock
+  (`today`, `tomorrow`, `+3`, `fri`, `next-fri`, `2026-11-20`, `11/20`; 今天 明天 周五 下周五 work too). Leave `-d` out
+  when no day was named; `--due` when the day is a last day ("by Friday"). Then tell them in a few words that it's
+  written down, and for which day.
+- `plan.py` on its own prints today's date on their clock, what is overdue, today's, the next two weeks, and what has
+  no day yet. Look there before you answer anything about their days — don't trust your own sense of what day it is.
+- When they say a thing is done, moved, or called off: `plan.py done P012`, `plan.py set P012 -d DAY -t HH:MM`,
+  `plan.py rm P012`. They can do all of this on the page themselves; what they changed there shows in `plan.py`.
+- Keep entries short and in their words. One thing per entry. Don't write down your own guesses about what they
+  ought to do, and don't put the plan's things into `now.md` as well.
+
 ## The short version (for your persona file)
 
 ```
 Before you edit the app's pages or relay: python3 ~/nyx/relay/board.py next (or ls).
 Pick one ticket, claim it with the files you'll touch, back up (git commit / ~/nyx-bak), edit,
 check (ast.parse for Python), ship (rsync pages / restart relay), note progress, done + proof,
-then tell me in a line or two. Anything that leaves the server, touches keys or permissions,
+then tell me in a line or two. What I say I have to do goes in the plan at once
+(python3 ~/nyx/relay/plan.py add "what" -d DAY [-t HH:MM]), not in memory notes. Anything that leaves the server, touches keys or permissions,
 costs money, or deletes my data waits for my yes in person.
 ```
 
