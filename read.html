@@ -26,8 +26,8 @@
 <link rel="stylesheet" href="eye/ink.css">
 <link rel="stylesheet" href="read.css">
 <style>
-  /* a figure is printed in the house's three inks (the filter below): its darks in ink, its middle tones in the blue,
-     its lights left as paper; under the pointer it shows its own colours */
+  /* a figure is printed pale, in blue (the filter below) — a slate blue at its darkest, its lights left as paper — like a
+     drawing gone over in blue pencil; under the pointer it shows its own colours */
   .cv.has{ filter:url(#rd-print); }
   :root[data-side="moon"] .cv.has{ filter:url(#rd-print-n); }
   @media (hover:hover){ a:hover > .cv.has, :root[data-side="moon"] a:hover > .cv.has{ filter:none; } }
@@ -37,22 +37,22 @@
 <div id="paper" aria-hidden="true"></div>
 <svg id="drops" aria-hidden="true" hidden></svg>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <!-- tone to ink: black → ink, the middle → the house's blue, white → paper (by day) -->
+  <!-- tone to a soft blue print (淡雅): the darkest no deeper than a slate blue, the middle a pale blue, white left as paper (by day) -->
   <filter id="rd-print" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
     <feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  0 0 0 1 0"/>
     <feComponentTransfer>
-      <feFuncR type="table" tableValues=".106 .130 .200 .610 .925"/>
-      <feFuncG type="table" tableValues=".106 .150 .240 .640 .914"/>
-      <feFuncB type="table" tableValues=".125 .390 .700 .850 .886"/>
+      <feFuncR type="table" tableValues=".330 .470 .640 .810 .925"/>
+      <feFuncG type="table" tableValues=".360 .500 .665 .820 .914"/>
+      <feFuncB type="table" tableValues=".620 .740 .840 .890 .886"/>
     </feComponentTransfer>
   </filter>
-  <!-- by night: black → the night's ground, the middle → its blue, white → a chalk white held back a little -->
+  <!-- by night: black → the night's ground, the middle → a dusk blue, white → a pale blue chalk, held back -->
   <filter id="rd-print-n" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
     <feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  0 0 0 1 0"/>
     <feComponentTransfer>
-      <feFuncR type="table" tableValues=".106 .150 .270 .580 .830"/>
-      <feFuncG type="table" tableValues=".102 .170 .310 .610 .820"/>
-      <feFuncB type="table" tableValues=".125 .480 .900 .880 .800"/>
+      <feFuncR type="table" tableValues=".125 .200 .330 .520 .720"/>
+      <feFuncG type="table" tableValues=".125 .215 .360 .550 .735"/>
+      <feFuncB type="table" tableValues=".160 .340 .560 .740 .840"/>
     </feComponentTransfer>
   </filter>
 </svg>
@@ -61,7 +61,7 @@
   <!-- the spine: the room's name, the day, where to go. On a wide screen it is the dark left page; on a phone, the head of the sheet. -->
   <aside class="spine" id="spine">
     <header class="sp-top">
-      <button class="back" id="back" type="button" aria-label="回到首页"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="back" id="back" type="button" aria-label="回到首页"><i class="sw"></i></button>
       <h1 class="ttl"><b>Read</b><small>一起读</small></h1>
     </header>
     <div class="sp-day" id="spDay" aria-hidden="true"></div>
@@ -83,7 +83,7 @@
       <nav class="rail" id="rail" aria-label="这一叠"></nav>
       <article class="ar" id="ar" tabindex="-1">
         <header class="ah" id="ah">
-          <button class="shut" id="aback" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>回去</span></button>
+          <button class="shut" id="aback" type="button"><i class="sw"></i><span>回去</span></button>
           <span class="step"><button type="button" id="prev" aria-label="上一篇"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><button type="button" id="next" aria-label="下一篇"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span>
           <span class="prog" id="prog"></span>
           <nav class="tools" id="tools"></nav>
@@ -103,8 +103,10 @@
 <script src="paper.js"></script>
 <script src="eye/rough.js"></script>
 <script src="eye/core.js"></script>
+<script src="eye/birds.js"></script>
 <script src="eye/orrery.js"></script>
 <script src="eye/postmark.js"></script>
+<script src="eye/plate.js"></script>
 <script src="ask.js"></script>
 <script src="read.js"></script>
 </body>

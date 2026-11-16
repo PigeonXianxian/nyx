@@ -16,6 +16,11 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .read a{ color:inherit; text-decoration:none; }
 .read a:focus-visible, .read button:focus-visible, .read input:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
 .read ::selection{ background:color-mix(in srgb, var(--blue) 26%, transparent); }
+/* a swallow — the home's own outline (--sw, set by read.js from eye/birds.js) — as a small mark, in whatever colour the text is */
+.sw{ display:inline-block; flex:none; width:20px; height:17px; background:currentColor; -webkit-mask:var(--sw) center / contain no-repeat; mask:var(--sw) center / contain no-repeat; }
+.back .sw, .shut .sw{ transform:scaleX(-1) rotate(-8deg); }   /* flying back the way one came */
+.none.wait .sw{ margin-right:10px; vertical-align:-3px; color:var(--blue); animation:rdglide 1.5s ease-in-out infinite alternate; }
+@keyframes rdglide{ from{ transform:translateY(-2px) rotate(-12deg); } to{ transform:translateY(2px) rotate(-20deg); } }
 
 /* ════════ one column (a phone) ════════ */
 .rdx{ position:relative; z-index:1; min-height:100vh; }
@@ -24,7 +29,7 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 html.is-reading .spine{ display:none; }
 .sp-top{ display:flex; align-items:center; gap:2px; padding-bottom:8px; }
 .back{ flex:none; width:34px; height:36px; display:grid; place-items:center; }
-.back svg, .shut svg, .step svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.step svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
 .ttl{ margin:0; font-weight:400; line-height:1; white-space:nowrap; }
 .ttl b{ font:italic 500 30px/1 var(--latin); letter-spacing:.02em; }
 .ttl small{ margin-left:9px; font:400 12px/1 var(--han); letter-spacing:.4em; color:var(--faint); }
@@ -74,7 +79,7 @@ html.is-reading .spine{ display:none; }
 .tx{ display:flex; flex-direction:column; gap:5px; min-width:0; }
 .tt{ font:500 16.5px/1.5 var(--han); letter-spacing:.02em; }
 .tt.la{ font:500 20px/1.28 var(--latin); letter-spacing:.01em; }
-.new .tt::before{ content:""; display:inline-block; width:7px; height:7px; margin:0 8px .2em 0; border-radius:50%; background:var(--blue); vertical-align:middle; }   /* not read yet */
+.new .tt::before{ content:""; display:inline-block; width:17px; height:14px; margin:0 8px 0 0; background:var(--blue); -webkit-mask:var(--sw) center / contain no-repeat; mask:var(--sw) center / contain no-repeat; vertical-align:-1px; transform:rotate(-16deg); }   /* not read yet: a swallow sits by it */
 .card:not(.new) .tt, .ft:not(.new) .tt{ font-weight:400; color:var(--soft); }
 .ot{ font:italic 400 14.5px/1.35 var(--latin); letter-spacing:.02em; color:var(--faint); }
 .sm{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; font:400 13.5px/1.72 var(--han); letter-spacing:.02em; color:var(--soft); }
@@ -125,8 +130,9 @@ html.is-reading .spine{ display:none; }
 .ar{ padding:0 18px calc(env(safe-area-inset-bottom) + 80px); outline:0; }
 .ah{ --p:0%; position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:8px; min-height:54px; margin:0 -18px; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px 8px;
   background:var(--paper) var(--grain); background-size:180px; box-shadow:0 1px 0 var(--hair); }
-.ah::after{ content:""; position:absolute; left:0; bottom:-1px; width:var(--p); height:2px; background:var(--blue); transition:width .15s linear; }   /* how far down the sheet */
-.shut{ flex:none; display:flex; align-items:center; gap:2px; padding:8px 8px 8px 2px; font:400 13.5px/1 var(--han); letter-spacing:.14em; }
+.ah::after{ content:""; position:absolute; left:0; bottom:-1px; width:var(--p); height:2px; background:var(--blue); transition:width .15s linear; }   /* how far down the sheet … */
+.ah::before{ content:""; position:absolute; z-index:1; left:var(--p); bottom:-10px; width:21px; height:18px; margin-left:-6px; background:var(--blue); -webkit-mask:var(--sw) center / contain no-repeat; mask:var(--sw) center / contain no-repeat; transform:rotate(-6deg); transition:left .15s linear; pointer-events:none; }   /* … and a swallow flying at the head of that line */
+.shut{ flex:none; display:flex; align-items:center; gap:8px; padding:8px 8px 8px 6px; font:400 13.5px/1 var(--han); letter-spacing:.14em; }
 .prog{ flex:none; min-width:36px; font:italic 400 14.5px/1 var(--latin); letter-spacing:.06em; color:var(--faint); }
 .tools{ margin-left:auto; display:flex; align-items:center; gap:6px; overflow-x:auto; scrollbar-width:none; }
 .tools::-webkit-scrollbar{ display:none; }
@@ -139,6 +145,7 @@ html.is-reading .spine{ display:none; }
 .tb.on{ color:var(--blue); box-shadow:inset 0 0 0 1px var(--blue); }
 .tb.on svg{ fill:color-mix(in srgb, var(--blue) 22%, transparent); }
 .tb.go{ background:var(--blue); color:#fff; box-shadow:none; }
+.tb .sw{ width:19px; height:16px; transform:rotate(-14deg); }
 
 .sheet{ --fs:16.5px; padding:24px 0 0; }
 .sheet[data-size="0"]{ --fs:15px; } .sheet[data-size="2"]{ --fs:19px; }
@@ -224,38 +231,47 @@ html.is-reading .spine{ display:none; }
     background:var(--ink); color:var(--paper); box-shadow:none; }
   :root[data-side="moon"] .spine{ --sb:#2933C4; }
   .spine::-webkit-scrollbar{ display:none; }
-  .sp-top{ flex-direction:column; align-items:flex-start; gap:16px; padding:0; }
-  .spine .back{ margin-left:-8px; opacity:.7; } .spine .back:hover{ opacity:1; }
-  .ttl{ display:flex; flex-direction:column; gap:12px; }
-  .ttl b{ font-size:70px; letter-spacing:.01em; }
-  .ttl small{ margin:0 0 0 4px; font-size:13.5px; letter-spacing:.56em; color:color-mix(in srgb, var(--paper) 58%, transparent); }
-  .sp-day{ display:grid; grid-template-columns:auto minmax(0, 1fr); align-items:end; gap:0 14px; margin-top:30px; padding-top:26px; border-top:1px solid color-mix(in srgb, var(--paper) 20%, transparent); }
-  .sp-day .dn{ font:500 96px/.78 var(--latin); letter-spacing:-.02em; }
-  .sp-day .dm{ display:flex; flex-direction:column; gap:7px; padding-bottom:4px; font:italic 400 19px/1 var(--latin); letter-spacing:.03em; }
-  .sp-day .dm i:last-child{ font-size:15px; opacity:.6; }
-  .sp-day .sk{ grid-column:1 / -1; display:flex; align-items:center; gap:14px; margin-top:22px; }
-  .sp-day .sky{ width:88px; height:88px; margin-left:-2px; }
-  .sp-day .sk small{ font:italic 400 14.5px/1.5 var(--latin); letter-spacing:.05em; opacity:.6; }
-  .sp-nav{ flex-direction:column; gap:0; margin:26px -30px 0 -34px; border-bottom:1px solid color-mix(in srgb, var(--paper) 13%, transparent); }
-  .sp-nav a{ flex-direction:row; align-items:baseline; gap:12px; padding:15px 30px 15px 34px; color:color-mix(in srgb, var(--paper) 62%, transparent); border-top:1px solid color-mix(in srgb, var(--paper) 13%, transparent); transition:background-color .15s, color .15s; }
+  /* behind it all, the house's plate laid in the other side's hand (read.js → G.plate): orbits, and the swallow among the stars */
+  .spine > .plate{ position:absolute; left:0; top:0; width:100%; height:100%; z-index:0; pointer-events:none; }
+  .spine > :not(.plate){ position:relative; z-index:1; }
+  .sp-top{ display:block; padding:clamp(128px, 20.5vh, 196px) 0 0; }   /* the head of the spine is the swallow's */
+  .spine .back{ position:absolute; left:-8px; top:0; opacity:.75; } .spine .back:hover{ opacity:1; }
+  .ttl{ display:flex; align-items:baseline; gap:14px; }
+  .ttl b{ font-size:64px; letter-spacing:.01em; }
+  .ttl small{ margin:0; font-size:13px; letter-spacing:.5em; color:color-mix(in srgb, var(--paper) 62%, transparent); }
+  .sp-day{ display:grid; grid-template-columns:auto minmax(0, 1fr) auto; align-items:center; gap:0 14px; margin-top:14px; padding-top:16px; border-top:1px solid color-mix(in srgb, var(--paper) 20%, transparent); }
+  .sp-day .dn{ font:500 72px/.8 var(--latin); letter-spacing:-.02em; }
+  .sp-day .dm{ display:flex; flex-direction:column; gap:7px; font:italic 400 18px/1 var(--latin); letter-spacing:.03em; }
+  .sp-day .dm i:last-child{ font-size:14.5px; opacity:.6; }
+  .sp-day .sk{ display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .sp-day .sky{ width:64px; height:64px; }
+  .sp-day .sk small{ font:italic 400 13px/1 var(--latin); letter-spacing:.05em; opacity:.6; }
+  .sp-nav{ flex-direction:column; gap:0; margin:16px -30px 0 -34px; border-bottom:1px solid color-mix(in srgb, var(--paper) 13%, transparent); }
+  .sp-nav a{ flex-direction:row; align-items:baseline; gap:12px; padding:12px 30px 12px 34px; color:color-mix(in srgb, var(--paper) 66%, transparent); border-top:1px solid color-mix(in srgb, var(--paper) 13%, transparent); transition:background-color .15s, color .15s; }
   .sp-nav a b{ order:-1; margin:0; font:500 19px/1 var(--han); letter-spacing:.24em; }
   .sp-nav a i{ font-size:17.5px; opacity:.72; }
   .sp-nav a small{ display:block; margin-left:auto; font:400 11.5px/1 var(--han); letter-spacing:.06em; opacity:.72; white-space:nowrap; }
   .sp-nav a:hover{ color:var(--paper); background:color-mix(in srgb, var(--paper) 5%, transparent); }
   .sp-nav a.on{ color:var(--paper); background:color-mix(in srgb, var(--paper) 9%, transparent); }
   .sp-nav a.on::after{ left:0; right:auto; top:0; bottom:0; width:4px; height:auto; }
-  .sp-cal{ display:block; margin-top:26px; }
-  .sp-cal h4{ display:flex; align-items:baseline; gap:10px; margin:0 0 12px; font:400 12px/1 var(--han); letter-spacing:.3em; color:color-mix(in srgb, var(--paper) 78%, transparent); }
+  /* the days before: moons along two star-tracks that run off the spine, the outer one ticked like a scale, a swallow at its head */
+  .sp-cal{ display:block; margin-top:16px; }
+  .sp-cal h4{ display:flex; align-items:baseline; gap:10px; margin:0 0 2px; font:400 12px/1 var(--han); letter-spacing:.3em; color:color-mix(in srgb, var(--paper) 78%, transparent); }
   .sp-cal h4 i{ font:italic 400 13.5px/1 var(--latin); letter-spacing:.05em; opacity:.7; }
-  .cal{ display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:6px 2px; margin:0 -6px; }
-  .cal a{ display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 0 7px; color:color-mix(in srgb, var(--paper) 60%, transparent); }
-  .cal a img{ width:30px; height:30px; }
-  .cal a i{ font:italic 400 14.5px/1 var(--latin); }
-  .cal a:hover{ color:var(--paper); background:color-mix(in srgb, var(--paper) 7%, transparent); }
-  .cal a.on{ color:var(--paper); box-shadow:inset 0 0 0 1px var(--sb); }
-  .sp-foot{ display:block; margin-top:auto; padding-top:26px; }
-  .sp-foot p{ margin:0 0 10px; font:400 12px/1.5 var(--han); letter-spacing:.08em; color:color-mix(in srgb, var(--paper) 60%, transparent); }
-  .sp-foot button{ width:100%; padding:12px 0 13px; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--paper) 38%, transparent); font:400 13.5px/1 var(--han); letter-spacing:.32em; transition:background-color .15s, color .15s; }
+  .trk{ position:relative; aspect-ratio:280 / 172; margin:0 -30px 0 -34px; overflow:hidden; }
+  .trk svg{ position:absolute; left:0; top:0; width:100%; height:100%; fill:none; }
+  .trk path{ stroke:color-mix(in srgb, var(--paper) 36%, transparent); stroke-width:.7; vector-effect:non-scaling-stroke; }
+  .trk path.i{ stroke-dasharray:1.5 4.5; }
+  .trk path.t{ stroke:color-mix(in srgb, var(--paper) 30%, transparent); stroke-width:.6; }
+  .trk a{ position:absolute; display:flex; flex-direction:column; align-items:center; gap:1px; width:40px; margin:-15px 0 0 -20px; color:color-mix(in srgb, var(--paper) 64%, transparent); }
+  .trk a img{ width:30px; height:30px; border-radius:50%; transition:transform .15s; }
+  .trk a i{ font:italic 400 13.5px/1 var(--latin); }
+  .trk a:hover{ color:var(--paper); } .trk a:hover img{ transform:scale(1.16); }
+  .trk a.on{ color:var(--paper); } .trk a.on img{ outline:1px solid var(--sb); outline-offset:3px; }
+  .trk > .sw{ position:absolute; width:15px; height:13px; margin:-7px 0 0 -8px; color:var(--sb); transform:rotate(-40deg); }
+  .sp-foot{ display:block; margin-top:auto; padding-top:8px; }
+  .sp-foot p{ margin:0 0 8px; font:400 12px/1.5 var(--han); letter-spacing:.08em; color:color-mix(in srgb, var(--paper) 60%, transparent); }
+  .sp-foot button{ width:100%; padding:10px 0 11px; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--paper) 38%, transparent); font:400 13.5px/1 var(--han); letter-spacing:.32em; transition:background-color .15s, color .15s; }
   .sp-foot button:hover:not([disabled]){ background:var(--paper); color:var(--ink); }
   .sp-foot button[disabled]{ opacity:.5; cursor:default; }
   /* its edge goes off into grain, as the band does on the home */
@@ -263,10 +279,14 @@ html.is-reading .spine{ display:none; }
 
   /* ── the sheet ── */
   .stage{ position:relative; min-width:0; height:100vh; overflow:hidden; }
+  .stage > .plate{ position:absolute; left:0; top:0; width:100%; height:100%; z-index:0; pointer-events:none; }   /* the orbits, far behind the sheet */
+  html.is-reading .stage > .plate{ display:none; }
+  .browse, .reading{ position:relative; z-index:1; }
   .browse{ height:100%; overflow-y:auto; padding:38px clamp(40px, 3.6vw, 76px) 80px clamp(56px, 4.2vw, 92px); }
   .view{ max-width:1560px; margin:0 auto; }
   .view .day, .view .days{ display:none; }   /* the spine carries the day and the days before */
-  .view .hd{ display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 20px; margin:0 0 4px; }
+  .view .hd{ position:relative; display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 20px; margin:0 0 4px; }
+  .fl{ position:absolute; right:-14px; top:-34px; width:min(40%, 470px); height:92px; pointer-events:none; }   /* a flight of swallows at the head of the sheet */
   .hd h2{ margin:0; font:500 40px/1.1 var(--han); letter-spacing:.1em; }
   .hd p{ margin:0; font:italic 400 18px/1 var(--latin); letter-spacing:.05em; color:var(--faint); }
   .hd p a{ margin-left:4px; font:400 13px/1 var(--han); letter-spacing:.14em; color:var(--blue); }
@@ -321,7 +341,7 @@ html.is-reading .spine{ display:none; }
 
   .ar{ height:100%; overflow-y:auto; padding:0; }
   .ah{ min-height:64px; margin:0; padding:12px clamp(32px, 3vw, 60px); gap:14px; }
-  .shut{ padding:9px 14px 10px 8px; box-shadow:inset 0 0 0 1px var(--hair); font-size:13.5px; }
+  .shut{ padding:8px 14px 9px 10px; box-shadow:inset 0 0 0 1px var(--hair); font-size:13.5px; }
   .step{ display:flex; gap:6px; }
   .step button{ width:35px; height:35px; display:grid; place-items:center; box-shadow:inset 0 0 0 1px var(--hair); }
   .step button[disabled]{ opacity:.3; cursor:default; }

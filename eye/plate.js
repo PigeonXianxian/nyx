@@ -6,7 +6,9 @@
    is constructed, as the home's is when the eye opens.
    opt.lay(night, W, H) → what lies on it, in page units (H is always 1400, W whatever the canvas is wide):
      { orb: { x, y, K, tilt (degrees), q, a }, sheets: [{ name, x, y, sx, sy, w, rot, a }] }
-   (a sheet's point (sx, sy) — fractions of it — lies at (x, y); see sketch.js for the sheets). Returns { stop }. */
+   (a sheet's point (sx, sy) — fractions of it — lies at (x, y); see sketch.js for the sheets). Returns { stop }.
+   opt.flip: lay the OTHER side's plate (the night's by day, the day's by night) — for a page that sets a block of the
+   other side's ground beside its own, as Read does with its spine. */
 (function () {
   "use strict";
   var G = window.Gou; if (!G) return;
@@ -24,7 +26,7 @@
       var now = performance.now(); if (!was) { was = true; seenAt = now; }
       var nw = Math.round(r.width), nh = Math.round(r.height), nd = Math.min(window.devicePixelRatio || 1, 2);
       if (nw !== w || nh !== h || nd !== dpr) { w = nw; h = nh; dpr = nd; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-      var night = root.dataset.side === "moon", s = h / 1400, k = s * dpr, W = w / s, tt = now / 1000, rv = G.clamp((now - seenAt) / 2200, 0, 1), L = opt.lay ? opt.lay(night, W, 1400) : {};
+      var night = (root.dataset.side === "moon") !== !!opt.flip, s = h / 1400, k = s * dpr, W = w / s, tt = now / 1000, rv = G.clamp((now - seenAt) / 2200, 0, 1), L = opt.lay ? opt.lay(night, W, 1400) : {};
       x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.setTransform(k, 0, 0, k, 0, 0);
       if (L.orb && G.orrery) {
         var o = L.orb, F = G.FOOT;
