@@ -40,7 +40,7 @@
     });
   }
   function trouble(e) { return '<p class="none">' + (e && e.status >= 500 ? "书架那边没有应答，过一会儿再来。" : esc((e && e.message) || "没取到。")) + "</p>"; }
-  var WAIT = '<p class="none wait">在取……</p>';
+  var WAIT = '<p class="none wait"><i class="sw"></i>在取……</p>';
 
   /* ── days, as the library counts them (Shanghai) ── */
   var MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"], WD = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -58,9 +58,9 @@
   function dark() { return root.dataset.side === "moon"; }
   function sheetOf(w, h) { var S = 3, c = document.createElement("canvas"); c.width = w * S; c.height = h * S; var x = c.getContext("2d"); x.scale(S, S); return [c, x]; }
   function pens(x, onDark) { return { blue: SK.pen(x, onDark ? "rdBlueN" : "rdBlue", onDark ? [128, 138, 252] : [36, 46, 184], .92), lead: SK.pen(x, onDark ? "rdLeadN" : "rdLead", onDark ? [226, 223, 216] : [40, 40, 48], .6) }; }
-  /* the moon: one pencil study of the full moon (eye/moon.webp — graphite, its seas in blue pencil, as the swallow of the
-     home is drawn), and for any night the part of it that is lit. What is in shadow is left as a fine outline on paper;
-     on a dark ground a ghost of the whole disc shows through, as earthshine does. lit 0…1; waxing: lit on the right. */
+  /* the moon: one hand-drawn study of the full moon (eye/moon.webp — a freehand pencil outline, its seas hatched in blue
+     pencil, cut along its own uneven edge), and for any night the part of it that is lit. What is in shadow is the same
+     drawing, faint: there is no ruled circle anywhere. lit 0…1; waxing: lit on the right. */
   var moonSprite = new Image(), moonOk = false, BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", TAU = Math.PI * 2;
   moonSprite.onload = function () { moonOk = true; document.querySelectorAll("img[data-moon]").forEach(function (im) { var q = im.dataset.moon.split("|"); im.src = moonUrl(+q[0], q[1] === "1", +q[2], q[3] === "1"); }); };
   moonSprite.src = "eye/moon.webp";
@@ -69,36 +69,36 @@
     var q = Math.round(Math.max(0, Math.min(1, lit)) * 24) / 24, k = "m" + q + (waxing ? "w" : "n") + "|" + R + "|" + (onDark ? 1 : 0); if (drawn[k]) return drawn[k];
     var W = Math.ceil(R * 2 + 4), cx = sheetOf(W, W), x = cx[1], whole = function () { x.drawImage(moonSprite, -R, -R, R * 2, R * 2); };
     x.translate(W / 2, W / 2); x.imageSmoothingQuality = "high";
-    if (onDark && q < .98) { x.save(); x.globalAlpha = .12; whole(); x.restore(); }
+    if (q < .98) { x.save(); x.globalAlpha = onDark ? .14 : .3; whole(); x.restore(); }   // the part in shadow: the same drawing, faint
     if (q > .02) {
       x.save(); x.rotate(-.3); if (!waxing) x.scale(-1, 1);
       x.beginPath();
-      if (q >= .98) x.arc(0, 0, R + 1, 0, TAU);
-      else { x.arc(0, 0, R + 1, -Math.PI / 2, Math.PI / 2, false); x.ellipse(0, 0, Math.max(.01, R * Math.abs(1 - 2 * q)), R + 1, 0, Math.PI / 2, -Math.PI / 2, q < .5); }   // the limb, then back along the terminator
+      if (q >= .98) x.arc(0, 0, R + 2, 0, TAU);
+      else { x.arc(0, 0, R + 2, -Math.PI / 2, Math.PI / 2, false); x.ellipse(0, 0, Math.max(.01, R * Math.abs(1 - 2 * q)), R + 2, 0, Math.PI / 2, -Math.PI / 2, q < .5); }   // the limb, then back along the terminator
       x.closePath(); x.clip();
       if (!waxing) x.scale(-1, 1); x.rotate(.3); whole(); x.restore();
     }
-    x.strokeStyle = onDark ? "rgba(236,233,226,.4)" : "rgba(27,27,32,.42)"; x.lineWidth = Math.max(.5, R * .026); x.beginPath(); x.arc(0, 0, R - x.lineWidth / 2, 0, TAU); x.stroke();
     return (drawn[k] = cx[0].toDataURL("image/png"));
   }
   function moonTag(lit, waxing, R, onDark, cls, size) { return '<img class="' + cls + '" alt="" width="' + size + '" height="' + size + '" data-moon="' + [lit, waxing ? 1 : 0, R, onDark ? 1 : 0].join("|") + '" src="' + moonUrl(lit, waxing, R, onDark) + '">'; }
   function phase(a) { return a.completed ? 4 : a.progress > .66 ? 3 : a.progress > .33 ? 2 : a.progress > .02 ? 1 : a.read ? 0 : -1; }
   var LIT = [0, .25, .5, .75, 1];                                              // how far a piece has been read, as a waxing moon
   function sky(day) { var d = new Date(day + "T12:00:00Z"); return G && G.moonAge ? { lit: G.moonLit(d), wax: G.moonAge(d) < 14.765 } : { lit: 1, wax: true }; }   // the moon that night
-  /* a source's seal: its mark in a ring struck a little crooked (a programme's in a square frame) */
+  /* a source's seal, finely cut: its letter in a thin ring with a hairline inside it and four survey ticks (a programme's in a frame) */
   var SEALS = { "qbitai": "量", "qbitai-xhs": "量", "latepost": "晚", "anthropic-engineering": "A", "anthropic-research": "A", "claude-articles": "C", "openai-codex": "O", "boris-cherny": "B", "thariq-shihipar": "T",
     "bilibili-d7": "D7", "bilibili-zhangxiaojun": "珺", "bilibili-whynottv": "W", "x-anthropic": "X", "x-openai-devs": "X", "x-karpathy": "X" };
   function seal(sourceId, onDark) {
     var ch = SEALS[sourceId] || "·", od = onDark == null ? dark() : !!onDark, video = /^bilibili/.test(sourceId || ""), k = "s" + ch + (od ? 1 : 0) + (video ? "v" : "");
-    if (drawn[k]) return drawn[k]; if (!SK || !window.rough) return "";
-    var W = 34, cx = sheetOf(W, W), x = cx[1], p = pens(x, od), g = window.rough.generator(), n = ch.charCodeAt(0), r = G.rng(n * 31 + 7), O = SK.opts; SK.wf(1);
-    x.translate(W / 2 + (r() - .5), W / 2 + (r() - .5)); x.rotate((r() - .5) * .22);
-    SK.put(x, video ? [g.rectangle(-12.5, -12.5, 25, 25, O({ seed: 40 + n, roughness: 1.2, strokeWidth: 1.3, stroke: p.blue }))]
-      : [g.circle(0, 0, 27, O({ seed: 40 + n, roughness: 1.4, bowing: 1.3, strokeWidth: 1.3, stroke: p.blue, curveFitting: .955 })),
-        g.arc(0, 0, 20.5, 20, r() * 6.28, r() * 6.28 + 4.4, false, O({ seed: 60 + n, roughness: 1.5, strokeWidth: .8, stroke: p.blue }))]);
-    x.fillStyle = p.blue; x.textAlign = "center"; x.textBaseline = "middle";
-    x.font = HAN.test(ch) ? "500 14px " + G.HAN : (ch.length > 1 ? "italic 600 13px " : "italic 600 17px ") + G.SERIF;
-    x.fillText(ch, 0, HAN.test(ch) ? .5 : 1);
+    if (drawn[k]) return drawn[k]; if (!G) return "";
+    var W = 34, cx = sheetOf(W, W), x = cx[1], n = ch.charCodeAt(0), r = G.rng(n * 31 + 7), blue = od ? "140,149,255" : "41,51,196", i;
+    var ink = function (a, w) { x.strokeStyle = "rgba(" + blue + "," + a + ")"; x.lineWidth = w; };
+    x.translate(W / 2, W / 2); x.rotate((r() - .5) * .14); x.lineCap = "round";
+    if (video) { ink(.92, .9); x.strokeRect(-12, -12, 24, 24); ink(.55, .45); x.strokeRect(-9.7, -9.7, 19.4, 19.4); }   // a programme: a fine frame within a frame
+    else { ink(.92, .9); x.beginPath(); x.arc(0, 0, 13.3, 0, TAU); x.stroke(); var g0 = r() * TAU; ink(.6, .45); x.beginPath(); x.arc(0, 0, 10.9, g0, g0 + TAU * .87); x.stroke(); }   // a ring, and inside it a hairline that does not quite close
+    for (i = 0; i < 4; i++) { x.save(); x.rotate(i * Math.PI / 2); ink(.8, .6); x.beginPath(); x.moveTo(0, video ? -12 : -13.3); x.lineTo(0, -15.7); x.stroke(); x.restore(); }   // the surveyor's four ticks
+    x.fillStyle = "rgb(" + blue + ")"; x.textAlign = "center"; x.textBaseline = "middle";
+    x.font = HAN.test(ch) ? "500 12.5px " + G.HAN : (ch.length > 1 ? "italic 600 12px " : "italic 600 15.5px ") + G.SERIF;
+    x.fillText(ch, 0, HAN.test(ch) ? .6 : .9);
     return (drawn[k] = cx[0].toDataURL("image/png"));
   }
   function sealImg(sourceId, onDark, cls) { return '<img class="seal' + (cls ? " " + cls : "") + '" alt="" width="34" height="34" data-s="' + esc(sourceId || "") + '"' + (onDark == null ? "" : ' data-d="' + (onDark ? 1 : 0) + '"') + ' src="' + seal(sourceId, onDark) + '">'; }
@@ -107,6 +107,66 @@
     Object.keys(drawn).forEach(function (k) { if (k.charAt(0) === "s") delete drawn[k]; });
     document.querySelectorAll("img.seal").forEach(function (im) { im.src = seal(im.dataset.s, im.dataset.d == null ? null : im.dataset.d === "1"); });
   });
+
+  /* ── swallows, as the home draws them (eye/birds.js): the outline of one instant of the wingbeat as a mask for small
+     marks (--sw: on every piece not yet read, on the line that says how far down a piece one is, on the way back) … ── */
+  function swallowMask(hour) {
+    var P = G && G.BIRDPTS && (G.BIRDPTS[hour] || G.BIRDPTS[11]); if (!P) return "";
+    var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, d = "", i;
+    for (i = 0; i < P.length; i += 2) { x0 = Math.min(x0, P[i]); x1 = Math.max(x1, P[i]); y0 = Math.min(y0, P[i + 1]); y1 = Math.max(y1, P[i + 1]); d += (i ? "L" : "M") + P[i].toFixed(3) + " " + P[i + 1].toFixed(3); }
+    return 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + [x0, y0, x1 - x0, y1 - y0].map(function (v) { return v.toFixed(3); }).join(" ") + '"><path d="' + d + 'Z"/></svg>') + '")';
+  }
+  if (G && G.BIRDPTS) root.style.setProperty("--sw", swallowMask(11));
+  /* … and a flight of them at the head of a sheet, one for each thing it holds: a line rising to the right as an eyelid of
+     the home's eye does, the leader largest; they ride on raised wings and now and then give one beat (G.flight) */
+  function flight(host, n) {
+    if (!G || !G.swallow || !host || !wide()) return;
+    var cv = document.createElement("canvas"), x = cv.getContext("2d"), t0 = performance.now(); cv.className = "fl"; cv.setAttribute("aria-hidden", "true"); host.appendChild(cv);
+    n = Math.max(1, Math.min(11, n | 0));
+    (function draw() {
+      if (!cv.isConnected) return;
+      var r = cv.getBoundingClientRect();
+      if (r.width > 4 && !document.hidden) {
+        var dpr = Math.min(window.devicePixelRatio || 1, 2), W = r.width, H = r.height, t = (performance.now() - t0) / 1000, col = dark() ? "#8C95FF" : G.C.blue, i;
+        if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+        x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
+        for (i = 0; i < n; i++) {
+          var k = n - 1 - i, u = 1 - k / 10, px = W - 34 - k * (W - 60) / 10.5, py = 16 + (H - 34) * Math.pow(k / 10, 1.25) * 1.05 + Math.sin(t * .6 + i * 1.9) * 1.6;   // k: how many from the leader
+          G.swallow(x, px, py, 11 + 17 * u * u, -(.2 + .42 * u) + Math.sin(t * .45 + i) * .035, col, { f: G.flight ? G.flight(t * .8, i + 5) : 11, rim: false });
+        }
+      }
+      setTimeout(draw, 80);
+    })();
+  }
+
+  /* ── the plates behind (wide screens): the house's orbits going slowly round, and on the spine a leaf of its sketchbook —
+     laid in the OTHER side's hand, as the spine is the other side's ground: by day the swallow among the stars, in chalk;
+     by night the pencil study of the swallow ── */
+  var leaves = {}, leafWait = [];
+  if (G && !G.sheet) { G.sheet = function (name) { return leaves[name] || { im: null, kn: null }; }; G.sketchReady = function (fn) { if (fn) leafWait.push(fn); }; }
+  function leaf(name, ground) {
+    if (leaves[name]) return; var L = leaves[name] = { im: null, kn: null }, tell = function () { leafWait.forEach(function (f) { f(); }); };
+    var im = new Image(); im.onload = function () { L.im = im; tell(); }; im.src = "eye/" + name + ".webp";
+    var mk = new Image(); mk.onload = function () { var c = document.createElement("canvas"); c.width = mk.naturalWidth; c.height = mk.naturalHeight; var g = c.getContext("2d"); g.drawImage(mk, 0, 0); g.globalCompositeOperation = "source-in"; g.fillStyle = ground; g.fillRect(0, 0, c.width, c.height); L.kn = c; tell(); }; mk.src = "eye/" + name + "-m.webp";
+  }
+  function plates() {
+    if (!G || !G.plate || !G.orrery || !wide()) return;
+    if (dark()) leaf("draft-day-a", "#ECE9E2"); else leaf("draft-night-a", "#1B1A20");
+    G.plate($("spine"), { flip: true, lay: function (night, W, H) {
+      return { orb: { x: W * .12, y: H * .8, K: 1.02, tilt: 58, q: .62, a: night ? .36 : .28 },
+        sheets: [night ? { name: "draft-night-a", x: W * .5, y: H * .132, sx: .47, sy: .5, w: W * 1.2, rot: -4, a: .94 } : { name: "draft-day-a", x: W * .5, y: H * .13, sx: .55, sy: .42, w: W * 1.3, rot: -10, a: .9 }] };
+    } });
+    backdrop(); var rt = 0; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(backdrop, 300); });
+  }
+  /* far behind the sheet, the same orbits large and pale — drawn once and left still (a sheet for reading does not move under the words) */
+  function backdrop() {
+    var host = $("stage"), cv = host.querySelector("canvas.plate") || host.insertBefore(Object.assign(document.createElement("canvas"), { className: "plate" }), host.firstChild);
+    var r = host.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2), night = dark(), k = r.height / 1400 * dpr, W = r.width / (r.height / 1400), x = cv.getContext("2d");
+    if (r.width < 4 || !wide()) return;
+    cv.setAttribute("aria-hidden", "true"); cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    x.setTransform(k, 0, 0, k, 0, 0); x.clearRect(0, 0, W, 1400);
+    G.orrery(x, { cx: W * .34, cy: 1400 * .9, K: 2.2, tilt: 58 * Math.PI / 180, q: .62, night: night, orb: 0, time: 31, a: night ? .26 : .13, rv: 1, foot: null });
+  }
 
   /* ── covers: the first figure of a piece, small, fetched as the card comes near ── */
   var coverUrl = {}, coverIO = "IntersectionObserver" in window ? new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { coverIO.unobserve(e.target); loadCover(e.target); } }); }, { rootMargin: "400px" }) : null;
@@ -158,12 +218,22 @@
     if (!G) return;
     var t = today(), d = new Date(t + "T00:00:00Z"), onDark = !dark();   // the spine is laid in the other side's ground
     $("spDay").innerHTML = '<b class="dn">' + d.getUTCDate() + '</b><span class="dm"><i>' + WEEKDAY[d.getUTCDay()] + "</i><i>" + MONTH[d.getUTCMonth()] + " " + d.getUTCFullYear() + "</i></span>" +
-      '<span class="sk">' + moonTag(sky(t).lit, sky(t).wax, 42, onDark, "sky", 88) + '<small>the moon tonight<br>age ' + G.moonAge(new Date()).toFixed(1) + " d</small></span>";
+      '<span class="sk">' + moonTag(sky(t).lit, sky(t).wax, 34, onDark, "sky", 70) + "<small>age " + G.moonAge(new Date()).toFixed(1) + " d</small></span>";
   }
-  function spineCal() {
-    var onDark = !dark(), t = today(), list = cal.dates.slice(0, 12);
-    $("spCal").innerHTML = list.length ? '<h4><span>往日简报</span><i>the days before</i></h4><div class="cal">' + list.map(function (d) {
-      return '<a href="#today' + (d === t ? "" : "/" + d) + '"' + (d === cal.cur ? ' class="on"' : "") + ' title="' + zhDate(d + "T04:00:00Z") + '的简报">' + moonTag(sky(d).lit, sky(d).wax, 13, onDark, "", 30) + '<i>' + (+d.slice(8)) + "</i></a>"; }).join("") + "</div>" : "";
+  function spineCal() {   // the days before, set as moons along two star-tracks that run off the spine
+    var onDark = !dark(), t = today(), list = cal.dates.slice(0, 12), el = $("spCal");
+    if (!list.length) { el.innerHTML = ""; return; }
+    var W = 280, H = 172, cx = W / 2, cy = 356, RAD = Math.PI / 180, at = function (R, deg) { return [cx + R * Math.cos(deg * RAD), cy + R * Math.sin(deg * RAD)]; };
+    var arc = function (R, d0, d1) { var p = at(R, d0), q = at(R, d1); return "M" + p[0].toFixed(1) + " " + p[1].toFixed(1) + "A" + R + " " + R + " 0 0 1 " + q[0].toFixed(1) + " " + q[1].toFixed(1); };
+    var ticks = "", d, h = "", i;
+    for (d = -128; d <= -52; d += 2) { var p0 = at(300, d), p1 = at(300 + (Math.round(d) % 10 === 0 ? 6 : 3), d); ticks += "M" + p0[0].toFixed(1) + " " + p0[1].toFixed(1) + "L" + p1[0].toFixed(1) + " " + p1[1].toFixed(1); }
+    for (i = 0; i < list.length; i++) {
+      var day = list[i], outer = i < 6, R = outer ? 300 : 250, deg = outer ? -112.25 + i * 8.9 : -64 - (i - 6) * 10.4, pt = at(R, deg), sk = sky(day);   // the outer track left to right, the inner one back again
+      h += '<a href="#today' + (day === t ? "" : "/" + day) + '"' + (day === cal.cur ? ' class="on"' : "") + ' style="left:' + (pt[0] / W * 100).toFixed(2) + "%;top:" + (pt[1] / H * 100).toFixed(2) + '%" title="' + zhDate(day + "T04:00:00Z") + '的简报">' + moonTag(sk.lit, sk.wax, 14, onDark, "", 30) + "<i>" + (+day.slice(8)) + "</i></a>";
+    }
+    var lead = at(300, -120.5);
+    el.innerHTML = '<h4><span>往日简报</span><i>the days before</i></h4><div class="trk"><svg viewBox="0 0 ' + W + " " + H + '" aria-hidden="true"><path class="o" d="' + arc(300, -130, -50) + '"/><path class="i" d="' + arc(250, -128, -52) + '"/><path class="t" d="' + ticks + '"/></svg>' +
+      '<i class="sw" style="left:' + (lead[0] / W * 100).toFixed(2) + "%;top:" + (lead[1] / H * 100).toFixed(2) + '%"></i>' + h + "</div>";
   }
   var polling = 0;
   function spineFoot() {
@@ -213,7 +283,7 @@
       var others = (b.dates || []).filter(function (d) { return d !== b.date; }).slice(0, 9);
       if (others.length) h += '<nav class="days"><span>前几天</span>' + (isToday ? "" : '<a href="#today">今天</a>') + others.map(function (d) { return '<a href="#today/' + d + '">' + (+d.slice(5, 7)) + "." + (+d.slice(8)) + "</a>"; }).join("") + "</nav>";
       h += '</div><div class="col picks" id="picks">' + WAIT + "</div>";
-      view.innerHTML = h; stamps(view); pile(mine.concat(picked));
+      view.innerHTML = h; stamps(view); pile(mine.concat(picked)); flight(view.querySelector(".hd"), items.length || 1);
       cal.dates = b.dates || []; cal.cur = b.date; spineCal();
       var rg = $("regen"); if (rg) rg.onclick = function () {
         ask.confirm("现在写今天的简报？", { body: "要用两次模型调用，今天还剩 " + b.budget.remaining + " 次。", ok: "写", cancel: "先不" }).then(function (yes) {
@@ -253,6 +323,7 @@
       $("more").hidden = shelf.items.length >= shelf.total;
       $("count").textContent = shelf.total ? shelf.total + " 篇" : "";
       covers($("list")); pile(shelf.items.map(ofCard));
+      if (!more && !view.querySelector(".fl")) flight(view.querySelector(".hd"), shelf.items.filter(function (a) { return !a.read; }).length || 1);   // one for each piece not yet read, of those in sight
     }).catch(function (e) { shelf.busy = false; if ($("list")) $("list").innerHTML = trouble(e); });
   }
   function viewShelf() {
@@ -277,7 +348,7 @@
       if (r[0].items.length) h += '<h3 class="sec"><span>读到一半</span></h3><div class="list grid">' + r[0].items.map(function (a) { return card(a); }).join("") + "</div>";
       if (r[1].items.length) h += '<h3 class="sec"><span>留着的</span></h3><div class="list grid">' + r[1].items.map(function (a) { return card(a); }).join("") + "</div>";
       if (!r[0].items.length && !r[1].items.length) h += '<p class="none">还没有留下什么。读到想留的，在文章上面点「留着」。</p>';
-      view.innerHTML = h; covers(view); pile(r[0].items.concat(r[1].items).map(ofCard));
+      view.innerHTML = h; covers(view); pile(r[0].items.concat(r[1].items).map(ofCard)); flight(view.querySelector(".hd"), r[0].items.length + r[1].items.length || 1);
     }).catch(function (e) { view.innerHTML = trouble(e); });
   }
 
@@ -353,7 +424,7 @@
     var a = A, t = "";
     if (pr) t += '<span class="seg" id="seg">' + [["zh", "中文"], ["both", "对照"], ["src", "原文"]].map(function (m) { return '<button type="button" data-m="' + m[0] + '"' + (mode === m[0] ? ' class="on"' : "") + ">" + m[1] + "</button>"; }).join("") + "</span>";
     t += '<button type="button" class="tb" id="size" title="字的大小">' + ico("size") + '<span>字号</span></button><button type="button" class="tb' + (a.favorite ? " on" : "") + '" id="keep">' + ico("keep") + "<span>" + (a.favorite ? "留着了" : "留着") + "</span></button>" +
-      '<button type="button" class="tb" id="orig">' + ico("out") + '<span>原文</span></button><button type="button" class="tb go" id="talk">' + ico("talk") + "<span>拿去聊</span></button>";
+      '<button type="button" class="tb" id="orig">' + ico("out") + '<span>原文</span></button><button type="button" class="tb go" id="talk"><i class="sw"></i><span>拿去聊</span></button>';
     $("tools").innerHTML = t;
     if (pr) $("seg").querySelectorAll("button").forEach(function (b) { b.onclick = function () { var keepAt = cur.blockId; mode = b.dataset.m; ls("read_lang", mode); renderArticle(); var el = keepAt && document.getElementById("b-" + keepAt); if (el) el.scrollIntoView({ block: "start" }); }; });
     $("size").onclick = function () { var n = (+(ls("read_size") || 1) + 1) % 3; ls("read_size", String(n)); sheet.dataset.size = n; };
@@ -477,5 +548,6 @@
     $("rdx").style.setProperty("--edge", 'url("' + cx[0].toDataURL("image/png") + '")');
   }
   if (G) edge();
-  spineDay(); route(); setTimeout(spineFoot, 1200);   // the sheet first; the counts on the spine can follow
+  spineDay(); route(); setTimeout(spineFoot, 1200); plates();
+  setTimeout(function () { if (!cal.dates.length && wide()) api("briefs").then(function (b) { if (!cal.dates.length) { cal.dates = b.dates || []; cal.cur = null; spineCal(); } }).catch(function () {}); }, 1500);   // the days before, when the page did not open on Today   // the sheet first; the counts on the spine can follow
 })();
