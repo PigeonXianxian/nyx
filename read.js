@@ -5,13 +5,14 @@
      #shelf                everything collected, newest first, by day
      #kept                 what is half read, and what was kept
      #a/<id>               one article, open — beside the list it came from, on a wide screen
-   A wide screen is laid out as a spread: the spine on the left (the name, the day and its moon, where to go, the days
-   before), the sheet in the middle, and — once a piece is opened — the pile it came from as a rail with the piece
-   beside it. A phone gets one column: the spine is the head of the sheet, and an open piece takes the whole screen.
-   The moon is one pencil study (eye/moon.webp), shown lit as it is on the night in question: tonight's on the spine,
-   the days before as a row of moons, and small ones that say how far a thing has been read (none: not opened — a blue
-   dot instead; an empty ring: opened; then waxing; full: read to the end). Each source's seal is struck with the
-   shared pencil case (G.sk, eye/orrery.js). */
+   A wide screen is laid out as a spread: the spine on the left (the name, the day, and one instrument: tonight's moon
+   with the days before and the three places going round it), the sheet beside it, and — once a piece is opened — the
+   piece alone, or with the pile it came from beside it if that is asked for. A phone gets one column: the instrument
+   is the head of the sheet, and an open piece takes the whole screen.
+   The moon is one pencil study (eye/moon.webp), shown lit as it is on the night in question: tonight's at the hub,
+   the days before on the inner track, and small ones that say how far a thing has been read (none: not opened — a
+   swallow sits by it instead; an empty ring: opened; then waxing; full: read to the end). Each source's seal is a
+   freehand pencil drawing (eye/seals.webp). A figure of a piece is shown where it stands in it. */
 (function () {
   "use strict";
   var C = window.NYX || {}, RELAY = C.relay || "/relay", root = document.documentElement;
@@ -54,10 +55,9 @@
   function clock(v) { var t = Date.parse(v || ""); if (!isFinite(t)) return ""; var d = new Date(t + 8 * 3600000), z = function (n) { return (n < 10 ? "0" : "") + n; }, day = d.toISOString().slice(0, 10); return (day === today() ? "" : zhDate(v) + " ") + z(d.getUTCHours()) + ":" + z(d.getUTCMinutes()); }
 
   /* ── the pencil: moons and seals, each made once ── */
-  var G = window.Gou, SK = G && G.sk, drawn = {};
+  var G = window.Gou, drawn = {};
   function dark() { return root.dataset.side === "moon"; }
   function sheetOf(w, h) { var S = 3, c = document.createElement("canvas"); c.width = w * S; c.height = h * S; var x = c.getContext("2d"); x.scale(S, S); return [c, x]; }
-  function pens(x, onDark) { return { blue: SK.pen(x, onDark ? "rdBlueN" : "rdBlue", onDark ? [128, 138, 252] : [36, 46, 184], .92), lead: SK.pen(x, onDark ? "rdLeadN" : "rdLead", onDark ? [226, 223, 216] : [40, 40, 48], .6) }; }
   /* the moon: one hand-drawn study of the full moon (eye/moon.webp — a freehand pencil outline, its seas hatched in blue
      pencil, cut along its own uneven edge), and for any night the part of it that is lit. What is in shadow is the same
      drawing, faint: there is no ruled circle anywhere. lit 0…1; waxing: lit on the right. */
@@ -76,7 +76,7 @@
       if (q >= .98) x.arc(0, 0, R + 2, 0, TAU);
       else { x.arc(0, 0, R + 2, -Math.PI / 2, Math.PI / 2, false); x.ellipse(0, 0, Math.max(.01, R * Math.abs(1 - 2 * q)), R + 2, 0, Math.PI / 2, -Math.PI / 2, q < .5); }   // the limb, then back along the terminator
       x.closePath(); x.clip();
-      if (!waxing) x.scale(-1, 1); x.rotate(.3); whole(); x.restore();
+      if (!waxing) x.scale(-1, 1); x.rotate(.3); whole(); if (R < 11 && !onDark) whole(); x.restore();   // a very small moon on paper is gone over twice, or it is only a smudge
     }
     return (drawn[k] = cx[0].toDataURL("image/png"));
   }
@@ -84,29 +84,12 @@
   function phase(a) { return a.completed ? 4 : a.progress > .66 ? 3 : a.progress > .33 ? 2 : a.progress > .02 ? 1 : a.read ? 0 : -1; }
   var LIT = [0, .25, .5, .75, 1];                                              // how far a piece has been read, as a waxing moon
   function sky(day) { var d = new Date(day + "T12:00:00Z"); return G && G.moonAge ? { lit: G.moonLit(d), wax: G.moonAge(d) < 14.765 } : { lit: 1, wax: true }; }   // the moon that night
-  /* a source's seal, finely cut: its letter in a thin ring with a hairline inside it and four survey ticks (a programme's in a frame) */
+  /* a source's seal: its letter in a ring, drawn freehand in blue pencil and gone over twice (eye/seals.webp — twelve on
+     one sheet, kept only as where the pencil went, so each is laid in the blue of whichever side is up) */
   var SEALS = { "qbitai": "量", "qbitai-xhs": "量", "latepost": "晚", "anthropic-engineering": "A", "anthropic-research": "A", "claude-articles": "C", "openai-codex": "O", "boris-cherny": "B", "thariq-shihipar": "T",
     "bilibili-d7": "D7", "bilibili-zhangxiaojun": "珺", "bilibili-whynottv": "W", "x-anthropic": "X", "x-openai-devs": "X", "x-karpathy": "X" };
-  function seal(sourceId, onDark) {
-    var ch = SEALS[sourceId] || "·", od = onDark == null ? dark() : !!onDark, video = /^bilibili/.test(sourceId || ""), k = "s" + ch + (od ? 1 : 0) + (video ? "v" : "");
-    if (drawn[k]) return drawn[k]; if (!G) return "";
-    var W = 34, cx = sheetOf(W, W), x = cx[1], n = ch.charCodeAt(0), r = G.rng(n * 31 + 7), blue = od ? "140,149,255" : "41,51,196", i;
-    var ink = function (a, w) { x.strokeStyle = "rgba(" + blue + "," + a + ")"; x.lineWidth = w; };
-    x.translate(W / 2, W / 2); x.rotate((r() - .5) * .14); x.lineCap = "round";
-    if (video) { ink(.92, .9); x.strokeRect(-12, -12, 24, 24); ink(.55, .45); x.strokeRect(-9.7, -9.7, 19.4, 19.4); }   // a programme: a fine frame within a frame
-    else { ink(.92, .9); x.beginPath(); x.arc(0, 0, 13.3, 0, TAU); x.stroke(); var g0 = r() * TAU; ink(.6, .45); x.beginPath(); x.arc(0, 0, 10.9, g0, g0 + TAU * .87); x.stroke(); }   // a ring, and inside it a hairline that does not quite close
-    for (i = 0; i < 4; i++) { x.save(); x.rotate(i * Math.PI / 2); ink(.8, .6); x.beginPath(); x.moveTo(0, video ? -12 : -13.3); x.lineTo(0, -15.7); x.stroke(); x.restore(); }   // the surveyor's four ticks
-    x.fillStyle = "rgb(" + blue + ")"; x.textAlign = "center"; x.textBaseline = "middle";
-    x.font = HAN.test(ch) ? "500 12.5px " + G.HAN : (ch.length > 1 ? "italic 600 12px " : "italic 600 15.5px ") + G.SERIF;
-    x.fillText(ch, 0, HAN.test(ch) ? .6 : .9);
-    return (drawn[k] = cx[0].toDataURL("image/png"));
-  }
-  function sealImg(sourceId, onDark, cls) { return '<img class="seal' + (cls ? " " + cls : "") + '" alt="" width="34" height="34" data-s="' + esc(sourceId || "") + '"' + (onDark == null ? "" : ' data-d="' + (onDark ? 1 : 0) + '"') + ' src="' + seal(sourceId, onDark) + '">'; }
-  // the seals carry a letter: once the page's own types have arrived, strike them again in the right face
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () {
-    Object.keys(drawn).forEach(function (k) { if (k.charAt(0) === "s") delete drawn[k]; });
-    document.querySelectorAll("img.seal").forEach(function (im) { im.src = seal(im.dataset.s, im.dataset.d == null ? null : im.dataset.d === "1"); });
-  });
+  var SEAL_AT = { "量": 0, "晚": 1, "珺": 2, "A": 3, "C": 4, "O": 5, "X": 6, "W": 7, "B": 8, "T": 9, "D7": 10, "·": 11 };   // where each lies on the sheet, four to a row
+  function sealImg(sourceId, cls) { var n = SEAL_AT[SEALS[sourceId] || "·"]; return '<i class="seal' + (cls ? " " + cls : "") + '" style="--sx:' + (n % 4) + ";--sy:" + (n / 4 | 0) + '" aria-hidden="true"></i>'; }
 
   /* ── swallows, as the home draws them (eye/birds.js): the outline of one instant of the wingbeat as a mask for small
      marks (--sw: on every piece not yet read, on the line that says how far down a piece one is, on the way back) ── */
@@ -118,70 +101,118 @@
   }
   if (G && G.BIRDPTS) root.style.setProperty("--sw", swallowMask(11));
 
-  /* ── the instrument on the spine (wide screens): the house's orbits about tonight's moon, and on two of its tracks the
-     places to go (outer) and the days before (inner, one moon a day). Choosing one turns its ring until the choice lies
-     at the hand — and the orbits behind turn with it, each ring at its own rate, as they do on the home when the menu is
-     turned (G.orrery's `orb`); left alone they only flow. They are laid in the other side's hand, as the spine is the
-     other side's ground: chalk by day, pencil by night. ── */
+  /* ── the instrument: the house's orbits about tonight's moon, and on two of its tracks the places to go (outer) and the
+     days before (inner, one moon a day). On a wide screen it lies on the spine, the moon at its left; on a phone it is the
+     head of the sheet, the moon rising at its foot. A ring is turned by hand — take hold anywhere and turn it about the
+     moon, as the menu is turned on the home; let go and it comes to rest on the nearest mark, and that is opened — or by
+     a wheel, or by touching a mark. The orbits behind are geared to both rings (G.orrery's `orb`); left alone they only
+     flow. They are laid in the other side's hand, as the spine is the other side's ground: chalk by day, pencil by night. ── */
   var PLACES = [["today", "今日", "Today"], ["shelf", "书架", "Shelf"], ["kept", "收藏", "Kept"]], STEP_P = 27, STEP_D = 15, RADN = Math.PI / 180;
-  var cal = { dates: [], cur: null }, dial = { built: false, v: "today", date: null, orb: 0, to: 0 };
+  var cal = { dates: [] }, dial = { built: false, v: "today", date: null, pi: 0, di: 0, orb: 0, to: 0, geo: null, clickAt: 0 }, hold = null;
+  function daysOn() { return cal.dates.slice(0, 12); }
+  function lim(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function dialBuild() {   // laid again whenever the days become known
-    var el = $("dial"); if (!el || !wide()) return;
+    var el = $("dial"); if (!el) return;
     var onDark = !dark(), t = today(), tn = sky(t);
     el.innerHTML = '<span class="hub">' + moonTag(tn.lit, tn.wax, 62, onDark, "", 128) + '</span><i class="hand"></i>' +
-      '<div class="ring days">' + cal.dates.slice(0, 12).map(function (d, i) { var k = sky(d); return '<a href="#today' + (d === t ? "" : "/" + d) + '" data-d="' + d + '" style="--a:' + (i * STEP_D) + 'deg" title="' + zhDate(d + "T04:00:00Z") + '的简报">' + moonTag(k.lit, k.wax, 12, onDark, "", 26) + "<i>" + (+d.slice(8)) + "</i></a>"; }).join("") + "</div>" +
-      '<div class="ring places">' + PLACES.map(function (pl, i) { return '<a href="#' + pl[0] + '" data-v="' + pl[0] + '" style="--a:' + (i * STEP_P) + 'deg"><b></b><span><em>' + pl[1] + "</em><i>" + pl[2] + "</i></span></a>"; }).join("") + "</div>";
+      '<div class="ring days">' + daysOn().map(function (d, i) { var k = sky(d); return '<a href="#today' + (d === t ? "" : "/" + d) + '" draggable="false" data-d="' + d + '" style="--a:' + (i * STEP_D) + 'deg" title="' + zhDate(d + "T04:00:00Z") + '的简报">' + moonTag(k.lit, k.wax, 12, onDark, "", 26) + "<i>" + (+d.slice(8)) + "</i></a>"; }).join("") + "</div>" +
+      '<div class="ring places">' + PLACES.map(function (pl, i) { return '<a href="#' + pl[0] + '" draggable="false" data-v="' + pl[0] + '" style="--a:' + (i * STEP_P) + 'deg"><b></b><span><em>' + pl[1] + "</em><i>" + pl[2] + "</i></span></a>"; }).join("") + "</div>";
     dial.built = true; dialSet(dial.v, dial.date, true);
+  }
+  function dialTurn(pi, di) {   // the rings laid so that place pi and day di lie at the hand (between two marks, while a ring is in the hand)
+    var el = $("dial"); dial.pi = pi; dial.di = di;
+    el.style.setProperty("--tp", (-pi * STEP_P).toFixed(2) + "deg"); el.style.setProperty("--td", (-di * STEP_D).toFixed(2) + "deg");
+    dial.to = pi * .5 + di * .2;   // the orbits behind are geared to both rings
   }
   function dialSet(v, date, still) {
     if (v) dial.v = v; if (date !== undefined) dial.date = date;
     var el = $("dial"); if (!el || !dial.built) return;
-    var pi = Math.max(0, PLACES.findIndex(function (pl) { return pl[0] === dial.v; })), day = dial.date || today(), di = Math.max(0, cal.dates.indexOf(day));
-    el.style.setProperty("--tp", (-pi * STEP_P) + "deg"); el.style.setProperty("--td", (-di * STEP_D) + "deg");
+    var pi = Math.max(0, PLACES.findIndex(function (pl) { return pl[0] === dial.v; })), day = dial.date || today(), di = Math.max(0, daysOn().indexOf(day));
+    if (still) el.classList.add("still");
+    dialTurn(pi, di);
     el.querySelectorAll(".places a").forEach(function (l) { l.classList.toggle("on", l.dataset.v === dial.v); });
     el.querySelectorAll(".days a").forEach(function (l) { l.classList.toggle("on", dial.v === "today" && l.dataset.d === day); });
-    dial.to = pi * .5 + di * .2;   // the orbits behind are geared to both rings
-    if (still) dial.orb = dial.to;
-    backTurn(dial.to, still);
+    if (still) { dial.orb = dial.to; void el.offsetWidth; el.classList.remove("still"); }
+    $("stage").style.setProperty("--fly", (pi + di * .3).toFixed(2));   // the swallow behind the sheet flies on a little with every turn
   }
   function instrument() {
-    if (!G || !G.orrery || !wide()) return;
-    var host = $("spine"), cv = document.createElement("canvas"), x = cv.getContext("2d"), born = performance.now(), w = 0, h = 0, dpr = 1, c = { x: 40, y: 480 };
+    var host = $("spine"), el = $("dial"), cv = document.createElement("canvas"), x = cv.getContext("2d"), born = performance.now(), w = 0, h = 0, dpr = 1, wd = null;
     cv.className = "plate"; cv.setAttribute("aria-hidden", "true"); host.insertBefore(cv, host.firstChild);
     (function frame() {
-      var r = host.getBoundingClientRect(), now = performance.now(), moving = Math.abs(dial.to - dial.orb) > .0015;
-      if (r.width > 4 && !document.hidden) {
+      var r = host.getBoundingClientRect(), now = performance.now(), moving = Math.abs(dial.to - dial.orb) > .0015, W = wide();
+      if (r.width > 4 && r.bottom > 0 && !document.hidden && !host.classList.contains("stuck")) {
         var nd = Math.min(window.devicePixelRatio || 1, 2);
-        if (Math.round(r.width) !== w || Math.round(r.height) !== h || nd !== dpr) {   // the measure of the spine: where the hub lies and how wide its tracks are
-          w = Math.round(r.width); h = Math.round(r.height); dpr = nd; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-          var rp = Math.min(w * .575, h * .28), d = $("dial"); c = { x: Math.round(w * .115), y: Math.round(h * .55) };
-          d.style.setProperty("--cx", c.x + "px"); d.style.setProperty("--cy", c.y + "px"); d.style.setProperty("--rp", rp.toFixed(1) + "px"); d.style.setProperty("--rd", (rp * .64).toFixed(1) + "px"); d.style.setProperty("--hub", (rp * .64).toFixed(1) + "px");
+        if (Math.round(r.width) !== w || Math.round(r.height) !== h || nd !== dpr || W !== wd) {   // the measure of the spine: where the moon lies and how wide its tracks are
+          w = Math.round(r.width); h = Math.round(r.height); dpr = nd; wd = W; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+          var g = W ? { cx: Math.round(w * .115), cy: Math.round(h * .55), rp: Math.min(w * .575, h * .28), dd: 1, sc: h / 1400 } : { cx: Math.round(w / 2), cy: h - 2, rp: Math.min(158, w * .405), dd: -1 };
+          g.rd = g.rp * (W ? .64 : .57); g.hub = W ? g.rd : g.rp * .6; if (!W) g.sc = g.rp * .003;
+          dial.geo = g;
+          el.style.setProperty("--cx", g.cx + "px"); el.style.setProperty("--cy", g.cy + "px"); el.style.setProperty("--rp", g.rp.toFixed(1) + "px"); el.style.setProperty("--rd", g.rd.toFixed(1) + "px"); el.style.setProperty("--hub", g.hub.toFixed(1) + "px");
         }
-        dial.orb = moving ? dial.orb + (dial.to - dial.orb) * .085 : dial.to;
-        var sc = h / 1400, k = sc * dpr;
-        x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.setTransform(k, 0, 0, k, 0, 0);
-        G.orrery(x, { cx: c.x / sc, cy: c.y / sc, K: .8, tilt: 58 * RADN, q: .62, night: !dark(), orb: dial.orb, time: now / 1000, a: dark() ? .34 : .46, rv: G.clamp((now - born) / 2200, 0, 1), foot: null });
+        dial.orb = moving ? dial.orb + (dial.to - dial.orb) * (hold && hold.turn ? .3 : .085) : dial.to;
+        if (G && G.orrery) {
+          var sc = dial.geo.sc, k = sc * dpr;
+          x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.setTransform(k, 0, 0, k, 0, 0);
+          G.orrery(x, { cx: dial.geo.cx / sc, cy: dial.geo.cy / sc, K: .8, tilt: 58 * RADN, q: .62, night: !dark(), orb: dial.orb, time: now / 1000, a: dark() ? .34 : .46, rv: lim((now - born) / 2200, 0, 1), foot: null });
+        }
       }
-      if (moving) requestAnimationFrame(frame); else setTimeout(frame, 75);
+      if (moving || (hold && hold.turn)) requestAnimationFrame(frame); else setTimeout(frame, 75);
     })();
   }
-  /* far behind the sheet, the same orbits large and pale. They lie still under the words; when a ring of the instrument is
-     turned they turn too, then lie still again. */
-  var back = { orb: 0, to: 0, raf: 0 };
-  function backdrop() {
-    if (!G || !G.orrery || !wide()) return;
-    var host = $("stage"), cv = host.querySelector("canvas.plate") || host.insertBefore(Object.assign(document.createElement("canvas"), { className: "plate" }), host.firstChild);
-    var r = host.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 1.5), night = dark(), k = r.height / 1400 * dpr, W = r.width / (r.height / 1400), x = cv.getContext("2d");
-    if (r.width < 4) return;
-    cv.setAttribute("aria-hidden", "true");
-    if (cv.width !== Math.round(r.width * dpr) || cv.height !== Math.round(r.height * dpr)) { cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); }
-    x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.setTransform(k, 0, 0, k, 0, 0);
-    G.orrery(x, { cx: W * .34, cy: 1400 * .9, K: 2.2, tilt: 58 * RADN, q: .62, night: night, orb: back.orb, time: 31, a: night ? .26 : .13, rv: 1, foot: null });
+  /* a ring in the hand. Which ring: the one whose track is nearer to where it was taken hold of. It follows the hand's
+     angle about the moon; past its last mark it gives a little and no more. */
+  function ringAt(x, y) { var g = dial.geo; return Math.hypot(x - g.cx, y - g.cy) < (g.rp + g.rd) / 2 && daysOn().length > 1 ? "d" : "p"; }
+  function give(v, max) { return v < 0 ? v * .28 : v > max ? max + (v - max) * .28 : v; }
+  function openAt(ring, n) {   // what lies at the hand is opened; if it was open already, the ring only settles back on it
+    var t = today(), d = daysOn()[n], to = ring === "p" ? "#" + PLACES[n][0] : "#today" + (!d || d === t ? "" : "/" + d), now = location.hash || "#today";
+    if (to === now || ($("reading").hidden && shown === to.slice(1))) dialSet(dial.v, dial.date); else location.hash = to;
   }
-  function backTurn(to, still) {
-    back.to = to; if (still) { back.orb = to; backdrop(); return; }
-    if (back.raf || !wide()) return;
-    (function step() { var d = back.to - back.orb; if (Math.abs(d) < .003) { back.orb = back.to; back.raf = 0; backdrop(); return; } back.orb += d * .11; backdrop(); back.raf = requestAnimationFrame(step); })();
+  function stick() { var host = $("spine"); if (host.offsetHeight) host.classList.toggle("stuck", !wide() && window.scrollY > host.offsetHeight - 56); }   // (while a piece is open the spine is away: nothing to measure)
+  function hands() {
+    var host = $("spine"), el = $("dial"), wheel = { acc: 0, at: 0, t: 0 };
+    function at(e) { var r = host.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+    host.addEventListener("pointerdown", function (e) {
+      if (e.button || !dial.geo || !dial.built || (e.target.closest && e.target.closest("button, .sp-top, .sp-foot"))) return;
+      var p = at(e); hold = { id: e.pointerId, x0: e.clientX, y0: e.clientY, ring: ringAt(p.x, p.y), acc: 0, pi0: dial.pi, di0: dial.di, va: 0, turn: false };
+    });
+    host.addEventListener("pointermove", function (e) {
+      if (!hold || e.pointerId !== hold.id) return;
+      var g = dial.geo, p = at(e), a1 = Math.atan2(p.y - g.cy, p.x - g.cx), now = performance.now();
+      if (!hold.turn) {
+        if (Math.hypot(e.clientX - hold.x0, e.clientY - hold.y0) < 7) return;
+        hold.turn = true; hold.a = a1; hold.t = now; el.classList.add("held"); host.classList.add("held"); try { host.setPointerCapture(e.pointerId); } catch (er) {}
+      }
+      var da = ((a1 - hold.a + Math.PI) % TAU + TAU) % TAU - Math.PI, dt = Math.max(1, now - hold.t), deg;
+      hold.a = a1; hold.t = now; hold.acc += da; hold.va = hold.va * .55 + (da / dt) * .45; deg = hold.acc / RADN;
+      if (hold.ring === "p") dialTurn(give(hold.pi0 - deg / STEP_P, PLACES.length - 1), dial.di);
+      else dialTurn(dial.pi, give(hold.di0 - g.dd * deg / STEP_D, daysOn().length - 1));
+    });
+    function letGo(e, lost) {
+      if (!hold || e.pointerId !== hold.id) return; var h = hold; hold = null; if (!h.turn) return;
+      el.classList.remove("held"); host.classList.remove("held"); dial.clickAt = performance.now();
+      if (lost) { dialSet(dial.v, dial.date); return; }
+      // carry on a little with the speed it had, then come to rest on a mark
+      var p = h.ring === "p", stale = performance.now() - h.t > 90, step = (p ? STEP_P : STEP_D) * RADN, fling = stale ? 0 : lim(-(p ? 1 : dial.geo.dd) * h.va / step * 170, -1.2, 1.2);
+      var was = p ? h.pi0 : h.di0, is = p ? dial.pi : dial.di, max = (p ? PLACES.length : daysOn().length) - 1, goal = Math.round(is + fling);
+      if (goal === Math.round(was) && Math.abs(is - was) > .16) goal += is > was ? 1 : -1;
+      openAt(h.ring, lim(goal, 0, max));
+    }
+    host.addEventListener("pointerup", function (e) { letGo(e); });
+    host.addEventListener("pointercancel", function (e) { letGo(e, true); });
+    el.addEventListener("click", function (e) { if (performance.now() - dial.clickAt < 400) { e.preventDefault(); e.stopPropagation(); } }, true);   // letting go of a ring is not a touch on the mark under the hand
+    el.addEventListener("dragstart", function (e) { e.preventDefault(); });
+    // with a wheel: a notch is a mark; what comes to the hand is opened once the wheel has stopped
+    host.addEventListener("wheel", function (e) {
+      if (!dial.geo || !dial.built || !wide()) return; e.preventDefault();
+      var now = performance.now(), p = at(e), ring = wheel.ring && now - wheel.at < 600 ? wheel.ring : ringAt(p.x, p.y);
+      wheel.acc += e.deltaY; if (Math.abs(wheel.acc) < 40 || now - wheel.at < 130) return;
+      var s = wheel.acc > 0 ? 1 : -1, n; wheel.acc = 0; wheel.at = now; wheel.ring = ring;
+      if (ring === "p") { n = lim(Math.round(dial.pi) + s, 0, PLACES.length - 1); dialTurn(n, dial.di); } else { n = lim(Math.round(dial.di) + s, 0, daysOn().length - 1); dialTurn(dial.pi, n); }
+      clearTimeout(wheel.t); wheel.t = setTimeout(function () { openAt(ring, n); }, 420);
+    }, { passive: false });
+    // a phone: once the sheet has been pulled up over the instrument only its bar is left; a touch on the name brings it back
+    window.addEventListener("scroll", stick, { passive: true }); window.addEventListener("resize", stick); stick();
+    host.querySelector(".ttl").addEventListener("click", function () { if (!wide()) window.scrollTo({ top: 0, behavior: "smooth" }); });
   }
 
   /* ── covers: the first figure of a piece, small, fetched as the card comes near ── */
@@ -192,6 +223,16 @@
       .then(function (u) { el.style.backgroundImage = 'url("' + u + '")'; el.classList.add("has"); }, function () { el.classList.add("gone"); });
   }
   function covers(scope) { scope.querySelectorAll(".cv[data-cover]:not(.has):not(.gone)").forEach(function (el) { if (coverIO) coverIO.observe(el); else loadCover(el); }); }
+  /* ── a figure where it stands in a piece: shown as it is, fetched as the reading comes near (the relay makes it small) ── */
+  var figUrl = {}, figIO = "IntersectionObserver" in window ? new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { figIO.unobserve(e.target); loadFig(e.target); } }); }, { rootMargin: "900px" }) : null;
+  function loadFig(el) {
+    var k = el.dataset.fig; if (!k) return;
+    (figUrl[k] || (figUrl[k] = fetch(RELAY + "/app/read/figure/" + k, { headers: { "Authorization": "Bearer " + key } }).then(function (r) { if (!r.ok) throw 0; return r.blob(); }).then(function (b) { return URL.createObjectURL(b); })))
+      .then(function (u) { var im = new Image(); im.alt = el.dataset.alt || ""; im.decoding = "async"; im.onload = function () { el.textContent = ""; el.appendChild(im); el.classList.add("has"); }; im.onerror = function () { el.parentNode.classList.add("gone"); }; im.src = u; },
+        function () { el.parentNode.classList.add("gone"); });
+  }
+  function figures(scope) { scope.querySelectorAll(".pic[data-fig]:not(.has)").forEach(function (el) { if (figIO) figIO.observe(el); else loadFig(el); }); }
+  function figuresGone() { Object.keys(figUrl).forEach(function (k) { figUrl[k].then(function (u) { URL.revokeObjectURL(u); }, function () {}); }); figUrl = {}; }
 
   /* ── a card ── */
   var byId = {};   // every card the page has been given, by id (so a card can be struck again when its state changes)
@@ -273,8 +314,6 @@
         h += '<p class="none">' + (isToday ? "今天的还没写好。" : "这一天没有简报。") + "</p>";
         if (isToday && b.budget && b.budget.modelAvailable && b.budget.remaining >= b.budget.required) h += '<p class="act"><button type="button" id="regen">现在写一份</button></p>';
       }
-      var others = (b.dates || []).filter(function (d) { return d !== b.date; }).slice(0, 9);
-      if (others.length) h += '<nav class="days"><span>前几天</span>' + (isToday ? "" : '<a href="#today">今天</a>') + others.map(function (d) { return '<a href="#today/' + d + '">' + (+d.slice(5, 7)) + "." + (+d.slice(8)) + "</a>"; }).join("") + "</nav>";
       h += '</div><div class="col picks" id="picks">' + WAIT + "</div>";
       view.innerHTML = h; stamps(view); pile(mine.concat(picked));
       if ((b.dates || []).join() !== cal.dates.join()) { cal.dates = b.dates || []; dialBuild(); }
@@ -364,8 +403,12 @@
     if (b.type === "table") return "<pre" + ' class="' + cls + ' tb"' + ">" + t + "</pre>";
     if (b.type === "list") return "<p" + ' class="' + cls + ' li"' + (lang ? ' lang="' + lang + '"' : "") + ">" + t + "</p>";
     if (b.type === "quote") return "<blockquote" + at + ">" + t + "</blockquote>";
-    if (b.type === "image") { var u = safeUrl(b.url); return "<figure" + at + "><span>" + (t || "原文配图") + "</span>" + (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">看原图</a>' : "") + "</figure>"; }
     return "<p" + at + ">" + t + "</p>";
+  }
+  function figHtml(a, b, x, i) {   // the picture itself; under it what the piece says of it, and the way to the original
+    var u = safeUrl(b.url), t = blockText(x || b), cap = t && !/^(图片|image|img|原文配图|配图)$/i.test(t.trim()) ? t : "";
+    return '<figure class="fig' + (u ? "" : " gone") + '">' + (u ? '<a class="pic" data-fig="' + esc(a.id) + "/" + i + '" data-alt="' + esc(cap) + '" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer"></a>' : "") +
+      "<figcaption><span>" + esc(cap) + "</span>" + (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">原图</a>' : "") + "</figcaption></figure>";
   }
   function coverage(a) {
     var ch = (a.chapters || []).length;
@@ -397,6 +440,7 @@
     h += '<div class="body ' + mode + '" id="body">' + (a.blocks || []).map(function (b, i) {
       var x = pr && pr[i], inner;
       if (b.type === "heading" && i < 2 && (b.text === a.title || b.text === zhTitle)) return '<div class="blk dup" id="b-' + esc(b.id) + '" data-id="' + esc(b.id) + '"></div>';   // the title again, as the body's first line
+      if (b.type === "image") return '<div class="blk figb" id="b-' + esc(b.id) + '" data-id="' + esc(b.id) + '">' + figHtml(a, b, x && mode !== "src" ? x : null, i) + "</div>";
       if (b.type === "heading") heads.push({ id: b.id, text: x && mode !== "src" ? x.text : b.text, level: Math.max(2, Math.min(4, +b.level || 2)) });
       if (x && mode === "both") inner = blockHtml(x, "zh", "zh-CN") + blockHtml(b, "src", "en");
       else if (x && mode === "zh") inner = blockHtml(x, "zh", "zh-CN");
@@ -406,7 +450,7 @@
     h += '<footer class="end"><p class="rate" id="rate"><span>这一篇值几颗月亮</span>' + [1, 2, 3, 4, 5].map(function (n) { return '<button type="button" data-n="' + n + '" aria-label="' + n + ' 颗">' + moonTag((a.rating || 0) >= n ? 1 : 0, true, 11, dark(), "", 26) + '</button>'; }).join("") + "</p>" +
       '<p class="act"><button type="button" id="done"' + (a.completed ? ' class="on"' : "") + ">" + (a.completed ? "读完了 · 已记下" : "读完了") + '</button><button type="button" id="nextb">下一篇</button></p></footer>';
     sheet.innerHTML = h; sheet.dataset.size = ls("read_size") || "1"; $("ar").classList.toggle("both", mode === "both" && !!pr);
-    tools(pr); toc();
+    tools(pr); toc(); figures(sheet);
     var rs = $("resume"); if (rs) rs.onclick = function () { var el = document.getElementById("b-" + A.blockId); if (el) el.scrollIntoView({ block: "start", behavior: "smooth" }); rs.parentNode.remove(); };
     $("done").onclick = function () { state({ read: true, completed: !A.completed }).then(function () { $("done").textContent = A.completed ? "读完了 · 已记下" : "读完了"; $("done").classList.toggle("on", !!A.completed); }); };
     $("nextb").onclick = function () { step(1); }; $("nextb").hidden = at(1) == null;
@@ -466,13 +510,17 @@
     saved = { blockId: cur.blockId, progress: cur.progress };
     api("articles/" + A.id + "/state", { method: "PATCH", body: saved, keep: keep === true }).then(function (s) { if (A) for (var k in s) A[k] = s[k]; }).catch(function () {});
   }
+  function piled(open) {   // the pile beside the piece, or the piece alone
+    $("reading").classList.toggle("piled", open); $("pileb").classList.toggle("on", open); $("pileb").setAttribute("aria-pressed", open ? "true" : "false");
+    if (open) { var on = $("rail").querySelector("a.on"); if (on) on.scrollIntoView({ block: "center" }); }
+  }
   function at(d) { if (!A) return null; for (var i = 0; i < ctx.length; i++) if (ctx[i].id === A.id) return ctx[i + d] ? ctx[i + d].id : null; return null; }
   function step(d) { var id = at(d); if (!id) return; history.replaceState(null, "", "#a/" + id); route(); }
   function rail(id) {
     var el = $("rail");
     if (el.dataset.n !== String(ctx.length) || !el.firstChild) {
       el.innerHTML = '<h4><span>这一叠</span><i>' + ctx.length + "</i></h4>" + ctx.map(function (c) { return '<a href="#a/' + esc(c.id) + '" data-id="' + esc(c.id) + '"' + (c.read === false ? ' class="new"' : "") + ">" + sealImg(c.sourceId) + "<span><b>" + esc(c.title) + "</b><small>" + c.meta + "</small></span></a>"; }).join("");
-      el.dataset.n = String(ctx.length);
+      el.dataset.n = String(ctx.length); $("pilen").textContent = ctx.length || "";
       el.querySelectorAll("a").forEach(function (l) { l.onclick = function (e) { e.preventDefault(); if (A && A.id === l.dataset.id) return; history.replaceState(null, "", "#a/" + l.dataset.id); route(); }; });
     }
     el.querySelectorAll("a").forEach(function (l) { var on = l.dataset.id === id; l.classList.toggle("on", on); if (on && l.scrollIntoView) l.scrollIntoView({ block: "nearest" }); });
@@ -481,7 +529,7 @@
     flush(true);
     if ($("reading").hidden) { listY = wide() ? $("browse").scrollTop : window.scrollY; $("browse").hidden = true; $("reading").hidden = false; root.classList.add("is-reading"); $("rail").dataset.n = ""; }
     rail(id);
-    $("tools").innerHTML = ""; $("prog").textContent = ""; $("ah").style.setProperty("--p", "0%"); $("toc").innerHTML = ""; sheet.innerHTML = WAIT; $("ar").scrollTop = 0; if (!wide()) window.scrollTo(0, 0);
+    figuresGone(); $("tools").innerHTML = ""; $("prog").textContent = ""; $("ah").style.setProperty("--p", "0%"); $("toc").innerHTML = ""; sheet.innerHTML = WAIT; $("ar").scrollTop = 0; if (!wide()) window.scrollTo(0, 0);
     A = null; saved = { blockId: null, progress: -1 }; cur = { blockId: null, progress: 0 };
     api("articles/" + encodeURIComponent(id)).then(function (a) {
       if ((location.hash || "").slice(3) !== id) return;   // another piece was asked for meanwhile
@@ -497,9 +545,10 @@
   }
   function closeArticle() {
     flush(true);
-    var a = A; $("reading").hidden = true; $("browse").hidden = false; root.classList.remove("is-reading"); sheet.innerHTML = "";
+    var a = A; $("reading").hidden = true; $("browse").hidden = false; root.classList.remove("is-reading"); sheet.innerHTML = ""; figuresGone();
     if (a) { var c = byId[a.id]; if (c) { ["read", "favorite", "completed", "progress", "blockId", "rating"].forEach(function (k) { c[k] = a[k]; }); strike(c); } }
     A = null; if (wide()) $("browse").scrollTop = listY; else window.scrollTo(0, listY);
+    stick();
   }
   $("ar").addEventListener("scroll", place, { passive: true });
   window.addEventListener("scroll", function () { if (!wide()) place(); }, { passive: true });
@@ -510,18 +559,19 @@
   var shown = null;
   function route() {
     var h = (location.hash || "#today").slice(1), m = h.match(/^a\/([A-Za-z0-9_-]{1,128})$/);
-    if (m) { if (!shown) { shown = "shelf"; mark("shelf"); dialSet("shelf", undefined, true); viewShelf(); } openArticle(m[1]); return; }
+    if (m) { if (!shown) { shown = "shelf"; dialSet("shelf", undefined, true); viewShelf(); } openArticle(m[1]); return; }
     if (!$("reading").hidden) closeArticle();
     var d = h.match(/^today\/(\d{4}-\d{2}-\d{2})$/), v = d ? "today" : (h === "shelf" || h === "kept") ? h : "today", id = v + (d ? "/" + d[1] : "");
     if (shown === id) return;
-    shown = id; mark(v); dialSet(v, v === "today" ? (d ? d[1] : null) : undefined);
+    shown = id; dialSet(v, v === "today" ? (d ? d[1] : null) : undefined);
     if (v === "today") viewToday(d && d[1]); else if (v === "shelf") viewShelf(); else viewKept();
   }
-  function mark(v) { $("spNav").querySelectorAll("a").forEach(function (a) { a.classList.toggle("on", a.dataset.v === v); }); }
   window.addEventListener("hashchange", route);
   $("back").onclick = function () { location.href = "./"; };
   $("aback").onclick = function () { if (history.length > 1 && shown) history.back(); else location.hash = "#shelf"; };
   $("prev").onclick = function () { step(-1); }; $("next").onclick = function () { step(1); };
+  $("pileb").onclick = function () { var o = !$("reading").classList.contains("piled"); ls("read_pile", o ? "1" : "0"); piled(o); };
+  piled(ls("read_pile") === "1");
   document.addEventListener("keydown", function (e) {
     if (document.querySelector(".nyxask") || e.metaKey || e.ctrlKey || e.altKey) return;
     var typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || "");
@@ -532,16 +582,18 @@
     } else if (!typing && e.key === "/" && $("q")) { e.preventDefault(); $("q").focus(); }
     else if (typing && e.key === "Escape") e.target.blur();
   });
-  /* the spine's edge goes off into grain, as the band does on the home: a strip of specks, thick at the spine and thinning away */
+  /* the spine's edge goes off into grain, as the band does on the home: a strip of specks, thick at the spine and thinning
+     away — to the right of the spine on a wide screen, under the band on a phone */
   function edge() {
-    var W = 46, H = 420, cx = sheetOf(W, H), x = cx[1], r = G ? G.rng(77) : Math.random, i;
-    x.fillStyle = getComputedStyle(root).getPropertyValue("--ink").trim() || "#1B1B20";
-    for (i = 0; i < 1500; i++) { var u = r(), px = W * Math.pow(u, 2.6), s = .45 + r() * (1.15 - u * .6); x.globalAlpha = .55 + r() * .45; x.fillRect(px, r() * H, s, s); }
-    $("rdx").style.setProperty("--edge", 'url("' + cx[0].toDataURL("image/png") + '")');
+    var W = 46, H = 420, r = G ? G.rng(77) : Math.random, ink = getComputedStyle(root).getPropertyValue("--ink").trim() || "#1B1B20";
+    [["--edge", W, H, 0], ["--edgeh", H, 34, 1]].forEach(function (e) {
+      var cx = sheetOf(e[1], e[2]), x = cx[1], n = e[3] ? 1250 : 1500, i; x.fillStyle = ink;
+      for (i = 0; i < n; i++) { var u = r(), far = Math.pow(u, 2.6), s = .45 + r() * (1.15 - u * .6), along = r(); x.globalAlpha = .55 + r() * .45; if (e[3]) x.fillRect(along * e[1], far * e[2], s, s); else x.fillRect(far * e[1], along * e[2], s, s); }
+      $("rdx").style.setProperty(e[0], 'url("' + cx[0].toDataURL("image/png") + '")');
+    });
   }
   if (G) edge();
   $("spDate").textContent = latinDay(today());
-  dialBuild(); instrument(); route(); setTimeout(spineFoot, 1200);
-  var rz = 0; window.addEventListener("resize", function () { clearTimeout(rz); rz = setTimeout(backdrop, 300); });
-  setTimeout(function () { if (!cal.dates.length && wide()) api("briefs").then(function (b) { if (!cal.dates.length) { cal.dates = b.dates || []; dialBuild(); } }).catch(function () {}); }, 1500);   // the days before, when the page did not open on Today
+  dialBuild(); instrument(); hands(); route(); setTimeout(spineFoot, 1200);
+  setTimeout(function () { if (!cal.dates.length) api("briefs").then(function (b) { if (!cal.dates.length) { cal.dates = b.dates || []; dialBuild(); } }).catch(function () {}); }, 1500);   // the days before, when the page did not open on Today
 })();

@@ -1,12 +1,13 @@
 /* Nyx — Read (一起读). Paper, ink, one blue (eye/ink.css).
    A wide screen is a spread that fills it: the spine on the left, laid in the other side's ground (ink by day, paper by
    night) with the room's name and one instrument — tonight's moon, the days before going round it, the three places on
-   its outer track, the house's orbits turning behind when a ring is turned; the sheet beside it; and, once a piece is
-   open, the pile it came from as a rail with the piece next to it.
-   A phone is one column: the spine becomes the head of the sheet, an open piece takes the screen.
-   What gives the eye somewhere to land: large numerals on the brief, each source's seal, a small figure beside a card
-   (printed in ink, blue and paper like a newspaper cut; in its own colours under the pointer), the moon as a pencil
-   study (eye/moon.webp) wherever a moon is shown, a short blue bar at every heading.
+   its outer track, the house's orbits turning behind when a ring is turned; the sheet beside it, a leaf of the
+   sketchbook far behind; and, once a piece is open, the piece alone — or with the pile it came from, if asked for.
+   A phone is one column: the instrument is the head of the sheet (the moon rising at its foot); pulled up, it leaves
+   its bar. An open piece takes the screen.
+   What gives the eye somewhere to land: large numerals on the brief, each source's seal (a freehand pencil drawing,
+   eye/seals.webp), a small figure beside a card (printed pale in blue; in its own colours under the pointer), the
+   moon as a pencil study (eye/moon.webp) wherever a moon is shown, a short blue bar at every heading.
    (app.css, the chat's stylesheet, is not loaded here — its class names collide with these.) */
 *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html, body{ margin:0; min-height:100%; background:var(--paper); color:var(--ink); }
@@ -29,36 +30,67 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 
 /* ════════ one column (a phone) ════════ */
 .rdx{ position:relative; z-index:1; min-height:100vh; }
-.spine{ --sb:var(--blue); position:sticky; top:0; z-index:6; display:flex; align-items:flex-end; gap:6px 12px; padding:calc(env(safe-area-inset-top) + 8px) 16px 0 8px;
-  background:var(--paper) var(--grain); background-size:180px; box-shadow:0 1px 0 var(--hair); }
+/* the head of the sheet is the instrument, in the other side's ground. It goes up with the sheet until only its bar is
+   left (the name, the day); a touch on the name brings it back. */
+.spine{ --sb:#8C95FF; --band:246px; --bar:50px; position:sticky; top:calc(var(--bar) - var(--band)); z-index:6; height:calc(env(safe-area-inset-top) + var(--band));
+  background:var(--ink); color:var(--paper); touch-action:pan-y; -webkit-user-select:none; user-select:none; }
+:root[data-side="moon"] .spine{ --sb:#2933C4; }
 html.is-reading .spine{ display:none; }
-.sp-top{ display:flex; align-items:center; gap:2px; padding-bottom:8px; }
+.spine::after{ content:""; position:absolute; left:0; right:0; top:100%; height:34px; pointer-events:none; background:var(--edgeh, none) repeat-x left top / 420px 34px; }   /* its foot goes off into grain, as the band does on the home */
+.spine > .plate{ position:absolute; left:0; top:0; width:100%; height:100%; z-index:0; pointer-events:none; }   /* the house's orbits (read.js draws them, geared to the rings) */
+.spine.stuck > .plate, .spine.stuck .dial{ visibility:hidden; }
+.sp-top{ position:sticky; top:0; z-index:3; display:flex; align-items:center; gap:2px; height:calc(env(safe-area-inset-top) + var(--bar)); padding:env(safe-area-inset-top) 16px 0 8px; }
 .back{ flex:none; width:34px; height:36px; display:grid; place-items:center; }
-.step svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.step svg, .pileb svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
 .ttl{ margin:0; font-weight:400; line-height:1; white-space:nowrap; }
-.ttl b{ font:italic 500 30px/1 var(--latin); letter-spacing:.02em; }
-.ttl small{ margin-left:9px; font:400 12px/1 var(--han); letter-spacing:.4em; color:var(--faint); }
-.sp-date, .dial, .sp-foot, canvas.plate{ display:none; }   /* a wide screen's: the instrument, its orbits, the foot */
-.sp-nav{ margin-left:auto; display:flex; gap:18px; }
-.sp-nav a{ position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; padding:2px 1px 9px; color:var(--faint); }
-.sp-nav a i{ font:italic 400 16.5px/1 var(--latin); letter-spacing:.04em; }
-.sp-nav a b{ font:400 10.5px/1 var(--han); letter-spacing:.3em; margin-right:-.3em; }
-.sp-nav a.on{ color:var(--ink); }
-.sp-nav a.on::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:var(--sb); }
+.ttl b{ font:italic 500 29px/1 var(--latin); letter-spacing:.02em; }
+.ttl small{ margin-left:13px; font:400 11.5px/1 var(--han); letter-spacing:.4em; color:color-mix(in srgb, var(--paper) 60%, transparent); }
+.sp-date{ margin:0 0 0 auto; font:italic 400 13px/1 var(--latin); letter-spacing:.14em; color:color-mix(in srgb, var(--paper) 55%, transparent); white-space:nowrap; }
+.sp-foot, .stage > .leaf, .pileb{ display:none; }   /* a wide screen's */
 
-.browse{ padding:2px 18px calc(env(safe-area-inset-bottom) + 72px); outline:0; }
+/* the instrument. Its hub is tonight's moon; on the inner track the days before, one moon a day; on the outer the three
+   places. A ring is turned by --tp / --td (read.js: by hand, or to what was chosen) until a mark lies at the hand; each
+   mark is kept upright. --base is where the hand points (up on a phone, to the right on the spine); --dd is the way the
+   days run from it (-1: back to the left). */
+.dial{ --cx:50%; --cy:100%; --rp:150px; --rd:92px; --hub:108px; --base:-90deg; --dd:-1; position:absolute; left:0; top:0; width:100%; height:100%; z-index:1; overflow:hidden; pointer-events:none;
+  transition:--tp 1s cubic-bezier(.3, .05, .2, 1), --td 1s cubic-bezier(.3, .05, .2, 1); }
+.dial.held, .dial.still{ transition:none; }
+.dial .hub{ position:absolute; left:var(--cx); top:var(--cy); width:var(--hub); height:var(--hub); transform:translate(-50%, -50%); }
+.dial .hub img{ display:block; width:100%; height:100%; }
+.dial .hand{ position:absolute; left:var(--cx); top:var(--cy); width:0; height:0; transform:rotate(var(--base)); }   /* the hand: what lies along it is what is open */
+.dial .hand::after{ content:""; position:absolute; left:calc(var(--rp) + 11px); top:0; width:13px; height:1px; background:var(--sb); opacity:.85; }   /* on a phone: a short tick over the mark at the top */
+.ring{ position:absolute; left:var(--cx); top:var(--cy); width:0; height:0; }
+.ring a{ position:absolute; left:0; top:0; width:0; height:0; pointer-events:auto; color:color-mix(in srgb, var(--paper) 56%, transparent); transition:color .3s; -webkit-user-drag:none; -webkit-touch-callout:none; }
+.ring img{ -webkit-user-drag:none; pointer-events:none; }
+.places a{ transform:rotate(calc(var(--base) + var(--a) + var(--tp))) translateX(var(--rp)) rotate(calc(-1 * (var(--base) + var(--a) + var(--tp)))); }
+.places a b{ position:absolute; left:-6px; top:-6px; width:12px; height:12px; border-radius:50%; box-shadow:inset 0 0 0 1.5px currentColor; transition:background-color .3s, box-shadow .3s, transform .3s; }
+.places a span{ position:absolute; left:-40px; top:13px; width:80px; display:flex; flex-direction:column; align-items:center; gap:4px; white-space:nowrap; }   /* its name hangs under the mark */
+.places a em{ font:500 16px/1 var(--han); font-style:normal; letter-spacing:.16em; margin-right:-.16em; }
+.places a i{ font:italic 400 12.5px/1 var(--latin); letter-spacing:.05em; opacity:.62; }
+.places a::after{ content:""; position:absolute; left:-32px; top:-18px; width:64px; height:66px; }   /* a mark this small needs room to be touched */
+.places a.on{ color:var(--paper); }
+.places a.on b{ background:var(--sb); box-shadow:none; transform:scale(1.25); }
+.days a{ transform:rotate(calc(var(--base) + var(--dd) * (var(--a) + var(--td)))) translateX(var(--rd)) rotate(calc(-1 * (var(--base) + var(--dd) * (var(--a) + var(--td))))); }
+.days a img{ position:absolute; left:-12px; top:-12px; width:24px; height:24px; border-radius:50%; transition:transform .2s; }
+.days a i{ position:absolute; left:-12px; top:-6px; width:24px; text-align:center; font:italic 400 12px/1 var(--latin);
+  transform:rotate(calc(var(--base) + var(--dd) * (var(--a) + var(--td)))) translateX(-22px) rotate(calc(-1 * (var(--base) + var(--dd) * (var(--a) + var(--td))))); }   /* its day, set a little way in toward the hub */
+.days a::after{ content:""; position:absolute; left:-15px; top:-15px; width:30px; height:30px; }
+.days a.on{ color:var(--paper); } .days a.on img{ outline:1px solid var(--sb); outline-offset:3px; }
+
+.browse{ padding:22px 18px calc(env(safe-area-inset-bottom) + 72px); outline:0; }
 .none{ margin:34px 0 0; font:400 14.5px/1.8 var(--han); letter-spacing:.04em; color:var(--faint); }
 .none.wait{ font-style:italic; }
 .view .hd{ display:none; }
+.view.shelf .hd, .view.kept .hd{ display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 12px; margin:26px 0 0; }
+.hd h2{ margin:0; font:500 22px/1.1 var(--han); letter-spacing:.14em; }
+.hd p{ margin:0; font:italic 400 14.5px/1 var(--latin); letter-spacing:.05em; color:var(--faint); }
+.hd .count{ margin-left:10px; font:400 12px/1 var(--han); letter-spacing:.12em; font-style:normal; }
 
 /* the day: its postmark, struck by hand (eye/postmark.js lays --pm) */
-.read .day{ display:flex; align-items:center; gap:14px; height:62px; margin:18px 0 0 -6px; }
+.read .day{ display:flex; align-items:center; gap:14px; height:62px; margin:6px 0 0 -6px; }
 .read .day::before{ content:""; flex:none; width:128px; height:58px; background:var(--pm, none) no-repeat left center / contain; }
 .read .day span{ display:flex; flex-direction:column; gap:8px; font:italic 400 13.5px/1 var(--latin); letter-spacing:.17em; color:var(--faint); }
 .read .day em{ font:500 19px/1 var(--han); letter-spacing:.2em; color:var(--ink); font-style:normal; }
-.days{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 16px; margin:26px 0 0; font:italic 400 15px/1.5 var(--latin); letter-spacing:.06em; color:var(--faint); }
-.days span{ font:400 12px/1 var(--han); letter-spacing:.3em; }
-.days a{ color:var(--soft); border-bottom:1px solid var(--hair); padding-bottom:1px; }
 
 /* a heading: a short blue bar, the word, what it is in the other tongue, a hairline to the edge */
 .sec{ display:flex; align-items:center; gap:11px; margin:30px 0 4px; font:500 14.5px/1 var(--han); letter-spacing:.3em; }
@@ -73,13 +105,16 @@ html.is-reading .spine{ display:none; }
 .bi .hl{ font:500 17px/1.5 var(--han); letter-spacing:.02em; }
 .bi .cd{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; font:400 13.5px/1.75 var(--han); letter-spacing:.02em; color:var(--soft); }
 .bi .sr{ display:flex; align-items:center; gap:8px; font:400 12px/1 var(--han); letter-spacing:.12em; color:var(--faint); }
-.bi .sr .seal{ width:22px; height:22px; }
+.bi .sr .seal{ width:26px; height:26px; }
 .bi .sr em{ font-style:normal; }
 .bi .sr u{ text-decoration:none; padding:3px 7px 4px; box-shadow:inset 0 0 0 1px var(--hair); font-size:11px; letter-spacing:.08em; }
 
 /* ── a card: the source's seal, the piece, a small figure of it ── */
-.card, .ft{ position:relative; display:grid; grid-template-columns:30px minmax(0, 1fr) auto; gap:0 12px; align-items:start; padding:16px 0 15px; border-bottom:1px solid var(--hair); }
-.seal{ width:30px; height:30px; flex:none; }
+.card, .ft{ position:relative; display:grid; grid-template-columns:34px minmax(0, 1fr) auto; gap:0 12px; align-items:start; padding:16px 0 15px; border-bottom:1px solid var(--hair); }
+/* the seal: one of the twelve on the pencilled sheet (--sx, --sy: which), laid in the side's blue */
+.seal{ display:block; flex:none; width:34px; height:34px; background:var(--blue);
+  -webkit-mask:url(eye/seals.webp) calc(var(--sx) * 33.3333%) calc(var(--sy) * 50%) / 400% 300% no-repeat; mask:url(eye/seals.webp) calc(var(--sx) * 33.3333%) calc(var(--sy) * 50%) / 400% 300% no-repeat; }
+:root[data-side="moon"] .seal{ background:#8C95FF; }
 .tx{ display:flex; flex-direction:column; gap:5px; min-width:0; }
 .tt{ font:500 16.5px/1.5 var(--han); letter-spacing:.02em; }
 .tt.la{ font:500 20px/1.28 var(--latin); letter-spacing:.01em; }
@@ -100,7 +135,7 @@ html.is-reading .spine{ display:none; }
 .cv.disc{ width:68px; height:68px; border-radius:50%;
   background:radial-gradient(circle, var(--blue) 0 4px, transparent 4.6px), repeating-radial-gradient(circle, transparent 0 5px, var(--hair) 5px 6px); box-shadow:inset 0 0 0 1.5px var(--river); }
 .cv.disc i{ display:none; }
-.ft{ grid-template-columns:30px minmax(0, 1fr); gap:11px 12px; }
+.ft{ grid-template-columns:34px minmax(0, 1fr); gap:11px 12px; }
 .ft > .cv{ grid-column:1 / -1; width:100%; height:auto; aspect-ratio:16 / 8; margin:0; }
 .ft > .cv.disc{ display:none; }
 .ft .tt{ font-size:18.5px; } .ft .tt.la{ font-size:22.5px; }
@@ -135,7 +170,7 @@ html.is-reading .spine{ display:none; }
 .ah{ --p:0%; position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:8px; min-height:54px; margin:0 -18px; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px 8px;
   background:var(--paper) var(--grain); background-size:180px; box-shadow:0 1px 0 var(--hair); }
 .ah::after{ content:""; position:absolute; left:0; bottom:-1px; width:var(--p); height:2px; background:var(--blue); transition:width .15s linear; }   /* how far down the sheet … */
-.ah::before{ content:""; position:absolute; z-index:1; left:var(--p); bottom:-10px; width:21px; height:18px; margin-left:-6px; background:var(--blue); -webkit-mask:var(--sw) center / contain no-repeat; mask:var(--sw) center / contain no-repeat; transform:rotate(-6deg); transition:left .15s linear; pointer-events:none; }   /* … and a swallow flying at the head of that line */
+.ah::before{ content:""; position:absolute; z-index:1; left:clamp(var(--p0, 20px), var(--p), 100%); bottom:1px; width:16px; height:13px; margin-left:-15px; background:var(--blue); -webkit-mask:var(--sw) center / contain no-repeat; mask:var(--sw) center / contain no-repeat; transform:rotate(-4deg); transition:left .15s linear; pointer-events:none; }   /* … and a swallow riding at the head of that line */
 .shut{ flex:none; display:flex; align-items:center; gap:8px; padding:8px 8px 8px 6px; font:400 13.5px/1 var(--han); letter-spacing:.14em; }
 .prog{ flex:none; min-width:36px; font:italic 400 14.5px/1 var(--latin); letter-spacing:.06em; color:var(--faint); }
 .tools{ margin-left:auto; display:flex; align-items:center; gap:6px; overflow-x:auto; scrollbar-width:none; }
@@ -189,8 +224,19 @@ html.is-reading .spine{ display:none; }
 .body pre{ padding:12px 14px; overflow-x:auto; white-space:pre; font:400 .8em/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing:0; background:color-mix(in srgb, var(--ink) 5%, transparent); box-shadow:inset 1px 0 0 var(--river); }
 .body pre.tb{ white-space:pre-wrap; }
 .body pre span{ display:block; margin-bottom:6px; font:italic 400 13px/1 var(--latin); letter-spacing:.08em; color:var(--faint); }
-.body figure{ display:flex; flex-wrap:wrap; gap:4px 14px; align-items:baseline; padding:9px 0 9px 14px; border-left:1px solid var(--hair); font-size:.84em; line-height:1.7; color:var(--faint); }
-.body figure a{ color:var(--blue); text-decoration:underline 1px; text-underline-offset:4px; white-space:nowrap; }
+/* a figure, where it stands: the picture as it is; under it what the piece says of it and the way to the original */
+.body .figb{ margin:1.5em 0 1.6em; }
+.fig .pic{ display:block; min-height:150px; background:color-mix(in srgb, var(--ink) 5%, transparent); animation:rdwait 1.6s ease-in-out infinite alternate; }
+.fig .pic.has{ display:inline-block; min-height:0; background:none; animation:none; vertical-align:top; max-width:100%; }
+.fig .pic img{ display:block; max-width:100%; width:auto; height:auto; max-height:88vh; box-shadow:0 0 0 1px var(--hair); }
+:root[data-side="moon"] .fig .pic img{ filter:brightness(.86); }
+.fig figcaption{ display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; margin-top:9px; font-size:.8em; line-height:1.65; letter-spacing:.03em; color:var(--faint); }
+.fig figcaption span{ flex:1 1 12em; min-width:0; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
+.fig figcaption a{ flex:none; color:var(--faint); text-decoration:underline 1px; text-underline-offset:4px; white-space:nowrap; }
+.fig figcaption a:hover{ color:var(--blue); }
+.fig.gone{ padding:9px 0 9px 14px; border-left:1px solid var(--hair); }   /* the picture could not be fetched: its words, and the way to it */
+.fig.gone .pic{ display:none; } .fig.gone figcaption{ margin:0; } .fig.gone figcaption a{ color:var(--blue); }
+.fig.gone figcaption span:empty::before{ content:"原文配图"; }
 /* both tongues: the reading first, what it was written in under it, fainter */
 .body .pair .src{ margin-top:.42em; font-size:.86em; color:var(--faint); }
 .body.both .pair{ margin-bottom:1.5em; }
@@ -206,8 +252,7 @@ html.is-reading .spine{ display:none; }
 .read .toast.on{ opacity:1; transform:translate(-50%, 0); }
 
 @media (max-width:420px){
-  .ttl b{ font-size:27px; } .ttl small{ display:none; }
-  .sp-nav{ gap:15px; } .sp-nav a i{ font-size:15.5px; }
+  .ttl b{ font-size:27px; }
   .cv{ width:78px; height:58px; } .cv.disc{ width:58px; height:58px; }
   .sheet .title{ font-size:24px; } .sheet .title[lang="en"]{ font-size:29px; }
 }
@@ -220,9 +265,10 @@ html.is-reading .spine{ display:none; }
   .bi, .card, .ft{ transition:background-color .15s; }
   .bi:hover, .card:hover, .ft:hover{ background:color-mix(in srgb, var(--blue) 5%, transparent); }
   .bi:hover .hl, .card:hover .tt, .ft:hover .tt{ color:var(--blue); }
-  .flt button:not(.on):hover, .tb:not(.go):hover, .seg button:not(.on):hover, .act button:hover, .step button:not([disabled]):hover{ color:var(--blue); box-shadow:inset 0 0 0 1px var(--blue); }
+  .flt button:not(.on):hover, .pileb:not(.on):hover, .tb:not(.go):hover, .seg button:not(.on):hover, .act button:hover, .step button:not([disabled]):hover{ color:var(--blue); box-shadow:inset 0 0 0 1px var(--blue); }
   .tb.go:hover{ background:color-mix(in srgb, var(--blue) 86%, #000); }
-  .days a:hover, .shut:hover{ color:var(--blue); border-color:var(--blue); }
+  .shut:hover{ color:var(--blue); border-color:var(--blue); }
+  .places a:hover, .days a:hover{ color:var(--paper); } .days a:hover img{ transform:scale(1.2); }
 }
 
 /* ════════ a spread (a wide screen): the spine, the sheet, and the pile beside an open piece ════════ */
@@ -231,45 +277,29 @@ html.is-reading .spine{ display:none; }
   .rdx{ --spine:clamp(300px, 21.5vw, 372px); display:grid; grid-template-columns:var(--spine) minmax(0, 1fr); height:100vh; min-height:0; }
 
   /* ── the spine, in the other side's ground ── */
-  .spine, html.is-reading .spine{ --sb:#8C95FF; position:relative; z-index:3; display:flex; flex-direction:column; align-items:stretch; gap:0; padding:22px 30px 24px 34px; height:100vh; overflow:hidden;
-    background:var(--ink); color:var(--paper); box-shadow:none; }
-  :root[data-side="moon"] .spine{ --sb:#2933C4; }
-  .spine::-webkit-scrollbar{ display:none; }
-  /* behind it all, the house's orbits laid in the other side's hand (read.js draws them, geared to the rings below) */
-  .spine > .plate{ display:block; position:absolute; left:0; top:0; width:100%; height:100%; z-index:0; pointer-events:none; }
+  .spine, html.is-reading .spine{ position:relative; top:auto; z-index:3; display:flex; flex-direction:column; align-items:stretch; gap:0; padding:22px 30px 24px 34px; height:100vh; overflow:hidden;
+    touch-action:none; cursor:grab; }
+  .spine.held{ cursor:grabbing; }
+  .spine::after{ display:none; }
   .spine > :not(.plate):not(.dial){ position:relative; z-index:2; }
-  .sp-top{ display:block; padding:0; }
+  .sp-top{ position:relative; display:block; height:auto; padding:0; cursor:default; }
   .spine .back{ margin:0 0 14px -8px; opacity:.75; } .spine .back:hover{ opacity:1; }
   .ttl{ display:flex; align-items:baseline; gap:14px; }
   .ttl b{ font-size:62px; letter-spacing:.01em; }
   .ttl small{ margin:0; font-size:13px; letter-spacing:.5em; color:color-mix(in srgb, var(--paper) 62%, transparent); }
-  .sp-date{ display:block; margin:14px 0 0 3px; font:italic 400 15px/1 var(--latin); letter-spacing:.16em; color:color-mix(in srgb, var(--paper) 52%, transparent); }
-  .sp-nav{ display:none; }
-  /* the instrument. Its hub is tonight's moon; on the inner track the days before, one moon a day; on the outer the three
-     places. A ring is turned by --tp / --td (set by read.js) until what was chosen lies at the hand; each mark is kept upright. */
-  .dial{ --cx:40px; --cy:55%; --rp:190px; --rd:122px; --hub:122px; display:block; position:absolute; left:0; top:0; width:100%; height:100%; z-index:1; pointer-events:none;
-    transition:--tp 1s cubic-bezier(.3, .05, .2, 1), --td 1s cubic-bezier(.3, .05, .2, 1); }
-  .dial .hub{ position:absolute; left:var(--cx); top:var(--cy); width:var(--hub); height:var(--hub); transform:translate(-50%, -50%); }
-  .dial .hub img{ display:block; width:100%; height:100%; }
-  .dial .hand{ position:absolute; left:calc(var(--cx) + var(--rd) + 22px); top:var(--cy); width:calc(var(--rp) - var(--rd) - 38px); height:1px; background:var(--sb); opacity:.75; }   /* the hand: what lies along it is what is open */
-  .dial .hand::before{ content:""; position:absolute; left:calc(-1 * var(--rd) - 22px + var(--hub) / 2 + 8px); right:calc(100% + 36px); top:0; height:1px; background:var(--sb); opacity:.55; }
-  .ring{ position:absolute; left:var(--cx); top:var(--cy); width:0; height:0; }
-  .ring a{ position:absolute; left:0; top:0; width:0; height:0; pointer-events:auto; color:color-mix(in srgb, var(--paper) 56%, transparent); transition:color .3s; }
-  .places a{ transform:rotate(calc(var(--a) + var(--tp))) translateX(var(--rp)) rotate(calc(-1 * (var(--a) + var(--tp)))); }
-  .places a b{ position:absolute; left:-7px; top:-7px; width:14px; height:14px; border-radius:50%; box-shadow:inset 0 0 0 1.5px currentColor; transition:background-color .3s, box-shadow .3s, transform .3s; }
-  .places a span{ position:absolute; left:22px; top:-13px; display:flex; flex-direction:column; gap:5px; white-space:nowrap; }
-  .places a em{ font:500 19px/1 var(--han); font-style:normal; letter-spacing:.22em; }
-  .places a i{ font:italic 400 14.5px/1 var(--latin); letter-spacing:.05em; opacity:.62; }
-  .places a::after{ content:""; position:absolute; left:-18px; top:-24px; width:126px; height:48px; }   /* a mark this small needs room to be touched */
-  .places a:hover{ color:var(--paper); }
-  .places a.on{ color:var(--paper); }
-  .places a.on b{ background:var(--sb); box-shadow:none; transform:scale(1.25); }
-  .days a{ transform:rotate(calc(var(--a) + var(--td))) translateX(var(--rd)) rotate(calc(-1 * (var(--a) + var(--td)))); }
-  .days a img{ position:absolute; left:-13px; top:-13px; width:26px; height:26px; border-radius:50%; transition:transform .2s; }
-  .days a i{ position:absolute; left:-12px; top:-7px; width:24px; text-align:center; font:italic 400 13px/1 var(--latin);
-    transform:rotate(calc(var(--a) + var(--td))) translateX(-25px) rotate(calc(-1 * (var(--a) + var(--td)))); }   /* its day, set a little way in toward the hub */
-  .days a:hover{ color:var(--paper); } .days a:hover img{ transform:scale(1.2); }
-  .days a.on{ color:var(--paper); } .days a.on img{ outline:1px solid var(--sb); outline-offset:3px; }
+  .sp-date{ margin:14px 0 0 3px; font-size:15px; letter-spacing:.16em; color:color-mix(in srgb, var(--paper) 52%, transparent); }
+  /* the instrument on the spine: the moon at its left, the hand pointing right, the days running on clockwise */
+  .dial{ --cx:40px; --cy:55%; --rp:190px; --rd:122px; --hub:122px; --base:0deg; --dd:1; }
+  .dial .hand::after{ left:calc(var(--rd) + 22px); width:calc(var(--rp) - var(--rd) - 38px); opacity:.75; }
+  .dial .hand::before{ content:""; position:absolute; left:calc(var(--hub) / 2 + 8px); top:0; width:calc(var(--rd) - var(--hub) / 2 - 22px); height:1px; background:var(--sb); opacity:.4; }
+  .places a b{ left:-7px; top:-7px; width:14px; height:14px; }
+  .places a span{ left:22px; top:-13px; width:auto; align-items:flex-start; gap:5px; }   /* on the spine its name stands beside the mark */
+  .places a em{ font-size:19px; letter-spacing:.22em; margin-right:0; }
+  .places a i{ font-size:14.5px; }
+  .places a::after{ left:-18px; top:-24px; width:126px; height:48px; }
+  .days a img{ left:-13px; top:-13px; width:26px; height:26px; }
+  .days a i{ top:-7px; font-size:13px;
+    transform:rotate(calc(var(--base) + var(--dd) * (var(--a) + var(--td)))) translateX(-25px) rotate(calc(-1 * (var(--base) + var(--dd) * (var(--a) + var(--td))))); }
   .sp-foot{ display:block; margin-top:auto; }
   .sp-foot p{ margin:6px 0 0; font:400 12px/1.5 var(--han); letter-spacing:.08em; color:color-mix(in srgb, var(--paper) 56%, transparent); }
   .sp-foot button{ font:400 12px/1.5 var(--han); letter-spacing:.14em; color:var(--paper); border-bottom:1px solid color-mix(in srgb, var(--paper) 45%, transparent); padding-bottom:1px; }
@@ -280,17 +310,23 @@ html.is-reading .spine{ display:none; }
 
   /* ── the sheet ── */
   .stage{ position:relative; min-width:0; height:100vh; overflow:hidden; }
-  .stage > .plate{ display:block; position:absolute; left:0; top:0; width:100%; height:100%; z-index:0; pointer-events:none; }   /* the orbits, far behind the sheet */
-  html.is-reading .stage > .plate{ display:none; }
+  /* far behind the sheet, a leaf of the sketchbook, pale: by day the study of a swallow, by night the swallow among the
+     stars. With every turn of a ring the swallow flies on a little (--fly, read.js). */
+  .stage > .leaf{ display:block; position:absolute; z-index:0; right:-5%; bottom:-9%; width:min(78%, 1180px); aspect-ratio:3 / 2; pointer-events:none; opacity:.18;
+    background:url(eye/draft-day-a.webp) center / contain no-repeat;
+    -webkit-mask-image:radial-gradient(ellipse 50% 50% at 50% 50%, #000 58%, transparent 100%); mask-image:radial-gradient(ellipse 50% 50% at 50% 50%, #000 58%, transparent 100%);
+    transform:translate(calc(var(--fly, 0) * 30px), calc(var(--fly, 0) * -11px)) rotate(calc(var(--fly, 0) * -1deg)); transition:transform 1.5s cubic-bezier(.3, .05, .2, 1); }
+  :root[data-side="moon"] .stage > .leaf{ background-image:url(eye/draft-night-a.webp); opacity:.2; }
+  html.is-reading .stage > .leaf{ display:none; }
   .browse, .reading{ position:relative; z-index:1; }
   .browse{ height:100%; overflow-y:auto; padding:38px clamp(40px, 3.6vw, 76px) 80px clamp(56px, 4.2vw, 92px); }
   .view{ max-width:1560px; margin:0 auto; }
-  .view .day, .view .days{ display:none; }   /* the spine carries the day and the days before */
-  .view .hd{ position:relative; display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 20px; margin:0 0 4px; }
-  .hd h2{ margin:0; font:500 40px/1.1 var(--han); letter-spacing:.1em; }
-  .hd p{ margin:0; font:italic 400 18px/1 var(--latin); letter-spacing:.05em; color:var(--faint); }
+  .view .day{ display:none; }   /* the spine carries the day */
+  .view .hd, .view.shelf .hd, .view.kept .hd{ position:relative; display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 20px; margin:0 0 4px; }
+  .hd h2{ font-size:40px; letter-spacing:.1em; }
+  .hd p{ font-size:18px; }
   .hd p a{ margin-left:4px; font:400 13px/1 var(--han); letter-spacing:.14em; color:var(--blue); }
-  .hd .count{ margin-left:14px; font:400 13px/1 var(--han); letter-spacing:.12em; font-style:normal; }
+  .hd .count{ margin-left:14px; font-size:13px; }
   .sec{ margin-top:34px; font-size:15.5px; }
   .sec i{ font-size:15.5px; }
 
@@ -300,22 +336,22 @@ html.is-reading .spine{ display:none; }
   .bi .no{ font-size:42px; line-height:1; }
   .bi .hl{ font-size:21.5px; line-height:1.45; }
   .bi .cd{ display:block; font-size:14.5px; line-height:1.8; }
-  .bi .sr{ margin-top:2px; font-size:12.5px; } .bi .sr .seal{ width:24px; height:24px; }
+  .bi .sr{ margin-top:2px; font-size:12.5px; } .bi .sr .seal{ width:30px; height:30px; }
 
   .card, .ft{ margin:0 -16px; padding:19px 16px 18px; }
-  .card{ grid-template-columns:34px minmax(0, 1fr) auto; gap:0 14px; }
-  .seal{ width:34px; height:34px; }
+  .card{ grid-template-columns:40px minmax(0, 1fr) auto; gap:0 14px; }
+  .seal{ width:40px; height:40px; }
   .tt{ font-size:17.5px; } .tt.la{ font-size:22px; }
   .sm{ font-size:14px; } .mt{ font-size:12px; }
   .cv{ width:128px; height:90px; } .cv.disc{ width:78px; height:78px; margin:6px 25px 0; }
   .grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(440px, 1fr)); gap:0 clamp(40px, 3.4vw, 72px); }
   .grid .sec{ grid-column:1 / -1; }
-  .ft{ grid-template-columns:34px minmax(0, 1fr); gap:13px 14px; }
+  .ft{ grid-template-columns:40px minmax(0, 1fr); gap:13px 14px; }
   .ft > .cv{ aspect-ratio:16 / 7.4; }
   .ft .tt{ font-size:23px; line-height:1.42; } .ft .tt.la{ font-size:28px; }
   .ft .sm{ font-size:14.5px; }
   /* after the first, a feature lies as a card does, with a larger figure */
-  .fts .ft:not(:first-child){ grid-template-columns:34px minmax(0, 1fr) auto; gap:0 14px; }
+  .fts .ft:not(:first-child){ grid-template-columns:40px minmax(0, 1fr) auto; gap:0 14px; }
   .fts .ft:not(:first-child) > .cv{ grid-column:3; grid-row:1; width:156px; height:108px; aspect-ratio:auto; }
   .fts .ft:not(:first-child) .tt{ font-size:19px; } .fts .ft:not(:first-child) .tt.la{ font-size:23px; }
   .bar{ margin:22px 0 0; gap:14px 26px; }
@@ -324,13 +360,19 @@ html.is-reading .spine{ display:none; }
   .find input{ padding:11px 0 12px; font-size:15px; }
   .act button, .resume button{ padding:13px 28px 14px; font-size:14.5px; }
 
-  /* ── a piece open: the pile as a rail, the piece beside it ── */
-  .reading{ display:grid; grid-template-columns:clamp(290px, 21vw, 372px) minmax(0, 1fr); height:100%; }
-  .rail{ display:block; height:100%; overflow-y:auto; padding:30px 0 60px; background:color-mix(in srgb, var(--ink) 3.5%, transparent); box-shadow:inset -1px 0 0 var(--hair); }
+  /* ── a piece open: alone on the sheet; the pile it came from is laid beside it when asked for (the button at its head) ── */
+  .reading{ display:grid; grid-template-columns:minmax(0, 1fr); height:100%; }
+  .reading.piled{ grid-template-columns:clamp(290px, 21vw, 372px) minmax(0, 1fr); }
+  .reading.piled .rail{ display:block; }
+  .pileb{ flex:none; display:flex; align-items:center; gap:8px; height:35px; padding:0 13px 0 10px; box-shadow:inset 0 0 0 1px var(--hair); font:400 13.5px/1 var(--han); letter-spacing:.14em; color:var(--soft); white-space:nowrap; }
+  .pileb svg{ width:17px; height:17px; }
+  .pileb i{ font:italic 400 15.5px/1 var(--latin); letter-spacing:.02em; color:var(--faint); }
+  .pileb.on{ color:var(--blue); box-shadow:inset 0 0 0 1px var(--blue); } .pileb.on i{ color:inherit; }
+  .rail{ height:100%; overflow-y:auto; padding:30px 0 60px; background:color-mix(in srgb, var(--ink) 3.5%, transparent); box-shadow:inset -1px 0 0 var(--hair); }
   .rail h4{ display:flex; align-items:baseline; gap:10px; margin:0 26px 16px clamp(34px, 2.6vw, 50px); font:500 14.5px/1 var(--han); letter-spacing:.3em; }
   .rail h4 i{ font:italic 400 16px/1 var(--latin); letter-spacing:.04em; color:var(--faint); }
-  .rail a{ position:relative; display:grid; grid-template-columns:26px minmax(0, 1fr); gap:0 11px; padding:13px 22px 13px clamp(34px, 2.6vw, 50px); border-top:1px solid var(--hair); transition:background-color .15s; }
-  .rail .seal{ width:26px; height:26px; margin-top:1px; }
+  .rail a{ position:relative; display:grid; grid-template-columns:30px minmax(0, 1fr); gap:0 11px; padding:13px 22px 13px clamp(34px, 2.6vw, 50px); border-top:1px solid var(--hair); transition:background-color .15s; }
+  .rail .seal{ width:30px; height:30px; margin-top:1px; }
   .rail b{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; font:400 14.5px/1.5 var(--han); letter-spacing:.02em; color:var(--soft); }
   .rail a.new b{ font-weight:500; color:var(--ink); }
   .rail small{ display:block; margin-top:5px; font:400 11px/1.3 var(--han); letter-spacing:.08em; color:var(--faint); }
@@ -340,7 +382,7 @@ html.is-reading .spine{ display:none; }
   .rail a.on b{ color:var(--ink); }
 
   .ar{ height:100%; overflow-y:auto; padding:0; }
-  .ah{ min-height:64px; margin:0; padding:12px clamp(32px, 3vw, 60px); gap:14px; }
+  .ah{ --p0:64px; min-height:64px; margin:0; padding:12px clamp(32px, 3vw, 60px); gap:14px; }   /* --p0: the swallow starts clear of the spine's grain */
   .shut{ padding:8px 14px 9px 10px; box-shadow:inset 0 0 0 1px var(--hair); font-size:13.5px; }
   .step{ display:flex; gap:6px; }
   .step button{ width:35px; height:35px; display:grid; place-items:center; box-shadow:inset 0 0 0 1px var(--hair); }
@@ -386,11 +428,11 @@ html.is-reading .spine{ display:none; }
   .body.both .pair{ display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); column-gap:60px; align-items:start; margin-bottom:1.25em; }
   .body.both .pair .src{ order:-1; margin-top:.1em; font-size:.92em; color:var(--soft); }
   .body.both .blk:not(.pair){ max-width:calc(50% - 30px); margin-left:calc(50% + 30px); }
+  .body.both .blk.figb{ max-width:none; margin-left:0; text-align:center; }   /* a figure belongs to both pages: across the fold */
+  .body.both .figb .fig{ display:inline-block; max-width:min(100%, 980px); text-align:left; }
 }
-/* a narrower desk: no room for the rail beside the piece */
+/* a narrower desk: no room for the headings down the side of a piece */
 @media (min-width:1100px) and (max-width:1439px){
-  .reading{ grid-template-columns:minmax(0, 1fr); }
-  .rail{ display:none; }
   .page{ grid-template-columns:minmax(0, 780px); }
   .toc{ display:none; }
 }
