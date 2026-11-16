@@ -55,8 +55,8 @@ HERE = {
     "effort": ("[low|medium|high|xhigh|max]", "How hard it thinks"),
     "mode": ("[ask|edits|plan|auto]", "Permission mode: ask first, accept edits, plan, auto"),
     "compact": ("[what to keep]", "Summarise the window so far to free up context"),
-    "clear": ("", "A new window; the last hours of talk are handed over"),
-    "new": ("", "A new window; the last hours of talk are handed over"),
+    "clear": ("", "Another window, in a tab of its own"),
+    "new": ("", "Another window, in a tab of its own"),
     "sessions": ("", "All windows, in groups: open, rename, file, archive"),
     "resume": ("", "Go back to an earlier window"),
     "rename": ("<title>", "Name this window"),
@@ -112,6 +112,18 @@ def register(app, g, x):
     USAGE_FILE, window_model = x["USAGE_FILE"], x["window_model"]
     effort_file, effort_pending = x["EFFORT_FILE"], x["EFFORT_PENDING"]
     mode_file, pending_file, meta_file = data_dir / "mode_pick", data_dir / "cc_pending.json", data_dir / "windows_meta.json"
+    # tabs: side windows next to the main one (nyx_extras: live_windows, open_side …). Everything below that acts on a window
+    # takes its tmux name; the main window's picks are kept in the data dir for its next start, a side window's only here.
+    tgt, live_windows, window_of, is_window = x["tgt"], x["live_windows"], x["window_of"], x["is_window"]
+    open_side, close_side, side_picks, MAX_WINDOWS = x["open_side"], x["close_side"], x["side_picks"], x["MAX_WINDOWS"]
+    side_pending = {}   # sid -> {"model": …, "effort": …} waiting for a side window to be quiet
+
+    async def win(sid):
+        """A tab's window by its session id ("" = the main one); 404 if that session isn't open in any window."""
+        name = await asyncio.to_thread(window_of, str(sid or ""))
+        if not name:
+            raise HTTPException(status_code=404, detail="that session isn't open in a window")
+        return name
 
     # ---------------- what Claude Code itself says: initialize + get_usage ----------------
     probe = {"init": None, "init_at": 0.0, "usage": None, "usage_at": 0.0, "err": "", "tried": 0.0}
@@ -261,14 +273,16 @@ def register(app, g, x):
                 return FOOT[m.group(1)]
         return None
 
-    def capture(scroll=0):
-        a = ["capture-pane", "-p", "-t", TMUX] + (["-J", "-S", str(-scroll)] if scroll else [])
+    def capture(scroll=0, name=TMUX):
+        a = ["capture-pane", "-p", "-t", tgt(name)] + (["-J", "-S", str(-scroll)] if scroll else [])
         p = tmux(*a)
         return p.stdout if p.returncode == 0 else None
 
-    def window_state():
-        sid = str(session_meta().get("sessionId") or "")
-        text = capture()
+    def window_state(name=TMUX):
+        main = name == TMUX
+        sid = str(session_meta(name).get("sessionId") or "")
+        text = capture(name=name)
+        mine = side_picks.get(sid) or {}
         sl, sl_at = statusline(sid)
         names, by_model = {m["id"]: m for m in models()}, {}
         for m in models():   # a full model id → its short name (opus, fable …), which come first in the list
@@ -278,12 +292,12 @@ def register(app, g, x):
         cands = []
         if (sl.get("model") or {}).get("id"):
             cands.append((sl_at, sl["model"]["id"]))
-        mid, at = window_model()
+        mid, at = window_model(name)
         if mid:
             cands.append((at, mid))
-        pick = read(model_file)
+        pick = read(model_file) if main else (mine.get("model") or ("",))[0]
         if pick:
-            cands.append((mtime(model_file), pick))
+            cands.append((mtime(model_file) if main else mine["model"][1], pick))
         cur = max(cands)[1] if cands else None
         entry = names.get(cur) or by_model.get(cur) or {}
         model = {"id": entry.get("id") or cur, "model": entry.get("model") or cur,
@@ -292,13 +306,13 @@ def register(app, g, x):
             model["name"] = (by_model.get(entry.get("model")) or {}).get("name") or model["name"]
         # effort: the status line if it's this window's and newer than a pick made here; then the badge on the pane
         effort = None
-        if sl.get("effort") and sl_at >= mtime(effort_file):
+        if sl.get("effort") and sl_at >= (mtime(effort_file) if main else (mine.get("effort") or ("", 0))[1]):
             effort = (sl.get("effort") or {}).get("level")
         if not effort and text:
             m = BADGE_RE.search(text) or BANNER_RE.search(text)
             effort = m and m.group(1)
         if not effort:
-            effort = read(effort_file) or None
+            effort = (read(effort_file) if main else (mine.get("effort") or ("",))[0]) or None
         if not effort:
             try:
                 ms = json.loads(SETTINGS.read_text()).get("modelSettings") or {}
@@ -308,24 +322,24 @@ def register(app, g, x):
         mode = footer_mode(text) if text else None
         if not mode and sid:
             mode = transcript_mode(sid)
-        pend = load_pending()
-        if read(effort_pending):
+        pend = load_pending(name, sid)
+        if main and read(effort_pending):
             pend.setdefault("effort", read(effort_pending))
-        return {"sid": sid, "online": text is not None, "model": model, "effort": effort if effort in LEVELS else None,
+        return {"sid": sid, "main": main, "online": text is not None, "model": model, "effort": effort if effort in LEVELS else None,
                 "mode": mode, "fast": bool(sl.get("fast_mode")) if sl else None, "pending": pend,
                 "efforts": entry.get("efforts") or list(LEVELS)}
 
-    async def state():
+    async def state(name=TMUX):
         await refresh()
-        st = await asyncio.to_thread(window_state)
+        st = await asyncio.to_thread(window_state, name)
         st.update(models=models(), limits=limits(), plan=plan_name(), modes=[{"id": k, "name": n} for k, n, _ in MODES],
                   limits_at=probe["usage_at"] or None, probe_error=probe["err"] or None)
         return st
 
-    async def enrich(m):
+    async def enrich(m, name=TMUX):
         """GET /app/meter for Claude Code: the live limits and the full model list over what the status line said."""
         try:
-            st = await state()
+            st = await state(name)
         except Exception as e:
             m["probe_error"] = str(e)[:200]
             return m
@@ -379,79 +393,106 @@ def register(app, g, x):
         await asyncio.sleep(1.5)   # in case Claude Code writes the file a moment after it says so
         await asyncio.to_thread(restore, snap)
 
-    async def ready(busy_ok=False):
+    async def ready(busy_ok=False, name=TMUX):
         """True: the window is idle at its input box. False: it is mid-turn. Raises when it's closed or a question is up."""
-        st = await asyncio.to_thread(claude_busy)
+        st = await asyncio.to_thread(claude_busy, name)
         if st.get("state") == "offline":
             raise HTTPException(status_code=503, detail="the window isn't open")
-        text = await asyncio.to_thread(capture)
+        text = await asyncio.to_thread(capture, 0, name)
         if text is None:
             raise HTTPException(status_code=503, detail="the window isn't open")
         if not input_box_showing(text):
             raise HTTPException(status_code=409, detail="the window is waiting on a question; answer it in the terminal first")
         return busy_ok or st.get("state") == "idle"
 
-    type_lock = asyncio.Lock()
+    type_locks = {}   # one per window: what is typed into one window waits only for that window
 
-    async def type_line(line):
+    def type_lock(name=TMUX):
+        return type_locks.setdefault(name, asyncio.Lock())
+
+    async def type_line(line, name=TMUX):
         for a in (("C-u",), ("-l", "--", line), ("Enter",)):
-            p = await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, *a)
+            p = await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), *a)
             if p.returncode != 0:
                 raise HTTPException(status_code=502, detail="couldn't reach the window")
             await asyncio.sleep(0.05)
 
-    async def type_and_wait(line, mark, tries=12):
-        before = (await asyncio.to_thread(capture, 300) or "").count(mark)
-        await type_line(line)
+    async def type_and_wait(line, mark, tries=12, name=TMUX):
+        before = (await asyncio.to_thread(capture, 300, name) or "").count(mark)
+        await type_line(line, name)
         for _ in range(tries):
             await asyncio.sleep(0.5)
-            if (await asyncio.to_thread(capture, 300) or "").count(mark) > before:
+            if (await asyncio.to_thread(capture, 300, name) or "").count(mark) > before:
                 return True
         return False
 
-    async def apply_model(mid):
-        async with type_lock:
+    def keep_pick(name, kind, value, f):
+        """The main window's pick goes in the data dir (its next start reads it); a side window's is only remembered here."""
+        if name == TMUX:
+            f.write_text(value, encoding="utf-8")
+        else:
+            sid = str(session_meta(name).get("sessionId") or "")
+            if sid:
+                side_picks.setdefault(sid, {})[kind] = (value, time.time())
+
+    async def apply_model(mid, name=TMUX):
+        async with type_lock(name):
             snap = await asyncio.to_thread(snapshot)
-            ok = await type_and_wait("/model " + mid, "Set model to")
+            ok = await type_and_wait("/model " + mid, "Set model to", name=name)
             asyncio.get_running_loop().create_task(keep_defaults(snap))
         if ok:
-            model_file.write_text(mid, encoding="utf-8")
+            keep_pick(name, "model", mid, model_file)
         return ok
 
-    async def apply_effort(level):
-        async with type_lock:
+    async def apply_effort(level, name=TMUX):
+        async with type_lock(name):
             snap = await asyncio.to_thread(snapshot)
-            ok = await type_and_wait("/effort " + level, "Set effort level to")
+            ok = await type_and_wait("/effort " + level, "Set effort level to", name=name)
             asyncio.get_running_loop().create_task(keep_defaults(snap))
         if ok:
-            effort_file.write_text(level, encoding="utf-8")
-            try:
-                effort_pending.unlink()
-            except OSError:
-                pass
+            keep_pick(name, "effort", level, effort_file)
+            if name == TMUX:
+                try:
+                    effort_pending.unlink()
+                except OSError:
+                    pass
         return ok
 
-    async def apply_mode(target):
-        async with type_lock:
+    async def apply_mode(target, name=TMUX):
+        async with type_lock(name):
             for _ in range(len(MODES) + 2):
-                cur = footer_mode(await asyncio.to_thread(capture))
+                cur = footer_mode(await asyncio.to_thread(capture, 0, name))
                 if cur == target:
-                    mode_file.write_text(target, encoding="utf-8")
+                    keep_pick(name, "mode", target, mode_file)
                     return True
                 if cur is None:
                     return False
-                await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, "BTab")
+                await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "BTab")
                 await asyncio.sleep(0.6)
         return False
 
-    def load_pending():
+    def load_pending(name=TMUX, sid=None):
+        if name != TMUX:
+            sid = sid if sid is not None else str(session_meta(name).get("sessionId") or "")
+            return dict(side_pending.get(sid) or {})
         try:
             d = json.loads(pending_file.read_text())
             return d if isinstance(d, dict) else {}
         except (OSError, ValueError):
             return {}
 
-    def save_pending(**kw):
+    def save_pending(name=TMUX, **kw):
+        if name != TMUX:
+            sid = str(session_meta(name).get("sessionId") or "")
+            d = side_pending.setdefault(sid, {})
+            for k, v in kw.items():
+                if v is None:
+                    d.pop(k, None)
+                else:
+                    d[k] = v
+            if not d:
+                side_pending.pop(sid, None)
+            return
         d = load_pending()
         for k, v in kw.items():
             if v is None:
@@ -467,33 +508,46 @@ def register(app, g, x):
                 pass
 
     async def pending_watch():
-        """A model or effort picked mid-turn goes in once the window is quiet again."""
+        """A model or effort picked mid-turn goes in once that window is quiet again."""
         while True:
             await asyncio.sleep(4)
-            p = load_pending()
-            if not p or backend() == "codex":
+            if backend() == "codex":
                 continue
-            try:
-                if not await ready():
+            ws = [(TMUX, "")]
+            if side_pending:
+                live = {w["sid"]: w["name"] for w in await asyncio.to_thread(live_windows) if w["sid"]}
+                for sid in list(side_pending):
+                    if sid in live:
+                        ws.append((live[sid], sid))
+                    else:
+                        side_pending.pop(sid, None)   # its window closed
+            for name, sid in ws:
+                p = load_pending(name, sid or None)
+                if not p:
                     continue
-                if p.get("model"):
-                    ok = await apply_model(p["model"])
-                    save_pending(model=None)
-                    await say(f"model → {p['model']}" + ("" if ok else " (sent; the window didn't confirm)"))
-                if p.get("effort"):
-                    ok = await apply_effort(p["effort"])
-                    save_pending(effort=None)
-                    await say(f"effort → {p['effort']}" + ("" if ok else " (sent; the window didn't confirm)"))
-            except HTTPException:
-                continue
-            except Exception:
-                continue
+                try:
+                    if not await ready(name=name):
+                        continue
+                    sid = sid or str(session_meta(name).get("sessionId") or "")
+                    if p.get("model"):
+                        ok = await apply_model(p["model"], name)
+                        save_pending(name, model=None)
+                        await say(f"model → {p['model']}" + ("" if ok else " (sent; the window didn't confirm)"), sid=sid)
+                    if p.get("effort"):
+                        ok = await apply_effort(p["effort"], name)
+                        save_pending(name, effort=None)
+                        await say(f"effort → {p['effort']}" + ("" if ok else " (sent; the window didn't confirm)"), sid=sid)
+                except HTTPException:
+                    continue
+                except Exception:
+                    continue
 
     g.setdefault("NYX_STARTUP", []).append(pending_watch)
 
-    async def say(text, **meta):
-        """A small note from the window into the chat (kind "term"): kept, shown to you, never sent to the companion."""
-        msg = save_message("out", "term", text, {"ts": now_iso(), "note": True, **meta})
+    async def say(text, sid="", **meta):
+        """A small note from the window into the chat (kind "term"): kept, shown to you, never sent to the companion.
+        sid: the tab it belongs to, so the page shows it there."""
+        msg = save_message("out", "term", text, {"ts": now_iso(), "note": True, **({"sid": sid} if sid else {}), **meta})
         await broadcast(g["app_subs"], app_payload(msg))
         return msg
 
@@ -503,11 +557,11 @@ def register(app, g, x):
 
     # ---------------- routes ----------------
     @app.get("/app/cc")
-    async def cc_get(request: Request):
+    async def cc_get(request: Request, sid: str = ""):
         check_auth(request)
         if backend() == "codex":
             raise HTTPException(status_code=404, detail="Claude Code only")
-        return await state()
+        return await state(await win(sid))
 
     @app.get("/app/cc/commands")
     async def cc_commands(request: Request):
@@ -531,16 +585,17 @@ def register(app, g, x):
         check_auth(request)
         b = await request.json()
         mid = str(b.get("model") or "").strip()
+        name = await win(b.get("sid"))
         await refresh(wait=12)
         if mid not in {m["id"] for m in models()}:
             raise HTTPException(status_code=400, detail="unknown model")
-        if not await ready():
-            save_pending(model=mid)
+        if not await ready(name=name):
+            save_pending(name, model=mid)
             return {"ok": True, "pending": True, "model": mid}
-        save_pending(model=None)
-        ok = await apply_model(mid)
+        save_pending(name, model=None)
+        ok = await apply_model(mid, name)
         if b.get("note"):
-            await say(f"/model {mid}  \u2192  " + ("set" if ok else "sent; the window didn't confirm"))
+            await say(f"/model {mid}  \u2192  " + ("set" if ok else "sent; the window didn't confirm"), sid=b.get("sid") or "")
         return {"ok": True, "model": mid, "confirmed": ok}
 
     @app.post("/app/cc/effort")
@@ -550,13 +605,14 @@ def register(app, g, x):
         lv = str(b.get("level") or "").strip().lower()
         if lv not in LEVELS:
             raise HTTPException(status_code=400, detail="effort is one of " + ", ".join(LEVELS))
-        if not await ready():
-            save_pending(effort=lv)
+        name = await win(b.get("sid"))
+        if not await ready(name=name):
+            save_pending(name, effort=lv)
             return {"ok": True, "pending": True, "level": lv}
-        save_pending(effort=None)
-        ok = await apply_effort(lv)
+        save_pending(name, effort=None)
+        ok = await apply_effort(lv, name)
         if b.get("note"):
-            await say(f"/effort {lv}  \u2192  " + ("set" if ok else "sent; the window didn't confirm"))
+            await say(f"/effort {lv}  \u2192  " + ("set" if ok else "sent; the window didn't confirm"), sid=b.get("sid") or "")
         return {"ok": True, "level": lv, "confirmed": ok}
 
     @app.post("/app/cc/mode")
@@ -566,12 +622,13 @@ def register(app, g, x):
         md = str(b.get("mode") or "").strip()
         if md not in FOOT.values() or md == "bypassPermissions":
             raise HTTPException(status_code=400, detail="mode is one of " + ", ".join(k for k, _, _ in MODES))
-        await ready(busy_ok=True)   # shift+tab works mid-turn too
-        ok = await apply_mode(md)
+        name = await win(b.get("sid"))
+        await ready(busy_ok=True, name=name)   # shift+tab works mid-turn too
+        ok = await apply_mode(md, name)
         if not ok:
             raise HTTPException(status_code=502, detail="the window didn't show that mode")
         if b.get("note"):
-            await say(f"/mode {md}  \u2192  set")
+            await say(f"/mode {md}  \u2192  set", sid=b.get("sid") or "")
         return {"ok": True, "mode": md}
 
     # a terminal command: the echo of the command, then everything under it down to the input box
@@ -611,19 +668,21 @@ def register(app, g, x):
         name, args = parse_cmd(text)
         if not name or name not in TERMINAL or "\n" in text or len(text) > 400 or any(ord(c) < 32 for c in text):
             raise HTTPException(status_code=400, detail="not a terminal command")
-        if not await ready():
+        wsid = str(b.get("sid") or "")
+        wn = await win(wsid)
+        if not await ready(name=wn):
             raise HTTPException(status_code=409, detail="busy")
-        meta = {"user": "human", "ts": now_iso()}
+        meta = {"user": "human", "ts": now_iso(), **({"sid": wsid} if wsid else {})}
         if b.get("side") in ("sun", "moon"):
             meta["side"] = b["side"]
         cmd = save_message("in", "cmd", text, meta)
         await broadcast(g["app_subs"], app_payload(cmd))
-        async with type_lock:
-            await type_line(text)
+        async with type_lock(wn):
+            await type_line(text, wn)
             last, same, out, dialog = None, 0, "", False
             for _ in range(24):   # wait until the screen stops changing (or a dialog is up)
                 await asyncio.sleep(0.45)
-                now = await asyncio.to_thread(capture, 400)
+                now = await asyncio.to_thread(capture, 400, wn)
                 if now is None:
                     break
                 if now == last:
@@ -636,11 +695,11 @@ def register(app, g, x):
                 out, dialog = cut(last, name)
             if dialog:   # read it, then close it so the window is free again
                 for _ in range(3):
-                    await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, "Escape")
+                    await asyncio.to_thread(tmux, "send-keys", "-t", tgt(wn), "Escape")
                     await asyncio.sleep(0.6)
-                    if input_box_showing(await asyncio.to_thread(capture) or ""):
+                    if input_box_showing(await asyncio.to_thread(capture, 0, wn) or ""):
                         break
-        res = await say(out or "(it printed nothing)", cmd=name, ref=cmd["id"], dialog=dialog, note=False)
+        res = await say(out or "(it printed nothing)", sid=wsid, cmd=name, ref=cmd["id"], dialog=dialog, note=False)
         return {"ok": True, "cmd": app_payload(cmd), "out": app_payload(res)}
 
     # a "/skill …" sent as a message: tell the companion it came from the / menu, so it runs it and answers here
@@ -757,14 +816,15 @@ def register(app, g, x):
             except (OSError, ValueError):
                 continue
             sid = str(d.get("sessionId") or "")
-            if not sid or str(d.get("tmux") or "").split(":")[0] == TMUX:
+            if not sid or is_window(str(d.get("tmux") or "").split(":")[0]):   # the page's own windows, main and side
                 continue
             ep = str(d.get("entrypoint") or d.get("kind") or "")
             out[sid] = "vscode" if "vscode" in ep else "terminal" if ep in ("cli", "interactive") else ep or "elsewhere"
         return out
 
     def scan_sessions():
-        cur = str(session_meta().get("sessionId") or "")
+        wins = {w["sid"]: w for w in live_windows() if w["sid"]}
+        cur = next((s_ for s_, w in wins.items() if w["main"]), "")
         out, away = [], open_elsewhere()
         for pd in project_dirs():
             for f in pd.glob("*.jsonl"):
@@ -779,13 +839,14 @@ def register(app, g, x):
                 if not hit or hit[0] != key:
                     hit = scan_cache[f.stem] = (key, read_session(f))
                 info = hit[1]
-                if not info or (not info["messages"] and f.stem != cur):
+                if not info or (not info["messages"] and f.stem not in wins):
                     continue
-                out.append({"sid": f.stem, **info, "last": datetime.fromtimestamp(mt, timezone.utc).isoformat(), "current": f.stem == cur,
+                out.append({"sid": f.stem, **info, "last": datetime.fromtimestamp(mt, timezone.utc).isoformat(), "current": f.stem == cur, "open": f.stem in wins,
                             "elsewhere": away.get(f.stem), "readonly": pd != CLAUDE_PROJECT, "folder": "companion" if pd != CLAUDE_PROJECT else ""})
-        if cur and not any(w["current"] for w in out):
-            out.append({"sid": cur, "started": None, "messages": 0, "first_text": "", "last_text": "", "usage_tokens": 0,
-                        "cc_title": "", "model": "", "last": None, "current": True, "elsewhere": None, "readonly": False, "folder": ""})
+        for sid in wins:   # a window that hasn't written its file yet
+            if not any(w["sid"] == sid for w in out):
+                out.append({"sid": sid, "started": None, "messages": 0, "first_text": "", "last_text": "", "usage_tokens": 0, "cc_title": "", "model": "",
+                            "last": None, "current": sid == cur, "open": True, "elsewhere": None, "readonly": False, "folder": ""})
         out.sort(key=lambda w: w["last"] or "9", reverse=True)
         return out[:300]
 
@@ -801,7 +862,7 @@ def register(app, g, x):
             w["named"] = bool(it.get("title"))
             w["group"] = it.get("group") if it.get("group") in gids else None
             w["archived"] = bool(it.get("archived"))
-        return {"sessions": ws, "groups": d["groups"], "chat": CHAT_MODE}
+        return {"sessions": ws, "groups": d["groups"], "chat": CHAT_MODE, "max": MAX_WINDOWS}
 
     @app.post("/app/cc/sessions/meta")
     async def cc_session_meta(request: Request):
@@ -875,6 +936,8 @@ def register(app, g, x):
 
     @app.post("/app/cc/sessions/new")
     async def cc_session_new(request: Request):
+        """{group?}: the main window starts afresh (handed the last hours of talk). {alongside: true}: a new tab instead —
+        a side window with a fresh session; the main one stays as it is, and nothing is handed over."""
         check_auth(request)
         try:
             b = await request.json()
@@ -883,6 +946,13 @@ def register(app, g, x):
         gid = b.get("group")
         if gid and gid not in {x["id"] for x in meta_load()["groups"]}:
             raise HTTPException(status_code=404, detail="no such group")
+        if b.get("alongside"):
+            _, sid = await open_side()
+            if gid and SID_RE.match(sid):
+                d = meta_load()
+                d["items"].setdefault(sid, {})["group"] = gid
+                meta_save(d)
+            return {"ok": True, "sid": sid, "alongside": True}
         c = x["carry_cfg"]()
         text = await asyncio.to_thread(x["carry_text"], c["hours"], c["chars"])
         await x["claude_restart"]()
@@ -1024,6 +1094,7 @@ def register(app, g, x):
         return out
 
     logs = {}   # sid -> {"f", "off", "lines", "msgs"}, read on as the file grows
+    open_sids = set()   # the windows' sessions: kept in logs while open, so a tab is never read again from the top
 
     def read_log(sid):
         f = session_file(sid)
@@ -1031,8 +1102,10 @@ def register(app, g, x):
             return None
         L = logs.get(sid)
         if not L or L["f"] != f:
-            if len(logs) > 6:
-                logs.pop(next(iter(logs)))
+            if len(logs) > 6 + len(open_sids):
+                old = next((k for k in logs if k not in open_sids), None)
+                if old:
+                    logs.pop(old)
             L = logs[sid] = {"f": f, "off": 0, "lines": 0, "msgs": [], "memo": {}}
         try:
             size = f.stat().st_size
@@ -1045,6 +1118,14 @@ def register(app, g, x):
                 cut = chunk.rfind(b"\n") + 1   # only whole lines
                 if cut:
                     lines = chunk[:cut].decode("utf-8", "ignore").split("\n")[:-1]
+                    for ln in lines:   # the session's name as Claude Code keeps it: /rename's, else the one it made up
+                        if '"custom-title"' in ln or '"ai-title"' in ln:
+                            try:
+                                d = json.loads(ln)
+                                L["custom"] = d.get("customTitle") or L.get("custom")
+                                L["ai"] = d.get("aiTitle") or L.get("ai")
+                            except ValueError:
+                                pass
                     L["msgs"].extend(parse_lines(lines, L["lines"], L["memo"]))
                     L["lines"] += len(lines)
                     L["off"] += cut
@@ -1052,22 +1133,44 @@ def register(app, g, x):
             pass
         return L
 
+    def title_of(sid, items=None):
+        """A tab's name: the one given here, then Claude Code's (/rename, then its own), then the first thing said."""
+        it = (items if items is not None else meta_load()["items"]).get(sid) or {}
+        L = logs.get(sid) or {}
+        first = next((m["text"] for m in L.get("msgs") or [] if m["kind"] == "user"), "")
+        t = it.get("title") or L.get("custom") or L.get("ai") or NIGHT.sub("", first)
+        return re.sub(r"\s+", " ", t or "").strip()[:60]
+
+    def windows_now():
+        """The open windows for the page's tabs: [{sid, main, title}], the main one first. One still starting has no sid yet."""
+        ws, items = live_windows(), meta_load()["items"]
+        open_sids.clear()
+        open_sids.update(w["sid"] for w in ws if w["sid"])
+        for w in ws:
+            if w["sid"]:
+                read_log(w["sid"])   # (cheap once read: only what's new)
+        return [{"sid": w["sid"], "main": w["main"], "title": title_of(w["sid"], items) if w["sid"] else ""} for w in ws]
+
     @app.get("/app/cc/where")
     async def cc_where(request: Request):
         check_auth(request)
-        return {"chat": CHAT_MODE, "sid": str(session_meta().get("sessionId") or "") or None, "workdir": str(WORK_DIR)}
+        ws = await asyncio.to_thread(windows_now)
+        main = next((w["sid"] for w in ws if w["main"]), "")
+        return {"chat": CHAT_MODE, "sid": main or None, "workdir": str(WORK_DIR), "windows": [w for w in ws if w["sid"]],
+                "opening": sum(1 for w in ws if not w["sid"]), "max": MAX_WINDOWS}
 
     @app.get("/app/cc/log")
     async def cc_log(request: Request, sid: str = "", after: int = -1, before: int = 0, tail: int = 200):
         """A session's transcript as chat messages: the last `tail`; or those after an id; or the `tail` before one."""
         check_auth(request)
+        live = {w["sid"] for w in await asyncio.to_thread(live_windows) if w["sid"]}
         cur = str(session_meta().get("sessionId") or "")
         sid = sid or cur
         if not SID_RE.match(sid):
             raise HTTPException(status_code=404, detail="no window yet")
         L = await asyncio.to_thread(read_log, sid)
         if L is None:
-            return {"sid": sid, "messages": [], "live": sid == cur, "elsewhere": None, "more": False}
+            return {"sid": sid, "messages": [], "live": sid in live, "main": sid == cur, "elsewhere": None, "more": False}
         ms, tail = L["msgs"], max(1, min(tail, 1000))
         if after >= 0:
             out = [m for m in ms if m["id"] > after]
@@ -1078,8 +1181,8 @@ def register(app, g, x):
             out = ms[-tail:]
         more = bool(out) and bool(ms) and ms[0]["id"] < out[0]["id"]
         away = (await asyncio.to_thread(open_elsewhere)).get(sid)
-        return {"sid": sid, "messages": out, "live": sid == cur, "elsewhere": away, "more": more,
-                "readonly": L["f"].parent != CLAUDE_PROJECT}
+        return {"sid": sid, "messages": out, "live": sid in live, "main": sid == cur, "elsewhere": away, "more": more,
+                "readonly": L["f"].parent != CLAUDE_PROJECT, "title": title_of(sid)}
 
     @app.post("/app/cc/say")
     async def cc_say(request: Request):
@@ -1099,23 +1202,26 @@ def register(app, g, x):
             raise HTTPException(status_code=400, detail="empty")
         if len(text) > 60000:
             raise HTTPException(status_code=413, detail="too long")
-        st = await asyncio.to_thread(claude_busy)
+        sid = str(b.get("sid") or "")
+        name = await win(sid)   # the tab's window; the main one when the page doesn't say
+        st = await asyncio.to_thread(claude_busy, name)
         if st.get("state") == "offline":
             raise HTTPException(status_code=503, detail="the window isn't open")
-        pane = await asyncio.to_thread(capture)
+        pane = await asyncio.to_thread(capture, 0, name)
         if pane is None:
             raise HTTPException(status_code=503, detail="the window isn't open")
         if not input_box_showing(pane):
             raise HTTPException(status_code=409, detail="the window is waiting on a question")
-        async with type_lock:
-            r = await asyncio.to_thread(subprocess_run, ["tmux", "load-buffer", "-b", "nyxsay", "-"], text)
+        buf = "nyxsay-" + secrets.token_hex(4)   # a buffer of its own: two tabs may be sending at once
+        async with type_lock(name):
+            r = await asyncio.to_thread(subprocess_run, ["tmux", "load-buffer", "-b", buf, "-"], text)
             if r.returncode != 0:
                 raise HTTPException(status_code=502, detail="couldn't reach the window")
-            await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, "C-u")
-            await asyncio.to_thread(tmux, "paste-buffer", "-p", "-d", "-b", "nyxsay", "-t", TMUX)
+            await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "C-u")
+            await asyncio.to_thread(tmux, "paste-buffer", "-p", "-d", "-b", buf, "-t", tgt(name))
             await asyncio.sleep(0.35 + min(1.5, len(text) / 20000))
-            await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, "Enter")
-        await broadcast(g["app_subs"], {"type": "typing", "active": True})
+            await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "Enter")
+        await broadcast(g["app_subs"], {"type": "typing", "active": True, "sid": sid or str(session_meta(name).get("sessionId") or "")})
         return {"ok": True, "queued": st.get("state") == "busy"}
 
     def subprocess_run(cmd, data):
@@ -1123,39 +1229,46 @@ def register(app, g, x):
         return subprocess.run(cmd, input=data, capture_output=True, text=True, timeout=10)
 
     async def log_watch():
-        """Follows the window's session file and hands the page each new message as it is written; tells it when the
-        window moves to another session; and, when no page is open, pushes Claude's last words to the phone."""
-        last_sid, sent = "", {}
+        """Follows every open window's session file and hands the page each new message as it is written (with its sid,
+        so the page knows the tab); tells it when the main window moves to another session (cc_sid) and when the set of
+        windows changes or a tab's name does (cc_windows); and, when no page is open, pushes Claude's last words to the phone."""
+        last_sid, last_ws, sent = "", None, {}
         while True:
             await asyncio.sleep(0.8)
             if CHAT_MODE != "cc":
                 await asyncio.sleep(10)
                 continue
             try:
-                sid = str(session_meta().get("sessionId") or "")
-                if sid != last_sid:   # the window opened another session — or closed, or came back (even to the same one): say so
+                ws = await asyncio.to_thread(windows_now)
+                sid = next((w["sid"] for w in ws if w["main"]), "")
+                if sid != last_sid:   # the main window opened another session — or closed, or came back (even to the same one): say so
                     await broadcast(g["app_subs"], {"type": "cc_sid", "sid": sid})
                     last_sid = sid
-                if not sid:
-                    continue
-                L = await asyncio.to_thread(read_log, sid)
-                if not L:
-                    continue
-                n = sent.get(sid)
-                if n is None:   # first look at this session: everything so far is history
-                    sent[sid] = len(L["msgs"])
-                    continue
-                new = L["msgs"][n:]
-                if not new:
-                    continue
-                sent[sid] = len(L["msgs"])
-                await broadcast(g["app_subs"], {"type": "cc", "sid": sid, "messages": new})
-                said = [m for m in new if m["kind"] == "reply"]
-                if said and not g["app_subs"]:
-                    try:
-                        await g["push_to_all"](g["notification_from_message"]({"id": said[-1]["id"], "ts": said[-1]["ts"], "text": said[-1]["text"]}))
-                    except Exception:
-                        pass
+                if ws != last_ws:
+                    await broadcast(g["app_subs"], {"type": "cc_windows", "windows": [w for w in ws if w["sid"]],
+                                                    "opening": sum(1 for w in ws if not w["sid"]), "max": MAX_WINDOWS})
+                    last_ws = ws
+                for w in ws:
+                    if not w["sid"]:
+                        continue
+                    L = await asyncio.to_thread(read_log, w["sid"])
+                    if not L:
+                        continue
+                    n = sent.get(w["sid"])
+                    if n is None or n > len(L["msgs"]):   # first look at this session (or its file was rewritten): everything so far is history
+                        sent[w["sid"]] = len(L["msgs"])
+                        continue
+                    new = L["msgs"][n:]
+                    if not new:
+                        continue
+                    sent[w["sid"]] = len(L["msgs"])
+                    await broadcast(g["app_subs"], {"type": "cc", "sid": w["sid"], "main": w["main"], "messages": new})
+                    said = [m for m in new if m["kind"] == "reply"]
+                    if said and not g["app_subs"]:
+                        try:
+                            await g["push_to_all"](g["notification_from_message"]({"id": said[-1]["id"], "ts": said[-1]["ts"], "text": said[-1]["text"]}))
+                        except Exception:
+                            pass
             except Exception:
                 continue
 
