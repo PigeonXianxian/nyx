@@ -18,15 +18,13 @@
 input[type="range"]{ accent-color:var(--blue); }
 
 /* ── a leaf from the home's sketchbook behind the quieter rooms, on a wide screen: the swallow that carries the post behind the
-   people you write to; the far cathedral behind the kitchen; by night the swallow among the stars, and the moons.
+   people you write to; by night the swallow among the stars. (The far cathedral lies behind the days of the plan: plan.css.)
    (The leaf lies under everything on the page: so the body lets the sheet of the page — html — show through.) ── */
 @media (min-width:1000px) and (min-aspect-ratio:5/4){
-  body.contacts, body.kitchen{ background:transparent; }
-  body.contacts::before, body.kitchen::before{ content:""; position:fixed; z-index:-1; pointer-events:none; background:no-repeat center / contain; }
+  body.contacts{ background:transparent; }
+  body.contacts::before{ content:""; position:fixed; z-index:-1; pointer-events:none; background:no-repeat center / contain; }
   body.contacts::before{ left:-9vw; bottom:-12vh; width:min(56vw, 104vh); aspect-ratio:3 / 2; background-image:url(draft-day-a.webp); opacity:.55; transform:rotate(-18deg); }
   :root[data-side="moon"] body.contacts::before{ background-image:url(draft-night-a.webp); opacity:.62; transform:rotate(10deg); left:-8vw; bottom:-6vh; }
-  body.kitchen::before{ right:1vw; bottom:-3vh; height:96vh; aspect-ratio:2 / 3; background-image:url(draft-day-b.webp); opacity:.4; }
-  :root[data-side="moon"] body.kitchen::before{ right:3vw; bottom:7vh; height:auto; width:min(46vw, 760px); aspect-ratio:3 / 2; background-image:url(draft-night-b.webp); opacity:.5; }
 }
 
 /* ── the house's small chrome in the plates' manner: slips of the page's paper, words not pills, one blue ── */

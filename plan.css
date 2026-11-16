@@ -1,0 +1,246 @@
+/* Nyx — Plan (日程). Paper, ink, one blue (eye/ink.css).
+   What is to be done, day by day. The head of the page is a band in the other side's ground (ink by day, paper by
+   night): the room's name, and the sky of the days — every day has its moon, lit as it is that night (eye/moon.webp),
+   and they ride one dotted track, ticked where a day meets the next, as on the leaf of moons in the sketchbook. The
+   band is pulled along by hand, and the days go by.
+   A wide screen is a week laid open under it: a column a day, standing under its own moon; beside them a line to write
+   on and what has no column — what is overdue, what has no day yet, what lies further on, what is done. A thing is
+   carried from one day to another by hand. Far behind the days, the cathedral from the sketchbook.
+   A phone shows one day at a time under a week of moons (the day in the middle is the one open); the rest follows it.
+   A thing to do is ticked with a moon: a faint one, and full when it is done.
+   (app.css, the chat's stylesheet, is not loaded here.) */
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body{ margin:0; min-height:100%; background:var(--paper); color:var(--ink); overscroll-behavior-x:none; }
+body.plan{ --han:"Noto Serif SC", "Songti SC", "STSong", serif; --bt:var(--blue); font-family:var(--han); -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+:root[data-side="moon"] body.plan{ --bt:#8C95FF; }   /* the blue of small writing: by night a paler one, or it does not read on the dark */
+button{ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; }
+[hidden]{ display:none !important; }
+#paper{ position:fixed; inset:0; z-index:0; pointer-events:none; background-image:var(--grain); background-size:180px; }
+.plan button:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+.plan input:focus-visible, .plan textarea:focus-visible{ outline:0; }   /* what is being written in shows it by its own rule turning blue */
+.plan ::selection{ background:color-mix(in srgb, var(--blue) 26%, transparent); }
+/* a swallow — the home's own outline (--sw, set by plan.js from eye/birds.js) — as a small mark, in whatever colour the text is */
+.sw{ display:inline-block; flex:none; width:20px; height:17px; background:currentColor; -webkit-mask:var(--sw) center / contain no-repeat; mask:var(--sw) center / contain no-repeat; }
+.back .sw{ transform:scaleX(-1) rotate(-8deg); }   /* flying back the way one came */
+
+/* ════════ one column (a phone) ════════ */
+.plx{ position:relative; z-index:1; min-height:100vh; }
+
+/* ── the band ── */
+.band{ --sb:#8C95FF; --bar:50px; position:relative; z-index:3; height:calc(env(safe-area-inset-top) + 216px); background:var(--ink); color:var(--paper);
+  touch-action:pan-y; -webkit-user-select:none; user-select:none; }
+:root[data-side="moon"] .band{ --sb:#2933C4; }
+.band::after{ content:""; position:absolute; left:0; right:0; top:100%; height:34px; pointer-events:none; background:var(--edgeh, none) repeat-x left top / 420px 34px; }   /* its foot goes off into grain, as the band does on the home */
+.sky{ position:absolute; left:0; top:calc(env(safe-area-inset-top) + var(--bar)); width:100%; height:calc(100% - env(safe-area-inset-top) - var(--bar)); pointer-events:none; }
+.b-top{ position:relative; z-index:2; display:flex; align-items:center; gap:2px; height:calc(env(safe-area-inset-top) + var(--bar)); padding:env(safe-area-inset-top) 14px 0 8px; }
+.back{ flex:none; width:34px; height:36px; display:grid; place-items:center; }
+.ttl{ margin:0; font-weight:400; line-height:1; white-space:nowrap; }
+.ttl b{ font:italic 500 29px/1 var(--latin); letter-spacing:.02em; }
+.ttl small{ margin-left:13px; font:400 11.5px/1 var(--han); letter-spacing:.4em; color:color-mix(in srgb, var(--paper) 60%, transparent); }
+.b-date{ display:none; }
+.b-go{ margin-left:auto; display:flex; gap:6px; }
+.b-go button{ display:grid; place-items:center; height:31px; min-width:31px; padding:0 12px 1px; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--paper) 32%, transparent);
+  font:400 12.5px/1 var(--han); letter-spacing:.2em; text-indent:.2em; color:var(--paper); transition:opacity .25s, color .15s, box-shadow .15s; }
+.b-go button svg{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.b-go #goPrev, .b-go #goNext{ display:none; padding:0; }
+.b-go #goToday.here{ opacity:0; pointer-events:none; }   /* already there */
+.b-month{ position:absolute; z-index:2; left:18px; top:calc(env(safe-area-inset-top) + var(--bar) + 4px); margin:0; display:flex; align-items:baseline; gap:9px; pointer-events:none;
+  font:italic 400 14.5px/1 var(--latin); letter-spacing:.12em; color:color-mix(in srgb, var(--paper) 58%, transparent); white-space:nowrap; }
+.b-month i{ font:400 11px/1 var(--han); font-style:normal; letter-spacing:.3em; }
+
+/* the moons of the days. Each head is laid by plan.js: where it stands along the band (its own transform), and how high
+   its moon rides and how large (the .mw's): the day in the middle of a phone is the largest; on a wide screen, today. */
+.heads{ --hw:56px; --mr:21px; position:absolute; z-index:1; left:0; right:0; top:calc(env(safe-area-inset-top) + var(--bar)); bottom:0; overflow:hidden; }
+.hd{ position:absolute; left:0; top:0; width:0; height:100%; color:color-mix(in srgb, var(--paper) 52%, transparent); cursor:pointer; transition:color .25s; will-change:transform; }
+.hd::after{ content:""; position:absolute; left:calc(var(--hw) / -2); top:0; width:var(--hw); height:100%; }   /* room to be touched */
+.hd .mw{ position:absolute; left:calc(var(--mr) * -1); top:0; width:calc(var(--mr) * 2); height:calc(var(--mr) * 2); transform-origin:50% 100%; will-change:transform; }
+.hd .mw img{ display:block; width:100%; height:100%; pointer-events:none; -webkit-user-drag:none; }
+.hd .mw .sw{ position:absolute; right:-17px; top:-9px; width:19px; height:16px; color:var(--sb); transform:rotate(-22deg); }   /* today: a swallow comes over its moon */
+.hd .dt{ position:absolute; left:-30px; bottom:12px; width:60px; display:flex; flex-direction:column; align-items:center; gap:5px; pointer-events:none; }
+.hd .dt b{ font:italic 500 20px/1 var(--latin); letter-spacing:.01em; }
+.hd .dt em{ font:400 10.5px/1 var(--han); font-style:normal; letter-spacing:.12em; text-indent:.12em; white-space:nowrap; }
+.hd .dt u{ display:flex; justify-content:center; gap:3px; height:4px; text-decoration:none; }   /* how much is still to do that day: a dot a thing, four at most */
+.hd .dt u s{ width:4px; height:4px; border-radius:50%; background:var(--sb); }
+.hd.we .dt em{ color:color-mix(in srgb, var(--sb) 80%, transparent); }
+.hd.on, .hd.today{ color:var(--paper); }
+.hd.today .dt em{ color:var(--sb); }
+
+/* ── the days ── */
+.strip{ position:relative; z-index:1; overflow:hidden; min-height:260px; touch-action:pan-y; transition:height .3s cubic-bezier(.3, .05, .2, 1); }
+.strip > .leaf{ display:none; }
+.cols{ position:absolute; inset:0; }
+.cols, #lists{ -webkit-user-select:none; user-select:none; }   /* things here are taken hold of, not selected */
+.plan input, .plan textarea{ -webkit-user-select:text; user-select:text; }
+.col{ position:absolute; left:0; top:0; width:100%; padding:34px 18px 30px; will-change:transform; }
+.col h3{ display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 11px; margin:0 0 8px; font:500 20px/1.2 var(--han); letter-spacing:.14em; }
+.col h3 i{ font:italic 400 15px/1 var(--latin); letter-spacing:.06em; color:var(--faint); }
+.col h3 em{ font:400 12.5px/1 var(--han); font-style:normal; letter-spacing:.24em; color:var(--bt); }
+
+/* a thing to do: its moon (faint; full when done), the hour if it has one, what it is, a word about it */
+.ens{ list-style:none; margin:0; padding:0; }
+.en{ position:relative; display:grid; grid-template-columns:24px minmax(0, 1fr); gap:0 10px; align-items:start; padding:10px 0 10px; border-bottom:1px solid var(--hair); cursor:pointer; }
+.tk{ position:relative; width:24px; height:24px; margin-top:1px; }
+.tk::after{ content:""; position:absolute; inset:-9px -7px; }
+.tk img{ display:block; width:24px; height:24px; transition:transform .2s; pointer-events:none; }
+.ex{ min-width:0; font:400 15.5px/1.55 var(--han); letter-spacing:.02em; overflow-wrap:anywhere; }
+.tm{ margin-right:8px; font:italic 500 17px/1 var(--latin); letter-spacing:.03em; color:var(--bt); white-space:nowrap; }
+.dy{ margin-right:8px; font:italic 400 15.5px/1 var(--latin); letter-spacing:.03em; color:var(--soft); white-space:nowrap; }
+.dy small{ margin-left:5px; font:400 11px/1 var(--han); font-style:normal; letter-spacing:.1em; }
+.ex u{ display:inline-block; margin-right:7px; padding:2px 5px 3px; font:400 10.5px/1 var(--han); letter-spacing:.12em; text-indent:.12em; text-decoration:none; color:var(--bt);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--bt) 50%, transparent); vertical-align:2px; }
+.nt{ margin:3px 0 0; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; font-size:12.5px; line-height:1.6; color:var(--faint); white-space:pre-line; }
+.en.done .ex, .en.done .tm, .en.done .dy{ color:var(--faint); }
+.en.done u{ opacity:.55; }
+.en.late .dy{ color:var(--bt); }
+.en.lift{ opacity:.28; }
+.free{ margin:12px 0 0 34px; font:400 13px/1.6 var(--han); letter-spacing:.2em; color:var(--faint); }
+.add{ margin:14px 0 0; }
+.more{ display:inline-flex; align-items:center; gap:8px; height:34px; padding:0 14px 1px 10px; box-shadow:inset 0 0 0 1px var(--hair); font:400 13px/1 var(--han); letter-spacing:.16em; color:var(--soft); white-space:nowrap; transition:color .15s, box-shadow .15s; }
+.more svg{ width:15px; height:15px; fill:none; stroke:var(--bt); stroke-width:1.5; stroke-linecap:round; }
+.wr{ display:flex; align-items:center; gap:4px; padding:0 4px 0 11px; box-shadow:inset 0 0 0 1px var(--blue); background:color-mix(in srgb, var(--paper) 70%, transparent); }
+.wr input, .jot input{ flex:1; min-width:0; border:0; outline:0; border-radius:0; background:none; color:var(--ink); font:400 15px/1.2 var(--han); letter-spacing:.03em; padding:9px 0 10px; -webkit-appearance:none; appearance:none; }
+.wr input::placeholder, .jot input::placeholder{ color:var(--faint); opacity:.9; }
+.wr button, .jot button{ flex:none; padding:8px 8px 9px; font:400 13px/1 var(--han); letter-spacing:.18em; color:var(--bt); white-space:nowrap; }
+
+/* ── beside the days ── */
+.side{ position:relative; z-index:1; padding:26px 18px calc(env(safe-area-inset-bottom) + 72px); border-top:1px solid var(--hair); }
+.jot{ display:flex; align-items:center; gap:4px; padding:0 6px 0 13px; box-shadow:inset 0 0 0 1px var(--river); transition:box-shadow .15s; }
+.jot:focus-within{ box-shadow:inset 0 0 0 1px var(--blue); }
+.jot input{ padding:12px 0 13px; font-size:15.5px; }
+.jot button{ font-size:13.5px; }
+.hint{ margin:9px 0 0 2px; min-height:20px; font:400 12.5px/1.6 var(--han); letter-spacing:.04em; color:var(--faint); }
+.hint b{ font-weight:400; color:var(--bt); }
+/* a heading: a short blue bar, the word, what it is in the other tongue, a hairline to the edge */
+.sec{ display:flex; align-items:center; gap:11px; margin:30px 0 2px; font:500 14.5px/1 var(--han); letter-spacing:.3em; }
+.sec::before{ content:""; flex:none; width:16px; height:4px; background:var(--blue); }
+.sec i{ font:italic 400 14px/1 var(--latin); letter-spacing:.05em; color:var(--faint); }
+.sec::after{ content:""; flex:1; height:1px; background:var(--hair); }
+.sec button{ order:3; flex:none; padding:5px 0 5px 2px; font:400 12px/1 var(--han); letter-spacing:.16em; color:var(--bt); }
+.bx{ margin:0 -8px; padding:0 8px; transition:background-color .15s; }
+.bx.drop{ background:color-mix(in srgb, var(--blue) 9%, transparent); }
+.bx .none{ margin:10px 0 0; font:400 12.5px/1.7 var(--han); letter-spacing:.05em; color:var(--faint); }
+.side .ex{ font-size:14.5px; }
+.empty{ margin:30px 0 0; font:400 14px/1.9 var(--han); letter-spacing:.04em; color:var(--soft); }
+.foot{ margin:36px 0 0; font:400 12px/1.7 var(--han); letter-spacing:.06em; color:var(--faint); }
+
+/* ── a thing, opened: a slip of the page's paper ── */
+.slipbg{ position:fixed; inset:0; z-index:300; display:flex; align-items:center; justify-content:center; padding:18px; background:color-mix(in srgb, var(--paper) 58%, transparent); animation:plIn .16s ease-out; }
+:root[data-side="moon"] .slipbg{ background:rgba(10,10,14,.5); }
+.slip{ position:relative; width:min(100%, 470px); max-height:calc(100vh - 36px); overflow-y:auto; margin:0 0 4vh; padding:24px 26px 16px; border-radius:2px; color:var(--ink);
+  background:var(--paper) var(--grain); background-size:180px; box-shadow:0 0 0 1px var(--river), 0 18px 48px rgba(16,16,22,.2); animation:plUp .22s cubic-bezier(.2, .8, .2, 1); }
+:root[data-side="moon"] .slip{ box-shadow:0 0 0 1px var(--river), 0 18px 48px rgba(0,0,0,.55); }
+@keyframes plIn{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes plUp{ from{ transform:translateY(10px); opacity:0; } to{ transform:none; opacity:1; } }
+.slip input, .slip textarea{ display:block; width:100%; border:0; border-bottom:1px solid var(--river); border-radius:0; outline:0; background:none; color:var(--ink); resize:none; caret-color:var(--blue); -webkit-appearance:none; appearance:none; }
+.slip input:focus, .slip textarea:focus{ border-bottom-color:var(--blue); }
+.slip input::placeholder, .slip textarea::placeholder{ color:var(--faint); }
+.slip .s-t{ padding:2px 0 9px; font:500 19px/1.5 var(--han); letter-spacing:.03em; }
+.s-row{ display:grid; grid-template-columns:46px minmax(0, 1fr); gap:0 12px; align-items:start; margin-top:20px; }
+.s-row > label{ padding-top:8px; font:400 12.5px/1 var(--han); letter-spacing:.3em; color:var(--faint); white-space:nowrap; }
+.chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.chips button, .s-due{ height:31px; padding:0 11px 1px; box-shadow:inset 0 0 0 1px var(--hair); font:400 13px/1 var(--han); letter-spacing:.12em; color:var(--soft); white-space:nowrap; transition:color .15s, box-shadow .15s; }
+.chips button.on{ background:var(--ink); color:var(--paper); box-shadow:none; }
+.s-due.on{ color:var(--bt); box-shadow:inset 0 0 0 1px var(--bt); }
+.s-due::before{ content:""; display:inline-block; width:8px; height:8px; margin-right:8px; box-shadow:inset 0 0 0 1px currentColor; vertical-align:middle; }
+.s-due.on::before{ background:var(--bt); box-shadow:none; }
+/* the month, to choose a day from */
+.cal{ margin-top:14px; }
+.cal-h{ display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+.cal-h b{ flex:1; font:italic 500 18px/1 var(--latin); letter-spacing:.04em; }
+.cal-h b i{ margin-left:10px; font:400 12px/1 var(--han); font-style:normal; letter-spacing:.3em; color:var(--faint); }
+.cal-h button{ width:30px; height:30px; display:grid; place-items:center; box-shadow:inset 0 0 0 1px var(--hair); color:var(--soft); }
+.cal-h svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.cal-g{ display:grid; grid-template-columns:repeat(7, 1fr); gap:1px 0; }
+.cal-g span{ padding:6px 0 5px; text-align:center; font:400 11px/1 var(--han); letter-spacing:.1em; color:var(--faint); }
+.cal-g button{ position:relative; height:33px; font:italic 400 17px/1 var(--latin); color:var(--ink); }
+.cal-g button.out{ color:var(--faint); opacity:.6; }
+.cal-g button.has::after{ content:""; position:absolute; left:50%; bottom:3px; width:3px; height:3px; margin-left:-1.5px; border-radius:50%; background:var(--bt); }
+.cal-g button.now{ box-shadow:inset 0 0 0 1px var(--river); }
+.cal-g button.on{ background:var(--blue); color:#fff; box-shadow:none; }
+.cal-g button.on::after{ background:#fff; }
+.s-hr{ display:flex; align-items:center; gap:12px; }
+.slip .s-h{ width:92px; padding:5px 0 6px; font:italic 500 19px/1.2 var(--latin); letter-spacing:.04em; }
+.slip .s-h.bad{ border-bottom-color:var(--blue); animation:plNo .3s; }
+@keyframes plNo{ 25%{ transform:translateX(-4px); } 75%{ transform:translateX(4px); } }
+.slip .s-n{ padding:5px 0 7px; font:400 14.5px/1.7 var(--han); letter-spacing:.02em; }
+.s-by{ margin:16px 0 0; font:400 11.5px/1.5 var(--han); letter-spacing:.08em; color:var(--faint); }
+.slip .a{ display:flex; align-items:baseline; gap:22px; margin-top:14px; }
+.slip .a i{ flex:1; }
+.slip .a button{ padding:6px 0; font:400 14px/1 var(--han); letter-spacing:.2em; }
+.slip .a .del{ color:var(--faint); } .slip .a .no{ color:var(--faint); }
+.slip .a .ok{ color:var(--bt); font-weight:500; text-decoration:underline 1px; text-underline-offset:6px; }
+
+/* a thing in the hand, on its way to another day */
+.ghost{ position:fixed; left:0; top:0; z-index:310; width:230px; padding:9px 13px 10px; pointer-events:none; border-radius:2px; background:var(--paper) var(--grain); background-size:180px; color:var(--ink);
+  box-shadow:0 0 0 1px var(--river), 0 14px 34px rgba(16,16,22,.24); font:400 14.5px/1.5 var(--han); letter-spacing:.02em; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.ghost .tm{ font-size:15.5px; }
+
+.plan .toast{ position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 40px); z-index:400; transform:translate(-50%, 10px); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; }
+.plan .toast.on{ opacity:1; transform:translate(-50%, 0); }
+
+@media (min-width:640px) and (max-width:1099px){
+  .strip, .side{ max-width:760px; margin:0 auto; }
+}
+@media (hover:hover){
+  .en{ transition:background-color .15s; }
+  .en:hover{ background:color-mix(in srgb, var(--blue) 5%, transparent); }
+  .en:hover .tt{ color:var(--bt); } .en.done:hover .tt{ color:var(--soft); }
+  .tk:hover img{ transform:scale(1.18); }
+  .more:hover, .chips button:not(.on):hover, .s-due:not(.on):hover, .cal-h button:hover{ color:var(--bt); box-shadow:inset 0 0 0 1px var(--bt); }
+  .cal-g button:not(.on):hover{ color:var(--bt); box-shadow:inset 0 0 0 1px var(--bt); }
+  .b-go button:hover{ color:var(--sb); box-shadow:inset 0 0 0 1px var(--sb); }
+  .hd:hover{ color:var(--paper); }
+  .sec button:hover, .slip .a .del:hover, .slip .a .no:hover{ color:var(--ink); }
+  .back:hover{ opacity:1; }
+}
+
+/* ════════ a week laid open (a wide screen) ════════ */
+@media (min-width:1100px){
+  html, body{ height:100%; overflow:hidden; }
+  .plx{ --side:clamp(292px, 20.5vw, 356px); --bandh:clamp(250px, 29vh, 272px); display:grid; grid-template-columns:var(--side) minmax(0, 1fr); grid-template-rows:var(--bandh) minmax(0, 1fr); height:100vh; min-height:0; }
+
+  .band{ grid-column:1 / -1; grid-row:1; height:auto; touch-action:none; cursor:grab; }
+  .band.held, .strip.held{ cursor:grabbing; }
+  .b-top{ position:absolute; left:0; top:0; display:block; width:var(--side); height:100%; padding:22px 26px 0 34px; cursor:default; }
+  .back{ margin:0 0 14px -8px; opacity:.75; }
+  .ttl{ display:flex; align-items:baseline; gap:14px; }
+  .ttl b{ font-size:62px; letter-spacing:.01em; }
+  .ttl small{ margin:0; font-size:13px; letter-spacing:.5em; color:color-mix(in srgb, var(--paper) 62%, transparent); }
+  .b-date{ display:block; margin:14px 0 0 3px; font:italic 400 15px/1 var(--latin); letter-spacing:.16em; color:color-mix(in srgb, var(--paper) 52%, transparent); white-space:nowrap; }
+  .b-go{ position:absolute; left:34px; bottom:26px; margin:0; }
+  .b-go button{ height:33px; min-width:33px; font-size:13px; }
+  .b-go #goPrev, .b-go #goNext{ display:grid; }
+  .b-go #goToday.here{ opacity:.4; pointer-events:none; }
+  .b-month{ left:auto; right:34px; top:25px; gap:12px; font-size:18px; letter-spacing:.1em; }
+  .b-month i{ font-size:12.5px; }
+  .sky{ left:var(--side); top:0; width:calc(100% - var(--side)); height:100%; }
+  .heads{ --mr:40px; left:var(--side); top:0; }
+  .hd .mw .sw{ right:-22px; top:-4px; width:24px; height:20px; }
+  .hd .dt{ left:-60px; bottom:20px; width:120px; flex-direction:row; justify-content:center; align-items:baseline; gap:11px; }
+  .hd .dt b{ font-size:35px; }
+  .hd .dt em{ font-size:13px; letter-spacing:.24em; text-indent:0; }
+  .hd .dt u{ display:none; }
+
+  .side{ grid-column:1; grid-row:2; overflow-y:auto; scrollbar-width:none; padding:46px 26px 44px 34px; border-top:0; box-shadow:inset -1px 0 0 var(--hair); }
+  .side::-webkit-scrollbar{ display:none; }
+  .strip{ grid-column:2; grid-row:2; height:auto !important; min-height:0; touch-action:none; cursor:grab; }
+  /* far behind the days, a leaf of the sketchbook, pale: the cathedral (in chalk by night). It gives a little as the days are pulled along (--fly). */
+  .strip > .leaf{ display:block; position:absolute; z-index:0; right:2.5%; bottom:-9%; height:112%; aspect-ratio:2 / 3; pointer-events:none; opacity:.3;
+    background:url(eye/draft-day-b.webp) center / contain no-repeat; transform:translateX(calc(var(--fly, 0) * -7px)); transition:transform .9s cubic-bezier(.3, .05, .2, 1); }
+  :root[data-side="moon"] .strip > .leaf{ filter:invert(1) hue-rotate(180deg); opacity:.2; }
+  .cols{ z-index:1; }
+  .col{ bottom:0; width:var(--cw, 200px); padding:50px 16px 60px 18px; overflow-y:auto; scrollbar-width:none; box-shadow:inset 1px 0 0 var(--hair); cursor:default; transition:background-color .15s; }
+  .col::-webkit-scrollbar{ display:none; }
+  .col h3{ display:none; }
+  .col.today{ background:color-mix(in srgb, var(--blue) 4%, transparent); box-shadow:inset 2px 0 0 var(--blue); }
+  .col.drop{ background:color-mix(in srgb, var(--blue) 10%, transparent); }
+  .col.past .en:not(.late) .ex{ color:var(--soft); }
+  .en{ margin:0 -8px; padding:10px 8px; }
+  .ex{ font-size:15px; }
+  .free{ margin-left:0; opacity:0; }   /* a week of empty columns says it without the word */
+  .add{ margin-top:16px; }
+  .wr{ padding-right:11px; } .wr button{ display:none; }   /* Enter writes it down */
+  .col:not(.today) .more{ opacity:.55; }
+  .col:hover .more, .col .more:focus-visible{ opacity:1; }
+  .slip{ padding:28px 32px 18px; }
+}
