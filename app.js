@@ -6,7 +6,7 @@
 (function () {
   "use strict";
   var C = window.NYX || {}, HOME = C.relay || "/relay", ME = C.meName || "Me";
-  // the chat talks to whoever you picked on the contacts page (nyx_relay / nyx_chat_key / nyx_ai); everything else in the house — the hold, town, listen, kitchen, attic — stays with the first companion (HOME + nyx_key)
+  // the chat talks to whoever you picked on the contacts page (nyx_relay / nyx_chat_key / nyx_ai); everything else in the house — the hold, town, listen, kitchen, read — stays with the first companion (HOME + nyx_key)
   function ls(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   var RELAY = ls("nyx_relay") || HOME, AI = (RELAY !== HOME && ls("nyx_ai")) || C.aiName || "Companion";
   var GROUP = /\/g$/.test(RELAY);   // the group chat: the first companion's relay at /g; nobody's gauge, every answer says who it's from
@@ -15,8 +15,12 @@
     prompt: function (q, o) { var v = prompt(q, (o && o.value) || ""); return Promise.resolve(v == null ? null : v.trim()); } };
   var key = null, hkey = null, lastId = 0, byId = new Map(), drafts = new Map(), quote = null, cc = null;   // cc: the Claude Code controls (cc.js)
   // CCMODE: the chat is the Claude Code window itself — the page reads its session transcript (GET /app/cc/log, "cc" events)
-  // and what you write is typed into it (POST /app/cc/say). view: the session on the page; liveSid: the one the window has open.
+  // and what you write is typed into it (POST /app/cc/say). view: the session on the page; liveSid: the one the main window has open.
+  // Tabs (tabs.js): more windows can be open at once — wins, the open ones [{sid, main, title}]; wstate, each one's busy state;
+  // unread, the tabs that have said something since you last looked; adding: true while a new tab opens, or the sid of an
+  // earlier session being opened in one.
   var CCMODE = false, view = "", liveSid = "", viewInfo = {}, tools = new Map(), carrying = false;
+  var wins = [], wmax = 3, wopen = 0, wstate = {}, unread = {}, adding = false, tabs = null;
   var log = $("log"), text = $("text"), sendBtn = $("send");
 
   var paintSide = NyxPaper.paint;
@@ -56,9 +60,9 @@
   // the drawer: a line icon on each row; a folder becomes a small clay heading with its rooms under it
   var IC = { chat: '<path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/>',
     listen: '<path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
-    attic: '<path d="M3 10l9-6 9 6"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/><path d="M8 12h.01M16 12h.01"/>',
-    room: '<path d="M6 20V9a6 6 0 0 1 12 0v11"/><path d="M4 20h16"/><path d="M14.5 14h.01"/>',
-    bedroom: '<path d="M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6"/><path d="M3 18h18M5 10V6.5A1.5 1.5 0 0 1 6.5 5h11A1.5 1.5 0 0 1 19 6.5V10"/><path d="M7 10h4v-2H7zM13 10h4v-2h-4z"/>',
+    today: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    shelf: '<path d="M4 20V5.5h4V20M8 20V4h4.5v16M12.5 20V7l4-1 3 13.5"/><path d="M3 20h18"/>',
+    kept: '<path d="M7 4h10v16l-5-3.6L7 20z"/>',
     memory: '<path d="M12 3.5c.8 5 3.5 7.7 8.5 8.5-5 .8-7.7 3.5-8.5 8.5-.8-5-3.5-7.7-8.5-8.5 5-.8 7.7-3.5 8.5-8.5Z"/>',
     board: '<rect x="3.5" y="4" width="17" height="16" rx="2.2"/><path d="M9 4v16M15 4v16"/><path d="M5.5 8h1.8M11 8h1.8M11 11.5h1.8M17 8h1.8"/>',
     sessions: '<path d="M7 4.5h11.5v13"/><path d="M4.5 7h11.5v13H4.5z"/><path d="M7.5 11h5.5M7.5 14h5.5M7.5 17h3"/>',
@@ -145,9 +149,10 @@
     clearTimeout(busyT);
     if (GROUP) return;
     if (!key || document.hidden || $("room").hidden) { busyT = setTimeout(pollBusy, 5000); return; }
-    api("/app/busy").then(function (d) { var was = busy && busy.state; d.at = Date.now(); busy = d; paintState(); if (CCMODE && view === liveSid) typing(d.state === "busy");
+    api("/app/busy" + tabQ()).then(function (d) { var was = busy && busy.state; d.at = Date.now(); busy = d; paintState();
+      if (CCMODE) { tabStates(d.windows); if (isLive(view)) typing(d.state === "busy"); }
       if (CCMODE && (was === "offline") !== (d.state === "offline")) refreshLive(); }).catch(function () { busy = null; })
-      .then(function () { busyT = setTimeout(pollBusy, busy && busy.state === "busy" ? 2500 : 5000); });
+      .then(function () { var any = busy && (busy.state === "busy" || (busy.windows || []).some(function (w) { return w.state === "busy"; })); busyT = setTimeout(pollBusy, any ? 2500 : 5000); });
   }
   document.addEventListener("visibilitychange", function () { if (!document.hidden) pollBusy(); });
 
@@ -184,9 +189,15 @@
   }
   function onEvent(ev) {
     if (CCMODE) {
-      if (ev.type === "cc") { if (ev.sid === view) (ev.messages || []).forEach(function (m) { put(m); fresh(m); }); return; }
+      if (ev.type === "cc") {
+        if (ev.sid === view) (ev.messages || []).forEach(function (m) { put(m); fresh(m); });
+        else if ((ev.messages || []).some(function (m) { return m.kind === "reply" || m.kind === "file"; })) { unread[ev.sid] = true; paintTabs(); }   // another tab spoke
+        return;
+      }
       if (ev.type === "cc_sid") { liveTo(ev.sid || ""); return; }
-      if (ev.id != null && ev.from) { if (ev.kind === "term" && ev.meta && ev.meta.note) localCard(ev.text, "", true); return; }   // the relay's own log is not this chat
+      if (ev.type === "cc_windows") { setWins(ev); return; }
+      if (ev.type === "typing" && ev.sid && ev.sid !== view) { if (ev.active && isLive(ev.sid)) { wstate[ev.sid] = "busy"; paintTabs(); } return; }   // another tab took a prompt: its star turns now, not at the next poll
+      if (ev.id != null && ev.from) { if (ev.kind === "term" && ev.meta && ev.meta.note && (!ev.meta.sid || ev.meta.sid === view)) localCard(ev.text, "", true); return; }   // the relay's own log is not this chat
     }
     if (ev.id != null && ev.from) { put(ev); fresh(ev); return; }
     switch (ev.type) {
@@ -202,9 +213,80 @@
   function ccLog(sid) {
     return api("/app/cc/log?sid=" + encodeURIComponent(sid || "") + "&tail=200").then(function (d) { view = d.sid || sid; viewInfo = d; return d; });
   }
-  function openView(sid) {   // show a session: the live one to write in, or any other to read (and carry on here if you like)
+  function openView(sid) {   // show a session: an open tab to write in, or any other to read (and open in a tab if you like)
+    var moved = sid !== view;
     view = sid; log.innerHTML = ""; byId.clear(); msgs.clear(); tools.clear(); lastId = 0; loadDeleted();
+    delete unread[sid]; typing(false); paintTabs();
+    if (isLive(sid)) { try { localStorage.setItem("nyx_tab", sid); } catch (e) {} }
+    if (moved && key) { loadMeter(); loadWin(); pollBusy(); }   // the gauge, the legend and the state line follow the tab
     return ccLog(sid).then(function (d) { (d.messages || []).forEach(put); earlier(d.more); paintRo(); toBottom(); }).catch(function (e) { toast("Couldn't open it: " + e.message); });
+  }
+  /* ---------- tabs: the windows open at once ---------- */
+  function isLive(sid) { return !!sid && wins.some(function (w) { return w.sid === sid; }); }
+  function winOf(sid) { return wins.filter(function (w) { return w.sid === sid; })[0] || null; }
+  function tabQ() { return CCMODE && isLive(view) ? "?sid=" + encodeURIComponent(view) : ""; }   // the gauge and the state line speak of the tab on the page
+  function full() { return wins.length + wopen + (adding === true ? 1 : 0) >= wmax; }
+  function paintTabs() {
+    if (!tabs) return;
+    tabs.paint({ on: CCMODE && !GROUP, wins: wins, view: view, reading: CCMODE && view && !isLive(view) ? { sid: view, title: viewInfo.title } : null, state: wstate,
+      unread: unread, opening: Math.max(wopen, adding === true ? 1 : 0), max: wmax, ai: AI });
+  }
+  function tabStates(list) {   // a tab that stops working while you're elsewhere has something for you
+    if (!list) return;
+    var next = {};
+    list.forEach(function (w) { next[w.sid] = w.state; if (w.sid !== view && wstate[w.sid] === "busy" && w.state === "idle") unread[w.sid] = true; });
+    wstate = next; paintTabs();
+  }
+  function setWins(d) {   // the windows open now (cc_windows, /app/cc/where)
+    if (!d || !d.windows) return;
+    var was = wins.map(function (w) { return w.sid; });
+    wins = d.windows; wopen = d.opening || 0; if (d.max) wmax = d.max;
+    var fresh_ = wins.filter(function (w) { return was.indexOf(w.sid) < 0; });
+    if (adding === true && fresh_.length && !fresh_[0].main) { adding = false; openView(fresh_[0].sid); return; }   // the new tab is up: go to it
+    if (adding && adding !== true && isLive(adding)) adding = false;                                              // the earlier one is open in a tab now
+    var w0 = was.indexOf(view) >= 0 && !isLive(view) && view !== liveSid;
+    if (w0 && !carrying) { toast("That tab has closed. Its session stays in Sessions."); openView(liveSid || (wins[0] && wins[0].sid) || ""); return; }
+    paintRo();
+  }
+  function newTab(group) {   // + : another window alongside, with a fresh session
+    if (adding) { toast("A window is already opening…"); return; }
+    if (full()) { toast(wmax + " windows are open, all this machine takes. Close a tab first."); return; }
+    adding = true; paintTabs();
+    var body = { alongside: true }; if (group) body.group = group;
+    api("/app/cc/sessions/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(function (r) {
+      if (adding === true) { adding = false; if (r && r.sid) openView(r.sid); }
+      refreshLive();
+    }, function (e) {
+      if (adding !== true) return;
+      if (/50[24]|fetch|network/i.test(e.message)) { setTimeout(function () { if (adding === true) { adding = false; paintTabs(); refreshLive(); } }, 90000); return; }   // the proxy stopped waiting; it may still come up
+      adding = false; paintTabs(); refreshLive();
+      toast(/409/.test(e.message) ? "No room for another window right now. Close a tab first." : "Didn't open: " + e.message);
+    });
+  }
+  function openInTab(sid) {   // an earlier session, carried on in a tab of its own (the main window stays as it is)
+    if (isLive(sid)) { openView(sid); return; }
+    if (adding) { toast("A window is already opening…"); return; }
+    if (full()) { toast(wmax + " windows are open, all this machine takes. Close a tab first."); return; }
+    adding = sid; if (view !== sid) openView(sid); else paintRo();
+    api("/app/window/switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: sid, alongside: true }) }).then(function () {
+      if (adding === sid) adding = false; refreshLive(); setTimeout(refreshLive, 2500);
+    }, function (e) {
+      if (adding !== sid) return;
+      adding = false; paintRo(); refreshLive();
+      toast(/409/.test(e.message) ? "Couldn't: it's open elsewhere, or there's no room. Close a tab first." : "Didn't open it: " + e.message);
+    });
+  }
+  function closeTab(sid) {
+    var w = winOf(sid); if (!w || w.main) return;
+    function go() {
+      api("/app/window/close", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: sid }) }).then(function () {
+        wins = wins.filter(function (x) { return x.sid !== sid; }); delete unread[sid];
+        if (view === sid) openView(liveSid || (wins[0] && wins[0].sid) || ""); else paintTabs();
+        toast("Closed. It stays in Sessions."); refreshLive();
+      }, function (e) { toast("Didn't close: " + e.message); });
+    }
+    if (wstate[sid] === "busy" || wstate[sid] === "waiting") ask.confirm("Close “" + (w.title || "this tab") + "”?", { body: "It is in the middle of a turn; closing stops it there. The session stays in Sessions.", ok: "close it", danger: true }).then(function (yes) { if (yes) go(); });
+    else go();
   }
   function earlier(more) {   // a "further back" mark at the head of the letter
     var b = $("earlier"); if (b) b.remove(); if (!more) return;
@@ -216,20 +298,25 @@
     };
     log.insertBefore(b, log.firstChild);
   }
-  function paintRo() {   // reading a session the window doesn't have open: say so, and offer to carry it on here
-    var ro = $("ro"), off = CCMODE && view && view !== liveSid;
+  function paintRo() {   // reading a session no window has open: say so, and offer to open it in a tab
+    var ro = $("ro"), off = CCMODE && view && !isLive(view);
     if (!ro) { ro = document.createElement("div"); ro.id = "ro"; document.querySelector("footer.write").insertBefore(ro, document.querySelector("footer.write .line")); }
     ro.hidden = !off; text.disabled = !!off; root.classList.toggle("reading", !!off);
+    paintTabs();
     if (!off) return;
     var away = viewInfo.elsewhere ? (viewInfo.elsewhere === "vscode" ? "open in VS Code right now" : "open in another Claude Code right now") : "";
-    if (carrying) { ro.innerHTML = "<span>Opening it in the window…</span>"; ro.onclick = null; return; }
-    ro.innerHTML = (liveSid ? '<span>Reading an earlier window' + (away ? " · <b>" + away + "</b>" : "") + ".</span>" : "<span>The window isn’t open right now.</span>") +
-      (viewInfo.readonly ? "" : '<button type="button" data-a="go">' + (liveSid ? "carry it on here" : "open it with this session") + "</button>") +
-      (liveSid ? '<button type="button" data-a="back">back to the live one</button>' : "");
+    if (carrying || adding === view) { ro.innerHTML = "<span>" + (carrying ? "Opening it in the main window…" : "Opening it in a tab…") + "</span>"; ro.onclick = null; return; }
+    var back = (function () { try { var t = localStorage.getItem("nyx_tab"); if (isLive(t)) return t; } catch (e) {} return liveSid || (wins[0] && wins[0].sid) || ""; })();
+    ro.innerHTML = (wins.length ? '<span>Reading an earlier window' + (away ? " · <b>" + away + "</b>" : "") + ".</span>" : "<span>No window is open right now.</span>") +
+      (viewInfo.readonly ? "" : '<button type="button" data-a="tab">open it in a tab</button>') +
+      (!liveSid && !viewInfo.readonly ? '<button type="button" data-a="main">open it as the main window</button>' : "") +
+      (back ? '<button type="button" data-a="back">back to ' + esc((winOf(back) || {}).title || "the open tab") + "</button>" : "");
     ro.onclick = function (e) {
       var b = e.target.closest("button"); if (!b) return;
-      if (b.dataset.a === "back") { openView(liveSid); return; }
-      carryOn(view, viewInfo.elsewhere);
+      if (b.dataset.a === "back") { openView(back); return; }
+      if (b.dataset.a === "main") { carryOn(view, viewInfo.elsewhere); return; }
+      if (viewInfo.elsewhere) ask.confirm("Open it in a tab?", { body: "It is " + away + "; two windows on one session don't see each other's new turns.", ok: "open it" }).then(function (yes) { if (yes) openInTab(view); });
+      else openInTab(view);
     };
   }
   /* a new window is on its way (Sessions, the gauge): say so in the letter, and follow the window to its new session */
@@ -249,11 +336,11 @@
     if (sid) { carrying = false; openingDone(); }
     if (follow) openView(sid); else paintRo();
   }
-  function refreshLive() { if (CCMODE) api("/app/cc/where").then(function (w) { liveTo((w && w.sid) || ""); }, function () {}); }
+  function refreshLive() { if (CCMODE) api("/app/cc/where").then(function (w) { setWins(w); liveTo((w && w.sid) || ""); }, function () {}); }
   function carryOn(sid, elsewhere) {   // the window closes its session and opens this one (--resume); the page follows it
     if (carrying) { toast("Already opening it…"); return; }
     var away = elsewhere ? (elsewhere === "vscode" ? "open in VS Code right now" : "open in another Claude Code right now") : "";
-    ask.confirm("Carry this session on here?", { body: (away ? "It is " + away + "; two windows on one session don't see each other's new turns. " : "") + "The window in use now closes; it stays in Sessions.", ok: "carry it on" }).then(function (yes) {
+    ask.confirm("Carry this session on in the main window?", { body: (away ? "It is " + away + "; two windows on one session don't see each other's new turns. " : "") + "The session the main window has now closes; it stays in Sessions. Other tabs stay as they are.", ok: "carry it on" }).then(function (yes) {
       if (!yes) return;
       var before = liveSid; carrying = true; toast("Opening it in the window…"); paintRo();
       api("/app/window/switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: sid }) })
@@ -586,7 +673,7 @@
     room.addEventListener("dragenter", function (e) { if (!hasFiles(e)) return; e.preventDefault(); depth++; lit(true); });
     room.addEventListener("dragover", function (e) { if (!hasFiles(e)) return; e.preventDefault(); try { e.dataTransfer.dropEffect = "copy"; } catch (x) {} });
     room.addEventListener("dragleave", function (e) { if (!hasFiles(e)) return; if (--depth <= 0) { depth = 0; lit(false); } });
-    room.addEventListener("drop", function (e) { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; lit(false); if (CCMODE && view !== liveSid) { toast("This is an earlier window — carry it on here first"); return; } addFiles(clipFiles(e.dataTransfer)); text.focus(); });
+    room.addEventListener("drop", function (e) { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; lit(false); if (CCMODE && !isLive(view)) { toast("This is an earlier window — open it in a tab first"); return; } addFiles(clipFiles(e.dataTransfer)); text.focus(); });
   })();
   /* emoji & stickers: emoji go into the text, a sticker is sent on its own straight away */
   var EMO = "😀😂🥹😭🥺😳😌😏🙃🤔😴🤤😤😵‍💫🫠🤍🖤💛🧡🔥✨🌙☀️👀🙏👍👏🫶🤝🦀🍜☕️".match(/\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic}\uFE0F?)*/gu) || [];
@@ -697,7 +784,7 @@
   // goes out once they're up. If an image never makes it, nothing is sent and a tap retries just the missing ones.
   function send() {
     var t = text.value.trim(); if ((!t && !tray.length) || !key) return;
-    if (CCMODE && view !== liveSid) { toast("This is an earlier window — carry it on here first"); return; }
+    if (CCMODE && !isLive(view)) { toast("This is an earlier window — open it in a tab first"); return; }
     if (cc && !tray.length && t.charAt(0) === "/" && cc.slash(t)) { text.value = ""; grow(); return; }   // a / command the page or the window takes (cc.js)
     var items = tray.slice(), q = quote;
     tray = []; trayEl.innerHTML = ""; trayEl.hidden = true;
@@ -719,7 +806,7 @@
     function go() {
       var atts = items.filter(function (x) { return x.done; }).map(function (x) { return x.done; });
       if (!t && !atts.length) { fail(); return; }
-      var body = { text: t, side: root.dataset.side }; if (q) body.quote = q; if (atts.length) body.attachments = atts;
+      var body = { text: t, side: root.dataset.side }; if (q) body.quote = q; if (atts.length) body.attachments = atts; if (CCMODE) body.sid = view;
       if (CCMODE) return api("/app/cc/say", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })   // typed into the window as a prompt
         .then(function (r) { if (r && r.queued) pending.querySelector(".t").textContent = "queued — after this turn"; typing(true); setTimeout(pollBusy, 1500); })
         .catch(function (e) { fail(/409/.test(e.message) ? { message: "it's waiting on a question at the terminal" } : e); });
@@ -818,7 +905,7 @@
       });
     })();
   }
-  function loadWin() { if (GROUP) return Promise.resolve(); return api("/app/window").then(function (d) { win = d; winRaw = d.sid || ""; paintWin(); if (cc) cc.paint(); }).catch(function () { win = null; winRaw = ""; paintWin(); }); }
+  function loadWin() { if (GROUP) return Promise.resolve(); return api("/app/window" + tabQ()).then(function (d) { win = d; winRaw = d.sid || ""; paintWin(); if (cc) cc.paint(); }).catch(function () { win = null; winRaw = ""; paintWin(); }); }
   function carryNote() { return +$("mCarryH").value ? "It is handed the last " + $("mCarryHV").textContent + " of your talk (up to " + $("mCarryCV").textContent + " characters); the rest comes from memory." : "Nothing is carried over; only memory comes along."; }
   var lineT = 0;
   $("mLine").addEventListener("input", function () { var k = +this.value; $("mLineV").textContent = k ? k + "k" : "none";
@@ -827,10 +914,10 @@
   var carryT = 0;   // a new window is handed the last hours of talk word for word, up to this many characters (two gates, whichever comes first)
   ["mCarryH", "mCarryC"].forEach(function (id) { $(id).addEventListener("input", function () { carryLabels(); clearTimeout(carryT);
     carryT = setTimeout(function () { api("/app/window/carry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hours: +$("mCarryH").value, chars: +$("mCarryC").value }) }).catch(function () {}); }, 500); }); });
-  function winAct(path, q, done) {
-    if (q) { ask.confirm(q).then(function (yes) { if (yes) winAct(path, "", done); }); return; }
+  function winAct(path, q, done, body) {
+    if (q) { ask.confirm(q).then(function (yes) { if (yes) winAct(path, "", done, body); }); return; }
     $("mWinNote").textContent = "…";
-    api(path, { method: "POST" }).then(function (r) { $("mWinNote").textContent = r && r.started === false ? "Sent, but it hasn't visibly started." : done; setTimeout(function () { loadWin(); loadMeter(); }, 2500); })
+    api(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : { method: "POST" }).then(function (r) { $("mWinNote").textContent = r && r.started === false ? "Sent, but it hasn't visibly started." : done; setTimeout(function () { loadWin(); loadMeter(); }, 2500); })
       .catch(function (e) { $("mWinNote").textContent = /409/.test(e.message) ? "It's busy or waiting on a question, so it did NOT go through. Try again when it has finished." : "Didn't work: " + e.message; });
   }
   function newWin(q, body) {
@@ -847,13 +934,13 @@
       });
     });
   }
-  $("mCompact").onclick = function () { winAct("/app/window/compact", "", "Compacting — give it a minute."); };
-  $("mNew").onclick = function () { newWin("Open a new window for " + AI + "?", "This one closes. " + carryNote() + " You can come back to this one from Sessions."); };
+  $("mCompact").onclick = function () { winAct("/app/window/compact", "", "Compacting — give it a minute.", CCMODE && isLive(view) ? { sid: view } : null); };
+  $("mNew").onclick = function () { newWin("Open a new main window for " + AI + "?", "The main window's session closes; you can come back to it from Sessions" + (wins.length > 1 ? ", and the other tabs stay as they are" : "") + ". " + carryNote()); };
   $("mWins").onclick = function () { if (cc && meterData && meterData.cc) { closeMeter(); cc.sessions(); return; } if (!hold) return; var before = winRaw; api("/app/window").then(function (d) { if (d.sid) before = d.sid; }, function () {});
     hold.windows(function () { verifyWin(before, "Switched windows."); }); };
   function loadMeter() {
     if (!key || GROUP) return Promise.resolve();
-    return api("/app/meter").then(function (d) { meterData = d; paintOrb(); if (cc) cc.paint(d); if (!$("meter").hidden) { paintMeter(); paintWin(); } }).catch(function () { meterData = null; paintOrb(); });
+    return api("/app/meter" + tabQ()).then(function (d) { meterData = d; paintOrb(); if (cc) cc.paint(d); if (!$("meter").hidden) { paintMeter(); paintWin(); } }).catch(function () { meterData = null; paintOrb(); });
   }
   /* keys for the companion's environment (relay/nyx_keys.py): a value goes in once and never comes back to the page */
   var KEY_HINT = $("mKeyNote").textContent;
@@ -968,7 +1055,12 @@
       return GROUP ? null : api("/app/cc/where").catch(function (e) { if (e.auth && RELAY === HOME) throw e; return null; });   // an older relay has no /app/cc: the letter as before
     }).then(function (w) {
       CCMODE = !!(w && w.chat === "cc"); root.classList.toggle("ccmode", CCMODE);
-      if (CCMODE) { liveSid = w.sid || ""; return liveSid ? ccLog(liveSid) : { messages: [] }; }
+      if (CCMODE) {
+        liveSid = w.sid || ""; wins = w.windows || []; wopen = w.opening || 0; if (w.max) wmax = w.max;
+        var t0 = null; try { t0 = localStorage.getItem("nyx_tab"); } catch (e) {}
+        var first = isLive(t0) ? t0 : liveSid || (wins[0] && wins[0].sid) || "";
+        return first ? ccLog(first) : { messages: [] };
+      }
       return latest().catch(function (e) { if (e.auth && RELAY !== HOME) { backHome(); return latest(); } throw e; });
     }).then(function (d) {
       try { localStorage.setItem("nyx_key", k); } catch (e) {}
@@ -985,9 +1077,12 @@
         ccmode: function () { return CCMODE; }, view: function (sid) { openView(sid); }, carry: carryOn, viewing: function () { return view; }, download: download, size: size,
         proof: function (f) { if (proof) proof.open(f); }, proofKind: function (n) { return proof ? NyxProof.kind(n) : ""; },
         opening: opening, openingFailed: openingFailed,
+        sid: function () { return CCMODE && isLive(view) ? view : ""; }, isLive: isLive, newTab: newTab, openInTab: openInTab, closeTab: closeTab,
         newWin: function () { $("mNew").onclick(); }, carryNote: carryNote, compact: function () {
-          api("/app/window/compact", { method: "POST" }).then(function (r) { toast(r && r.started === false ? "Sent; it hasn't visibly started" : "Compacting — give it a minute"); setTimeout(loadWin, 30000); },
+          api("/app/window/compact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: CCMODE && isLive(view) ? view : "" }) }).then(function (r) { toast(r && r.started === false ? "Sent; it hasn't visibly started" : "Compacting — give it a minute"); setTimeout(loadWin, 30000); },
             function (e) { toast(/409/.test(e.message) ? "Busy — compact once it has finished" : "Didn't compact: " + e.message); }); } });
+      if (!tabs && window.NyxTabs && CCMODE && !GROUP) tabs = NyxTabs({ host: log, pick: function (sid) { if (sid !== view) openView(sid); }, close: closeTab, add: function () { newTab(); } });
+      paintTabs();
       loadWin();
       pollBusy();
       if (!home) makeHome();

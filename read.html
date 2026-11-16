@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="apple-touch-icon" href="icon-180.png"><link rel="icon" href="icon-192.png"><link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#ECE9E2">
+<title>Read</title>
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/400.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.2.5/500.min.css" rel="stylesheet">
+<link href="fonts/source-serif-4.css" rel="stylesheet">
+<link href="fonts/cormorant.css" rel="stylesheet">
+<script>
+  try { document.documentElement.dataset.side = localStorage.getItem("nyx_side") === "moon" ? "moon" : "sun"; } catch (e) { document.documentElement.dataset.side = "sun"; }
+</script>
+<link rel="stylesheet" href="eye/ink.css">
+<link rel="stylesheet" href="read.css">
+</head>
+<body class="read">
+<div id="paper" aria-hidden="true"></div>
+<svg id="drops" aria-hidden="true" hidden></svg>
+
+<!-- the reading room: the day's sheet, the shelf, what was kept -->
+<main class="rd" id="rd">
+  <header class="rh">
+    <button class="back" id="back" type="button" aria-label="回去"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="ttl"><b>Read</b><small>一起读</small></div>
+    <nav class="tabs" id="tabs">
+      <a href="#today" data-v="today"><i>Today</i><small>今日</small></a>
+      <a href="#shelf" data-v="shelf"><i>Shelf</i><small>书架</small></a>
+      <a href="#kept" data-v="kept"><i>Kept</i><small>收藏</small></a>
+    </nav>
+  </header>
+  <section class="view" id="view" aria-live="polite"></section>
+</main>
+
+<!-- one article, open -->
+<article class="ar" id="ar" hidden>
+  <header class="ah">
+    <button class="back" id="aback" type="button" aria-label="回到书架"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <span class="prog" id="prog"></span>
+    <nav class="tools" id="tools"></nav>
+  </header>
+  <div class="sheet" id="sheet"></div>
+</article>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="config.js"></script>
+<script src="paper.js"></script>
+<script src="eye/rough.js"></script>
+<script src="eye/core.js"></script>
+<script src="eye/orrery.js"></script>
+<script src="eye/postmark.js"></script>
+<script src="ask.js"></script>
+<script src="read.js"></script>
+</body>
+</html>

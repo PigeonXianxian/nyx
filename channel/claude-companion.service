@@ -15,7 +15,7 @@ Wants=network-online.target
 Type=oneshot
 User=YOU
 ExecStart=/home/YOU/nyx/channel/start-channel.sh companion /home/YOU/companion /home/YOU/nyx/channel/mcp.example.json
-ExecStop=/usr/bin/tmux kill-session -t companion
+ExecStop=/usr/bin/tmux kill-session -t =companion
 RemainAfterExit=yes
 TimeoutStartSec=120
 

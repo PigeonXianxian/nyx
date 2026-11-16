@@ -244,7 +244,7 @@ Type=oneshot
 User=$USER
 Environment=PATH=$(dirname "$CLAUDE"):$(dirname "$BUN"):/usr/local/bin:/usr/bin:/bin
 ExecStart=$DIR/channel/start-channel.sh $TM $CDIR $DIR/channel/mcp.json $DIR/relay/model
-ExecStop=/usr/bin/tmux kill-session -t $TM
+ExecStop=/usr/bin/tmux kill-session -t =$TM
 RemainAfterExit=yes
 TimeoutStartSec=120
 
@@ -301,7 +301,7 @@ if [ -n "$SLUG" ]; then cat <<EOF
     1. $LOGIN
     2. sudo systemctl start nyx-companion$SFX
 
-  Then in the app: 小家 → 联系人 → ＋ 添一个, address $PREFIX, this key.
+  Then in the app: 聊天 → 联系人 → ＋ 添一个, address $PREFIX, this key.
   The town, Listen, Kitchen and the hold stay with your first companion;
   $AI_NAME is for chatting. Its persona lives in $CDIR/$([ "$AI" = claude ] && echo CLAUDE.md || echo AGENTS.md).
 ────────────────────────────────────────────────────────────

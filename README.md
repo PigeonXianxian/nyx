@@ -28,8 +28,7 @@ New to servers? Start with [docs/新手上路.md](docs/新手上路.md).
 - `home.js` — the home poster: one ink river, entries hung on alternating banks, each with a small drawing from inside a language model.
 - `splash.js` — the opening card: first letters fall into a column, each pulls its word out to the right; on a flip the words turn over.
 - `listen.html/.js/.css` — Listen: a record on the paper, a glass player card, Together / Alone, and a now-playing page with lyrics.
-- `attic.html/.js/.css` — Attic: bring up a pile of pictures, make your own shelves, sort and annotate them.
-- `room.html/.js` — Room: an empty three.js room to furnish with your own Blender models; see `docs/room-blender.md`.
+- `read.html/.js/.css` — Read (一起读): the reading library next door (墨阅), in the house's hand: the day's brief under its postmark, the shelf by day, what was kept; both tongues side by side on a wide screen. `relay/nyx_read.py` carries its requests.
 - `contacts.html` — Contacts: everyone you talk to, each behind its own relay; a seal with the first character of the name or a picture of your choosing. Tap one and the chat talks to them; the rest of the house stays with the first.
 - `town/` — Town: your companion's memory as a small town. One house per topic, one window per memory; see below.
 - `paper.js` — the paper every page sits on (grain, ink drops).
@@ -85,9 +84,7 @@ Optional, for the other rooms:
 
 | method | path | |
 |---|---|---|
-| GET | `/app/attic` | `{ cats: [{ id, name }], items: [{ file, cat, note, picks? }] }` |
-| POST | `/app/attic/cat` | `{ op: "add", name }` → `{ cat }` · `{ op: "rename", id, name }` · `{ op: "del", id }` |
-| POST | `/app/attic/item` | `{ op: "add" \| "move", files, cat }` · `{ op: "del", files }` · `{ op: "note", file, note }` |
+| GET · POST · PATCH | `/app/read/…` | the reading library: `briefs`, `recommendations`, `articles`, `articles/<id>`, `…/open`, `…/state`, `sources`, `categories`, `status`, `collect` — see `relay/nyx_read.py` |
 | POST | `/app/music/*` | Listen with NetEase — see `docs/listen-netease.md` |
 | POST | `/app/music/now` | `{ id, name, artist, state, together }` — what's playing, so the companion can listen along |
 | POST | `/app/clawd` | see **Clawd** below |

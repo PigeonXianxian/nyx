@@ -1,6 +1,6 @@
 """Nyx extras for the Tidal Echo relay: the rooms the Nyx pages need beyond chat.
 
-  Attic   GET  /app/attic · POST /app/attic/cat · POST /app/attic/item
+  Read    GET|POST|PATCH /app/read/…     the reading library next door (nyx_read.py)
   Listen  POST /app/music/<action> · GET|POST /app/music/now
   Clawd   POST /app/clawd                (only if ANTHROPIC_API_KEY is set)
   Usage   GET  /app/usage                (only if a status-line script saves Claude Code's JSON)
@@ -75,6 +75,18 @@ HEART_REDACT = re.compile(r"((?:sk|ghp|gho|xox[bp]|AIza)[-_A-Za-z0-9]{12,})|((?:
 
 # --- Window: the Claude Code session in tmux, and how to start it again (the systemd unit's ExecStart) ---
 TMUX = os.environ.get("RELAY_TMUX_SESSION", "companion")
+# Side windows: more Claude Code sessions running at once, each in its own tmux session TMUX-2 … TMUX-9 (tabs on the chat
+# page). The main window keeps the channel's notes; a side window only works and answers. Each Claude Code is ~400 MB.
+SIDE_RE = re.compile(r"^" + re.escape(TMUX) + r"-([2-9])$")
+MAX_WINDOWS = max(1, min(8, int(os.environ.get("RELAY_MAX_WINDOWS", "3") or 3)))   # the main window and the side ones together
+
+
+def tgt(name, pane=True):
+    """An exact tmux target. A bare name also matches by prefix, so with the main window down "companion" would hit
+    "companion-2": its keys typed into the wrong window, or that window killed."""
+    return f"={name}:" if pane else f"={name}"
+
+
 COMPANION_UNIT = Path(os.environ.get("RELAY_COMPANION_UNIT", "/etc/systemd/system/nyx-companion.service"))
 def _work_dir():
     """Where the window runs. The persona and memory stay in COMPANION_DIR; the window itself can run elsewhere — e.g.
@@ -96,23 +108,24 @@ QUIET_SEC = 45          # after the memory note, compact once the AI has answere
 WATCH_LOCK = Path(os.environ.get("RELAY_WATCH_LOCK", "/tmp/window-watch.lock"))   # held while the window restarts, so a window watcher sharing this flock can't start a second one
 STARTUP_PROMPT = "Teach auto mode about your environment"
 MODEL_SET_MARK = "Set model to"   # what Claude Code prints once /model has taken
-START_ENV_KEYS = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"}   # all a window gets from the relay: its secrets stay here, and could otherwise reach a tmux server this start brings up
+START_ENV_KEYS = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "TERM", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "TMUX_TMPDIR"}   # all a window gets from the relay: its secrets stay here, and could otherwise reach a tmux server this start brings up
 PROMPT_MARKS = ("Esc to cancel", "Enter to confirm", "Do you want", "\u276f 1.")   # a box is waiting: typing would answer it
 
 CLAUDE_MODELS = os.environ.get("RELAY_MODEL_OPTIONS",
                                "claude-opus-5-5:Opus 5.5,claude-sonnet-5-5:Sonnet 5.5,claude-haiku-5-5:Haiku 5.5")
 
 
-def live_session_meta(tmux_name):
-    """sessions/<pid>.json of the Claude Code process running in a tmux session. A dead process can leave its file
-    behind, so only live ones count, newest first."""
+def live_metas():
+    """{tmux session name: sessions/<pid>.json of the Claude Code process running in it}. A dead process can leave its
+    file behind, so only live ones count, the newest per tmux session."""
     best = {}
     for meta in (Path.home() / ".claude" / "sessions").glob("*.json"):
         try:
             d = json.loads(meta.read_text())
         except Exception:
             continue
-        if str(d.get("tmux", "")).split(":")[0] != tmux_name or not d.get("sessionId"):
+        name = str(d.get("tmux") or "").split(":")[0]
+        if not name or not d.get("sessionId"):
             continue
         try:
             os.kill(int(d.get("pid") or meta.stem), 0)
@@ -120,9 +133,39 @@ def live_session_meta(tmux_name):
             pass
         except (OSError, ValueError):
             continue
-        if not best or (d.get("startedAt") or 0) > (best.get("startedAt") or 0):
-            best = d
+        if name not in best or (d.get("startedAt") or 0) > (best[name].get("startedAt") or 0):
+            best[name] = d
     return best
+
+
+def live_session_meta(tmux_name):
+    return live_metas().get(tmux_name) or {}
+
+
+def is_window(name):
+    return name == TMUX or bool(SIDE_RE.match(name or ""))
+
+
+def live_windows():
+    """The windows: the main one first, then the side ones in the order they opened — [{name, sid, main, started}]. A tmux
+    session whose Claude Code isn't up (yet, or any more) has sid ""."""
+    try:
+        p = subprocess.run(["tmux", "ls", "-F", "#{session_name}"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    names = [n for n in p.stdout.split() if is_window(n)] if p.returncode == 0 else []
+    metas = live_metas()
+    out = [{"name": n, "sid": str((metas.get(n) or {}).get("sessionId") or ""), "main": n == TMUX,
+            "started": (metas.get(n) or {}).get("startedAt")} for n in names]
+    out.sort(key=lambda w: (not w["main"], w["started"] or float("inf"), w["name"]))   # a new tab goes at the end, whatever number it got
+    return out
+
+
+def window_of(sid):
+    """The tmux session that has this Claude Code session open; "" is the main window. None: it isn't open in any."""
+    if not sid:
+        return TMUX
+    return next((w["name"] for w in live_windows() if w["sid"] == sid), None)
 
 
 KEYS_FILE = None   # set in register(): the keys file a new window is told about (nyx_keys.py, start-channel.sh)
@@ -154,107 +197,9 @@ def register(app, g):
     check_auth, broadcast, now_iso = g["check_auth"], g["broadcast"], g["now_iso"]
     plugin_subs, human = g["plugin_subs"], g["HUMAN_NAME"]
     upload_dir, clean_filename = g["UPLOAD_DIR"], g["clean_filename"]
-    attic_file = Path(g["DB_PATH"]).parent / "attic.json"
-
-    # ---- Attic: categories and notes for uploaded pictures (files go through /app/upload) ----
-    def load():
-        try:
-            d = json.loads(attic_file.read_text(encoding="utf-8"))
-        except Exception:
-            d = {}
-        d.setdefault("cats", []); d.setdefault("items", [])
-        return d
-
-    def save(d):
-        tmp = attic_file.with_suffix(".tmp")
-        tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
-        tmp.replace(attic_file)
 
     def fname(x):
         return clean_filename(str(x or "").split("/")[-1].split("?")[0])
-
-    @app.get("/app/attic")
-    async def attic_get(request: Request):
-        check_auth(request)
-        return load()
-
-    @app.post("/app/attic/cat")
-    async def attic_cat(request: Request):
-        """{op: add, name} · {op: rename, id, name} · {op: del, id} (pictures go back to unsorted) · {op: order, ids}"""
-        check_auth(request)
-        b = await request.json()
-        op, d = str(b.get("op") or ""), load()
-        name, cid = str(b.get("name") or "").strip()[:40], str(b.get("id") or "")
-        if op == "add":
-            if not name:
-                raise HTTPException(status_code=400, detail="no name")
-            c = {"id": secrets.token_hex(4), "name": name, "at": now_iso()}
-            d["cats"].append(c); save(d)
-            return {"ok": True, "cat": c}
-        if op == "rename":
-            for c in d["cats"]:
-                if c["id"] == cid and name:
-                    c["name"] = name; save(d)
-                    return {"ok": True}
-            raise HTTPException(status_code=404, detail="no such category")
-        if op == "del":
-            d["cats"] = [c for c in d["cats"] if c["id"] != cid]
-            for it in d["items"]:
-                if it.get("cat") == cid:
-                    it["cat"] = ""
-            save(d)
-            return {"ok": True}
-        if op == "order":
-            ids = [str(x) for x in (b.get("ids") or [])]
-            d["cats"].sort(key=lambda c: ids.index(c["id"]) if c["id"] in ids else 999)
-            save(d)
-            return {"ok": True}
-        raise HTTPException(status_code=400, detail="bad op")
-
-    @app.post("/app/attic/item")
-    async def attic_item(request: Request):
-        """{op: add|move, files, cat} · {op: del, files} · {op: note, file, note} · {op: pick, file, who, on}"""
-        check_auth(request)
-        b = await request.json()
-        op, d = str(b.get("op") or ""), load()
-        files = [fname(f) for f in (b.get("files") or [])][:200]
-        cat = str(b.get("cat") or "")
-        if cat and not any(c["id"] == cat for c in d["cats"]):
-            cat = ""
-        if op == "add":
-            have = {it["file"] for it in d["items"]}
-            for f in files:
-                if f and f not in have and (upload_dir / f).is_file():
-                    d["items"].append({"file": f, "cat": cat, "note": "", "at": now_iso()})
-            save(d)
-            return {"ok": True, "n": len(d["items"])}
-        if op in ("move", "del"):
-            fs = set(files)
-            if op == "move":
-                for it in d["items"]:
-                    if it["file"] in fs:
-                        it["cat"] = cat
-            else:
-                d["items"] = [it for it in d["items"] if it["file"] not in fs]
-            save(d)
-            return {"ok": True}
-        f = fname(b.get("file"))
-        for it in d["items"]:
-            if it["file"] != f:
-                continue
-            if op == "note":
-                it["note"] = str(b.get("note") or "")[:500]
-            elif op == "pick":
-                who = str(b.get("who") or "")[:20]
-                picks = [p for p in (it.get("picks") or []) if p != who]
-                if b.get("on", True) and who:
-                    picks.append(who)
-                it["picks"] = picks
-            else:
-                raise HTTPException(status_code=400, detail="bad op")
-            save(d)
-            return {"ok": True}
-        raise HTTPException(status_code=404, detail="no such picture")
 
     # ---- Listen: proxy to the NetEase bridge; tell the AI what's on ----
     state = {"proc": None, "now": {"id": None, "name": "", "artist": "", "state": "", "ts": None}}
@@ -378,9 +323,9 @@ def register(app, g):
 
     window_ctx_size = {}   # sid -> context size, remembered from the turns where the shared usage file was this window's
 
-    def window_model():
+    def window_model(name=TMUX):
         """(model id, unix time) of this window's last real reply, from its own transcript."""
-        m = session_meta()
+        m = session_meta(name)
         if not m:
             return "", 0
         f = CLAUDE_PROJECT / f"{m['sessionId']}.jsonl"
@@ -403,15 +348,18 @@ def register(app, g):
                 continue
         return "", 0
 
-    def window_meter(m):
+    side_picks = {}   # sid -> {"model": (id, time), "effort": (level, time), "mode": (mode, time)}: picks made here for a side window
+
+    def window_meter(m, name=TMUX):
         """The usage file is shared by every window on the machine: whoever refreshed last. The limits are the account's,
         so they can stay; the model and context have to be this window's own."""
-        u = claude_usage()
+        u = claude_usage(name)
         sid = u.get("sid") or ""
-        mid, at = window_model()
-        try:   # a confirmed pick is written here, and can be newer than the last reply
-            if model_file.stat().st_mtime > at and (at or not mid):
-                mid = model_file.read_text(encoding="utf-8").strip() or mid
+        mid, at = window_model(name)
+        try:   # a confirmed pick is written here, and can be newer than the last reply (the main window's file; a side window's own pick)
+            pk = (read_pick(model_file), model_file.stat().st_mtime) if name == TMUX else (side_picks.get(sid) or {}).get("model")
+            if pk and pk[0] and pk[1] > at and (at or not mid):
+                mid = pk[0]
         except OSError:
             pass
         names = {x["id"]: x["name"] for x in m.get("models") or []}
@@ -428,8 +376,14 @@ def register(app, g):
 
     # ---- subagents: what the window's Agent-tool helpers are up to (tap the chat crab or the home Clawd) ----
     # A helper counts as moving if its transcript changed in the last three minutes; an estimate, not a signal.
-    def agents_now():
-        sid = str(live_session_meta(TMUX).get("sessionId") or "")
+    def read_pick(f):
+        try:
+            return f.read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+
+    def agents_now(name=TMUX):
+        sid = str(live_session_meta(name).get("sessionId") or "")
         if not re.fullmatch(r"[0-9a-f-]{36}", sid):
             return []
         now, out = time.time(), []
@@ -450,24 +404,27 @@ def register(app, g):
         return out[:20]
 
     @app.get("/app/agents")
-    async def agents_list(request: Request):
+    async def agents_list(request: Request, sid: str = ""):
         check_auth(request)
-        return {"agents": await asyncio.to_thread(agents_now)}
+        name = await asyncio.to_thread(window_of, sid)
+        return {"agents": await asyncio.to_thread(agents_now, name) if name else []}
 
     cc = {}   # nyx_cc.py, mounted at the end: live limits, the full model list, effort and mode
 
     @app.get("/app/meter")
-    async def meter_get(request: Request):
+    async def meter_get(request: Request, sid: str = ""):
+        """sid: the window (tab) on the page; the main one if left out."""
         check_auth(request)
+        name = (await asyncio.to_thread(window_of, sid) or TMUX) if backend() != "codex" else TMUX
         m = current_meter()
         if not m and backend() != "codex" and cc.get("enrich"):
             m = {"backend": "claude", "limits": [], "models": [], "model_applies": "live", "ts": time.time()}   # no status line yet: Claude Code can still answer
         if not m:
             raise HTTPException(status_code=503, detail="nothing reported yet")
         if m.get("model_applies") == "live":
-            m = await asyncio.to_thread(window_meter, m)
+            m = await asyncio.to_thread(window_meter, m, name)
             if cc.get("enrich"):
-                m = await cc["enrich"](m)
+                m = await cc["enrich"](m, name)
         try:
             m["chosen"] = model_file.read_text(encoding="utf-8").strip() or None
         except Exception:
@@ -507,17 +464,17 @@ def register(app, g):
         if mid not in {x.partition(":")[0] for x in CLAUDE_MODELS.split(",")}:
             raise HTTPException(status_code=400, detail="bad model id")
         st = await asyncio.to_thread(claude_busy)
-        pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", TMUX)
+        pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", tgt(TMUX))
         if st.get("state") != "idle" or pane.returncode != 0 or not input_box_showing(pane.stdout):
             raise HTTPException(status_code=409, detail=st.get("state") or "busy")
         seen = pane.stdout.count(MODEL_SET_MARK)
-        proc = await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, "C-u", "/model " + mid, "Enter")
+        proc = await asyncio.to_thread(tmux, "send-keys", "-t", tgt(TMUX), "C-u", "/model " + mid, "Enter")
         if proc.returncode != 0:
             raise HTTPException(status_code=502, detail="couldn't reach the window")
         confirmed = False
         for _ in range(10):
             await asyncio.sleep(0.5)
-            now = await asyncio.to_thread(tmux, "capture-pane", "-pt", TMUX)
+            now = await asyncio.to_thread(tmux, "capture-pane", "-pt", tgt(TMUX))
             if now.returncode == 0 and now.stdout.count(MODEL_SET_MARK) > seen:
                 confirmed = True
                 break
@@ -722,11 +679,11 @@ def register(app, g):
     def tmux(*a, timeout=10):
         return subprocess.run(["tmux", *a], capture_output=True, text=True, timeout=timeout)
 
-    def session_meta():
-        return live_session_meta(TMUX)
+    def session_meta(name=TMUX):
+        return live_session_meta(name)
 
-    def claude_usage():
-        m = session_meta()
+    def claude_usage(name=TMUX):
+        m = session_meta(name)
         if not m:
             return {}
         f = CLAUDE_PROJECT / f"{m['sessionId']}.jsonl"
@@ -755,12 +712,12 @@ def register(app, g):
         return claude_usage()
 
     async def claude_compact():
-        pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", TMUX)
+        pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", tgt(TMUX))
         if pane.returncode != 0:
             raise HTTPException(status_code=503, detail="the window isn't running")
         if any(s in "\n".join(pane.stdout.rstrip().splitlines()[-15:]) for s in PROMPT_MARKS):
             raise HTTPException(status_code=409, detail="the window is waiting on a question; answer it in the terminal first")
-        await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, "C-u", "/compact", "Enter")
+        await asyncio.to_thread(tmux, "send-keys", "-t", tgt(TMUX), "C-u", "/compact", "Enter")
 
     restart_lock = asyncio.Lock()
 
@@ -779,15 +736,15 @@ def register(app, g):
         f.close()
         return None
 
-    async def dismiss_startup_prompts():
+    async def dismiss_startup_prompts(name=TMUX):
         """The start script handles the first boxes; this one shows up later."""
         for _ in range(40):
             await asyncio.sleep(3)
-            pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", TMUX)
+            pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", tgt(name))
             if pane.returncode != 0:
                 return
             if STARTUP_PROMPT in pane.stdout and not input_box_showing(pane.stdout):
-                await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, "2", "Enter")
+                await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "2", "Enter")
                 return
 
     async def run_start(cmd, env):
@@ -803,40 +760,47 @@ def register(app, g):
             return type(e).__name__
         return "" if proc.returncode == 0 else (proc.stdout + proc.stderr)[-200:] or "it exited with an error"
 
-    async def window_up(old, fresh):
+    async def window_up(old, fresh, name=TMUX):
         """A start command returning 0 proves little: wait until a live session answers, and isn't sitting on a box."""
         for _ in range(15):
             await asyncio.sleep(2)
-            pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", TMUX)
+            pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", tgt(name))
             if pane.returncode != 0:
                 return False
             if STARTUP_PROMPT in pane.stdout and not input_box_showing(pane.stdout):
-                await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, "2", "Enter")
+                await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "2", "Enter")
                 continue
-            sid = session_meta().get("sessionId")
+            sid = session_meta(name).get("sessionId")
             tail = "\n".join(pane.stdout.rstrip().splitlines()[-15:])
             stuck = any(s in tail for s in PROMPT_MARKS) and not input_box_showing(pane.stdout)
             if sid and (sid != old or not fresh) and not stuck:
                 return True
         return False
 
+    def start_cmd():
+        """The systemd unit's ExecStart (start-channel.sh <tmux session> …) and the PATH it gives the window."""
+        try:
+            unit = COMPANION_UNIT.read_text().splitlines()
+            cmd = shlex.split(next(l for l in unit if l.startswith("ExecStart="))[len("ExecStart="):])
+        except Exception:
+            raise HTTPException(status_code=503, detail="don't know how to start the window (" + str(COMPANION_UNIT) + ")")
+        unit_path = next((l[len("Environment=PATH="):] for l in unit if l.startswith("Environment=PATH=")), None)   # where claude and bun live
+        return cmd, unit_path
+
     async def claude_restart(resume=""):
         """Closes the window and opens the next. If the next one doesn't come up, the old one is brought back and this raises 500."""
         if restart_lock.locked():
             raise HTTPException(status_code=409, detail="the window is already restarting")
+        if resume and await asyncio.to_thread(window_of, resume) not in (None, TMUX):
+            raise HTTPException(status_code=409, detail="that session is open in another tab")
         async with restart_lock:
-            try:
-                unit = COMPANION_UNIT.read_text().splitlines()
-                cmd = shlex.split(next(l for l in unit if l.startswith("ExecStart="))[len("ExecStart="):])
-            except Exception:
-                raise HTTPException(status_code=503, detail="don't know how to start the window (" + str(COMPANION_UNIT) + ")")
-            unit_path = next((l[len("Environment=PATH="):] for l in unit if l.startswith("Environment=PATH=")), None)   # where claude and bun live
+            cmd, unit_path = start_cmd()
             def start_env(sid):
-                return window_env(unit_path, sid)
+                return dict(window_env(unit_path, sid), NYX_SIDE="0")
             old = session_meta().get("sessionId", "")
             watch = await hold_watch_lock()
             try:
-                await asyncio.to_thread(tmux, "kill-session", "-t", TMUX)
+                await asyncio.to_thread(tmux, "kill-session", "-t", tgt(TMUX, False))
                 ctx.update(nudged_sid="", nudged_at=None)
                 await asyncio.sleep(1)
                 why = await run_start(cmd, start_env(resume))
@@ -845,7 +809,7 @@ def register(app, g):
                 if not why:
                     asyncio.get_running_loop().create_task(dismiss_startup_prompts())
                     return
-                await asyncio.to_thread(tmux, "kill-session", "-t", TMUX)
+                await asyncio.to_thread(tmux, "kill-session", "-t", tgt(TMUX, False))
                 await asyncio.sleep(1)
                 back = not await run_start(cmd, start_env(old)) and await window_up(old, False)
                 if back:
@@ -855,6 +819,46 @@ def register(app, g):
             finally:
                 if watch:
                     watch.close()
+
+    side_lock = asyncio.Lock()
+
+    async def open_side(resume=""):
+        """A window alongside the main one, in tmux TMUX-<n>: a fresh session, or an earlier one carried on (--resume). It
+        runs the same start script with NYX_SIDE=1, so its channel doesn't take the app's notes (they go to the main window).
+        Returns (tmux name, session id)."""
+        if side_lock.locked():
+            raise HTTPException(status_code=409, detail="a window is already opening")
+        async with side_lock:
+            ws = await asyncio.to_thread(live_windows)
+            if resume and any(w["sid"] == resume for w in ws):
+                raise HTTPException(status_code=409, detail="that session is already open in a tab")
+            if len(ws) >= MAX_WINDOWS:
+                raise HTTPException(status_code=409, detail=f"{len(ws)} windows are open, the most this machine takes; close one first")
+            cmd, unit_path = start_cmd()
+            if len(cmd) < 2 or cmd[1] != TMUX:
+                raise HTTPException(status_code=503, detail="the start command doesn't name the tmux session " + TMUX)
+            have = {w["name"] for w in ws}
+            name = next((f"{TMUX}-{k}" for k in range(2, 10) if f"{TMUX}-{k}" not in have), None)
+            if not name:
+                raise HTTPException(status_code=409, detail="no free window")
+            why = await run_start([cmd[0], name] + cmd[2:], dict(window_env(unit_path, resume), NYX_SIDE="1"))
+            if not why and not await window_up("", True, name):
+                why = "it never came up"
+            if why:
+                await asyncio.to_thread(tmux, "kill-session", "-t", tgt(name, False))
+                raise HTTPException(status_code=500, detail="the window didn't start: " + why)
+            asyncio.get_running_loop().create_task(dismiss_startup_prompts(name))
+            return name, str(session_meta(name).get("sessionId") or "")
+
+    async def close_side(sid):
+        """Close a side window. Its session stays, to read or carry on later; the main window can't be closed from here."""
+        name = await asyncio.to_thread(window_of, sid) if sid else None
+        if not name:
+            raise HTTPException(status_code=404, detail="that session isn't open in a window")
+        if name == TMUX:
+            raise HTTPException(status_code=400, detail="the main window stays open")
+        await asyncio.to_thread(tmux, "kill-session", "-t", tgt(name, False))
+        return name
 
     def claude_windows():
         tag = '<channel source=\\"companion\\"'
@@ -906,9 +910,11 @@ def register(app, g):
         cmd_file.write_text(json.dumps({"action": action, "ts": time.time(), **kw}))
 
     @app.get("/app/window")
-    async def window_get(request: Request):
+    async def window_get(request: Request, sid: str = ""):
+        """sid: a tab's window; the main one if left out (or not open)."""
         check_auth(request)
-        u = await asyncio.to_thread(usage_now)
+        name = await asyncio.to_thread(window_of, sid) if sid and backend() != "codex" else None
+        u = await asyncio.to_thread(claude_usage, name) if name else await asyncio.to_thread(usage_now)
         m = current_meter() or {}
         return {"backend": backend(), "line_k": line_k(), "used": u.get("used") or 0, "sid": u.get("sid"),
                 "started_at": u.get("started_at"), "size": ((m.get("context") or {}).get("size")), "nudged": bool(ctx["nudged_at"]), "carry": carry_cfg()}
@@ -929,20 +935,27 @@ def register(app, g):
         if backend() == "codex":
             queue_cmd("compact")
             return {"ok": True}
-        st = await asyncio.to_thread(claude_busy)
-        pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", TMUX)
+        try:
+            sid = str((await request.json()).get("sid") or "")
+        except ValueError:
+            sid = ""
+        name = await asyncio.to_thread(window_of, sid)
+        if not name:
+            raise HTTPException(status_code=404, detail="that session isn't open in a window")
+        st = await asyncio.to_thread(claude_busy, name)
+        pane = await asyncio.to_thread(tmux, "capture-pane", "-pt", tgt(name))
         if st.get("state") == "offline" or pane.returncode != 0:
             raise HTTPException(status_code=503, detail="the window isn't running")
         if st.get("state") != "idle" or not input_box_showing(pane.stdout):
             raise HTTPException(status_code=409, detail=st.get("state") or "busy")
         seen = pane.stdout.count("Compacting")
-        proc = await asyncio.to_thread(tmux, "send-keys", "-t", TMUX, "C-u", "/compact", "Enter")
+        proc = await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "C-u", "/compact", "Enter")
         if proc.returncode != 0:
             raise HTTPException(status_code=502, detail="couldn't reach the window")
         started = False
         for _ in range(8):   # started says whether the window visibly took it
             await asyncio.sleep(0.5)
-            now = await asyncio.to_thread(tmux, "capture-pane", "-pt", TMUX)
+            now = await asyncio.to_thread(tmux, "capture-pane", "-pt", tgt(name))
             if now.returncode == 0 and now.stdout.count("Compacting") > seen:
                 started = True
                 break
@@ -976,8 +989,11 @@ def register(app, g):
 
     @app.post("/app/window/switch")
     async def window_switch(request: Request):
+        """{sid}: the main window carries that session on (the one it had closes). {sid, alongside: true}: a side window
+        opens with it, and the main one stays as it is."""
         check_auth(request)
-        sid = str((await request.json()).get("sid") or "")
+        b = await request.json()
+        sid = str(b.get("sid") or "")
         if backend() == "codex":
             if not any(w.get("sid") == sid for w in (current_meter() or {}).get("windows") or []):
                 raise HTTPException(status_code=404, detail="no such window")
@@ -985,8 +1001,20 @@ def register(app, g):
             return {"ok": True}
         if not SID_RE.match(sid) or not (CLAUDE_PROJECT / f"{sid}.jsonl").exists():
             raise HTTPException(status_code=404, detail="no such window")
+        if b.get("alongside"):
+            name, now = await open_side(sid)
+            return {"ok": True, "sid": now, "window": name}
         await claude_restart(sid)
         return {"ok": True}
+
+    @app.post("/app/window/close")
+    async def window_close(request: Request):
+        """{sid}: close the side window that has it open (the main window stays)."""
+        check_auth(request)
+        if backend() == "codex":
+            raise HTTPException(status_code=404, detail="Claude Code only")
+        name = await close_side(str((await request.json()).get("sid") or ""))
+        return {"ok": True, "window": name}
 
     @app.get("/app/window/cmd")
     async def window_cmd_get(request: Request):
@@ -1042,9 +1070,9 @@ def register(app, g):
     def secs(t):
         return sum(int(v) * {"h": 3600, "m": 60, "s": 1}[u] for v, u in re.findall(r"(\d+)\s*([hms])", t or ""))
 
-    def current_tool():
+    def current_tool(name=TMUX):
         """The last tool call in the transcript that hasn't had its result yet."""
-        m = session_meta()
+        m = session_meta(name)
         f = CLAUDE_PROJECT / f"{m.get('sessionId')}.jsonl" if m else None
         try:
             with f.open("rb") as fh:
@@ -1088,10 +1116,10 @@ def register(app, g):
     EFFORT_FILE, EFFORT_PENDING = data_dir / "effort_now", data_dir / "effort_pending"   # last effort level typed in / one waiting for an idle moment
     EFFORT_RE = re.compile(r"[\u25cf\u25c9\u25cb\u25ce\u2022]\s*(low|medium|high|xhigh|max)\s*\u00b7\s*/effort")   # the badge on the pane, it fades after a while
     WAIT_DEBOUNCE = 45      # auto mode shows a confirm box for a few seconds before it lets the command through; only a box that stays is "waiting"
-    wait_since = {"t": None}
+    wait_since = {}   # tmux name -> when a box came up there
 
-    def claude_busy():
-        pane = tmux("capture-pane", "-pt", TMUX)
+    def claude_busy(name=TMUX):
+        pane = tmux("capture-pane", "-pt", tgt(name))
         if pane.returncode != 0:
             return {"state": "offline"}
         lines = [l for l in pane.stdout.rstrip().splitlines() if l.strip()]
@@ -1109,13 +1137,12 @@ def register(app, g):
         input_box = any(lines[i].startswith("\u2500\u2500\u2500") and lines[i + 1].startswith("\u276f") and lines[i + 2].startswith("\u2500\u2500\u2500")
                         for i in range(max(0, len(lines) - 8), len(lines) - 2))
         if not input_box and any(s in "\n".join(lines[-12:]) for s in PROMPT_MARKS):
-            if wait_since["t"] is None:
-                wait_since["t"] = time.time()
-            if time.time() - wait_since["t"] >= WAIT_DEBOUNCE:
+            wait_since.setdefault(name, time.time())
+            if time.time() - wait_since[name] >= WAIT_DEBOUNCE:
                 out["state"] = "waiting"
                 return out
         else:
-            wait_since["t"] = None
+            wait_since.pop(name, None)
         # Newer Claude Code no longer prints "esc to interrupt"; the spinner line ("\u273b Thinking\u2026 (5m 59s \u00b7 ...)") is the sign of a running turn.
         spinning = any(SPIN_RE.match(l) for l in lines[-20:])
         if "esc to interrupt" not in tail and not spinning:
@@ -1126,15 +1153,27 @@ def register(app, g):
             m = SPIN_RE.match(l)
             if m:
                 out.update(verb=m.group(1), secs=secs(m.group(2).split("\u00b7")[0])); break
-        t = current_tool()
+        t = current_tool(name)
         if t:
             out.update(tool=t["tool"], detail=t["detail"])
             if t["since"]:
                 out["tool_secs"] = max(0, int(time.time() - t["since"]))
         return out
 
+    def busy_all(sid):
+        """The tab's window in full, and a word on each window: {state…, windows: [{sid, main, state}]}."""
+        ws = live_windows()
+        name = next((w["name"] for w in ws if sid and w["sid"] == sid), TMUX)
+        st, out = claude_busy(name), []
+        for w in ws:
+            if w["sid"]:
+                out.append({"sid": w["sid"], "main": w["main"], "state": st.get("state") if w["name"] == name else claude_busy(w["name"]).get("state")})
+        st["windows"] = out
+        return st
+
     @app.get("/app/busy")
-    async def busy_get(request: Request):
+    async def busy_get(request: Request, sid: str = ""):
+        """sid: the tab on the page (the main window if left out); every window's state comes along in windows."""
         check_auth(request)
         if backend() == "codex":
             b = dict(bridge_busy)
@@ -1146,7 +1185,7 @@ def register(app, g):
             if b.get("tool_since"):
                 b["tool_secs"] = int(now - b["tool_since"])
             return b
-        st = await asyncio.to_thread(claude_busy)
+        st = await asyncio.to_thread(busy_all, sid)
         try:
             st["pending_effort"] = EFFORT_PENDING.read_text().strip() or None
         except Exception:
@@ -1300,6 +1339,10 @@ def register(app, g):
                 ksave(d)
                 return {"ok": True, "recipe": r}
         raise HTTPException(status_code=404, detail="no such recipe")
+
+    # ---- Read (一起读): the reading library next door, behind the house's own key (nyx_read.py) ----
+    import nyx_read
+    nyx_read.register(app, g["check_auth"])
 
     # ---- the chat page's Claude Code controls: live limits, models, effort, mode, / commands, sessions in groups ----
     import nyx_cc

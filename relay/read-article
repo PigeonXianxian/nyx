@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""read-article <id>: print one article from the reading library (墨阅) as plain text.
+
+For the companion: when a letter says「一起读这篇…（全文：read-article <id>）」, this gives the whole piece —
+title, source, the lead, then the body (the Chinese translation where there is one, unless --source).
+It asks the relay on this machine, with the relay's own secret from relay.env; nothing is printed but the article.
+"""
+import json
+import os
+import sys
+import urllib.request
+from pathlib import Path
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if len(args) != 1:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    here = Path(os.path.realpath(__file__)).parent
+    secret, port = os.environ.get("RELAY_SECRET", ""), os.environ.get("RELAY_PORT", "3011")
+    env = here / "relay.env"
+    if not secret and env.exists():
+        for line in env.read_text(encoding="utf-8").splitlines():
+            if line.startswith("RELAY_SECRET="):
+                secret = line.split("=", 1)[1].strip().strip("\"'")
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/app/read/articles/{args[0]}", headers={"Authorization": f"Bearer {secret}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            a = json.load(r)
+    except Exception as e:  # noqa: BLE001
+        print(f"read-article: could not fetch {args[0]}: {e}", file=sys.stderr)
+        return 1
+    t = a.get("translation") or {}
+    blocks = a.get("blocks") or []
+    zh = t.get("blocks") if t.get("status") == "ready" and "--source" not in sys.argv and len(t.get("blocks") or []) == len(blocks) else None
+    title = (t.get("title") if zh and t.get("title") else None) or a.get("title") or ""
+    out = [f"# {title}"]
+    if title != a.get("title"):
+        out.append(f"（原题：{a.get('title')}）")
+    out.append(" · ".join(x for x in [a.get("sourceName"), a.get("author"), (a.get("publishedAt") or "")[:10], a.get("url")] if x))
+    if a.get("summary"):
+        out.append(f"\n导读：{a['summary']}")
+    if a.get("evidence"):
+        out.append(a["evidence"])
+    out.append("")
+    for i, b in enumerate(blocks):
+        x = zh[i] if zh and zh[i] and zh[i].get("text") else b
+        text = (x.get("alt") or x.get("text") or "") if b.get("type") == "image" else (x.get("text") or "")
+        if not text.strip():
+            continue
+        kind = b.get("type")
+        out.append(("## " + text) if kind == "heading" else ("> " + text) if kind == "quote" else ("[图] " + text) if kind == "image" else ("```\n" + text + "\n```") if kind == "code" else text)
+        out.append("")
+    print("\n".join(out))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
