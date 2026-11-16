@@ -28,8 +28,9 @@ window.NYX = {
       { id: "town", en: "Town", zh: "小镇", d: "一个主题一栋房子，一条记忆一扇窗", href: "town/index.html" },   // the memory town: one house per topic, one window per memory (town/, relay/nyx_town.py)
       { id: "heart", en: "Heart", zh: "心脏", d: "它的人设和后台，只读" }] },
     { id: "listen", en: "Listen", zh: "一起听", href: "listen.html", art: "sampling" },
-    { id: "life", en: "Life", zh: "生活", art: "context", apps: [
-      { id: "kitchen", en: "Kitchen", zh: "厨房", d: "做饭，端给它吃", href: "kitchen.html" }] },
+    // Plan: what is to be done, day by day (plan.html, relay/nyx_plan.py). Your companion writes down what you say you have to do (relay/plan.py); you can write there too.
+    { id: "plan", en: "Plan", zh: "日程", href: "plan.html", art: "context",
+      svg: '<rect x="4" y="5.5" width="16" height="14.5" rx="1.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/><path d="M8.2 14.8l2.4 2.4 5-5"/>' },
     // Read: the reading library (墨阅) brought into the house — the day's sheet, the shelf, what was kept (read.html, relay/nyx_read.py)
     { id: "read", en: "Read", zh: "一起读", art: "clusters", apps: [
       { id: "today", en: "Today", zh: "今日", d: "今天的新鲜事", href: "read.html#today" },

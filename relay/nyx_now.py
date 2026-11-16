@@ -5,7 +5,8 @@ So the relay reads one small file, `memory/now.md` in your companion's folder, a
 
   - every message gets one short line:  【now · Sun 3/8 21:40 · Lisbon】
   - the card's bullet lines come along only now and then: after an hour of quiet, when the file changed,
-    or when they haven't been sent for three hours.
+    or when they haven't been sent for three hours. With them comes one line from the plan (nyx_plan.py): what is
+    overdue, today's, and the next days' — so what your human has to do is kept there, not in this file.
 
 Your companion keeps the file itself (its persona note tells it to); you can read it in the Heart.
 The file looks like this; only `Time zone:`, `Place:` and lines starting with "- " are read:
@@ -67,7 +68,7 @@ def read_card():
 
 
 def register(app, g):
-    st = {"last": 0.0, "body_at": 0.0, "mtime": 0.0}
+    st = {"last": 0.0, "body_at": 0.0, "mtime": 0.0, "plan": 0.0}
     log = g.get("log")
 
     async def now_card(pl: dict, body: dict) -> dict:
@@ -83,11 +84,16 @@ def register(app, g):
         d = datetime.fromtimestamp(now, z) if z else datetime.utcfromtimestamp(now)
         when = f"{DAYS[d.weekday()]} {d.month}/{d.day} {d:%H:%M}" + ("" if z else " UTC")
         head = f"【now · {when}" + (f" · {place}" if place else "")
-        whole = lines and (now - st["last"] >= GAP_SEC or mtime != st["mtime"] or now - st["body_at"] >= REPEAT_SEC)
+        plan = g.get("PLAN")   # nyx_plan: what is coming up, in one line
+        try:
+            pm, pl_line = (plan["mtime"](), plan["line"](z)) if plan else (0.0, "")
+        except Exception:
+            pm, pl_line = 0.0, ""
+        whole = (lines or pl_line) and (now - st["last"] >= GAP_SEC or mtime != st["mtime"] or pm != st["plan"] or now - st["body_at"] >= REPEAT_SEC)
         st["last"] = now
         if whole:
-            st.update(body_at=now, mtime=mtime)
-            head += f" | {CARD.name}, change it when this changes】\n" + "\n".join(lines)
+            st.update(body_at=now, mtime=mtime, plan=pm)
+            head += f" | {CARD.name}, change it when this changes】\n" + "\n".join(lines + ([pl_line] if pl_line else []))
         else:
             head += "】"
         return {**pl, "content": f"{head}\n\n{pl.get('content', '')}"}
