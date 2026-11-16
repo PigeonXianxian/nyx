@@ -1,6 +1,6 @@
 """Nyx extras for the Tidal Echo relay: the rooms the Nyx pages need beyond chat.
 
-  Attic   GET  /app/attic · POST /app/attic/cat · POST /app/attic/item
+  Read    GET|POST|PATCH /app/read/…     the reading library next door (nyx_read.py)
   Listen  POST /app/music/<action> · GET|POST /app/music/now
   Clawd   POST /app/clawd                (only if ANTHROPIC_API_KEY is set)
   Usage   GET  /app/usage                (only if a status-line script saves Claude Code's JSON)
@@ -154,107 +154,9 @@ def register(app, g):
     check_auth, broadcast, now_iso = g["check_auth"], g["broadcast"], g["now_iso"]
     plugin_subs, human = g["plugin_subs"], g["HUMAN_NAME"]
     upload_dir, clean_filename = g["UPLOAD_DIR"], g["clean_filename"]
-    attic_file = Path(g["DB_PATH"]).parent / "attic.json"
-
-    # ---- Attic: categories and notes for uploaded pictures (files go through /app/upload) ----
-    def load():
-        try:
-            d = json.loads(attic_file.read_text(encoding="utf-8"))
-        except Exception:
-            d = {}
-        d.setdefault("cats", []); d.setdefault("items", [])
-        return d
-
-    def save(d):
-        tmp = attic_file.with_suffix(".tmp")
-        tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
-        tmp.replace(attic_file)
 
     def fname(x):
         return clean_filename(str(x or "").split("/")[-1].split("?")[0])
-
-    @app.get("/app/attic")
-    async def attic_get(request: Request):
-        check_auth(request)
-        return load()
-
-    @app.post("/app/attic/cat")
-    async def attic_cat(request: Request):
-        """{op: add, name} · {op: rename, id, name} · {op: del, id} (pictures go back to unsorted) · {op: order, ids}"""
-        check_auth(request)
-        b = await request.json()
-        op, d = str(b.get("op") or ""), load()
-        name, cid = str(b.get("name") or "").strip()[:40], str(b.get("id") or "")
-        if op == "add":
-            if not name:
-                raise HTTPException(status_code=400, detail="no name")
-            c = {"id": secrets.token_hex(4), "name": name, "at": now_iso()}
-            d["cats"].append(c); save(d)
-            return {"ok": True, "cat": c}
-        if op == "rename":
-            for c in d["cats"]:
-                if c["id"] == cid and name:
-                    c["name"] = name; save(d)
-                    return {"ok": True}
-            raise HTTPException(status_code=404, detail="no such category")
-        if op == "del":
-            d["cats"] = [c for c in d["cats"] if c["id"] != cid]
-            for it in d["items"]:
-                if it.get("cat") == cid:
-                    it["cat"] = ""
-            save(d)
-            return {"ok": True}
-        if op == "order":
-            ids = [str(x) for x in (b.get("ids") or [])]
-            d["cats"].sort(key=lambda c: ids.index(c["id"]) if c["id"] in ids else 999)
-            save(d)
-            return {"ok": True}
-        raise HTTPException(status_code=400, detail="bad op")
-
-    @app.post("/app/attic/item")
-    async def attic_item(request: Request):
-        """{op: add|move, files, cat} · {op: del, files} · {op: note, file, note} · {op: pick, file, who, on}"""
-        check_auth(request)
-        b = await request.json()
-        op, d = str(b.get("op") or ""), load()
-        files = [fname(f) for f in (b.get("files") or [])][:200]
-        cat = str(b.get("cat") or "")
-        if cat and not any(c["id"] == cat for c in d["cats"]):
-            cat = ""
-        if op == "add":
-            have = {it["file"] for it in d["items"]}
-            for f in files:
-                if f and f not in have and (upload_dir / f).is_file():
-                    d["items"].append({"file": f, "cat": cat, "note": "", "at": now_iso()})
-            save(d)
-            return {"ok": True, "n": len(d["items"])}
-        if op in ("move", "del"):
-            fs = set(files)
-            if op == "move":
-                for it in d["items"]:
-                    if it["file"] in fs:
-                        it["cat"] = cat
-            else:
-                d["items"] = [it for it in d["items"] if it["file"] not in fs]
-            save(d)
-            return {"ok": True}
-        f = fname(b.get("file"))
-        for it in d["items"]:
-            if it["file"] != f:
-                continue
-            if op == "note":
-                it["note"] = str(b.get("note") or "")[:500]
-            elif op == "pick":
-                who = str(b.get("who") or "")[:20]
-                picks = [p for p in (it.get("picks") or []) if p != who]
-                if b.get("on", True) and who:
-                    picks.append(who)
-                it["picks"] = picks
-            else:
-                raise HTTPException(status_code=400, detail="bad op")
-            save(d)
-            return {"ok": True}
-        raise HTTPException(status_code=404, detail="no such picture")
 
     # ---- Listen: proxy to the NetEase bridge; tell the AI what's on ----
     state = {"proc": None, "now": {"id": None, "name": "", "artist": "", "state": "", "ts": None}}
@@ -1300,6 +1202,10 @@ def register(app, g):
                 ksave(d)
                 return {"ok": True, "recipe": r}
         raise HTTPException(status_code=404, detail="no such recipe")
+
+    # ---- Read (一起读): the reading library next door, behind the house's own key (nyx_read.py) ----
+    import nyx_read
+    nyx_read.register(app, g["check_auth"])
 
     # ---- the chat page's Claude Code controls: live limits, models, effort, mode, / commands, sessions in groups ----
     import nyx_cc

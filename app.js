@@ -6,7 +6,7 @@
 (function () {
   "use strict";
   var C = window.NYX || {}, HOME = C.relay || "/relay", ME = C.meName || "Me";
-  // the chat talks to whoever you picked on the contacts page (nyx_relay / nyx_chat_key / nyx_ai); everything else in the house — the hold, town, listen, kitchen, attic — stays with the first companion (HOME + nyx_key)
+  // the chat talks to whoever you picked on the contacts page (nyx_relay / nyx_chat_key / nyx_ai); everything else in the house — the hold, town, listen, kitchen, read — stays with the first companion (HOME + nyx_key)
   function ls(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   var RELAY = ls("nyx_relay") || HOME, AI = (RELAY !== HOME && ls("nyx_ai")) || C.aiName || "Companion";
   var GROUP = /\/g$/.test(RELAY);   // the group chat: the first companion's relay at /g; nobody's gauge, every answer says who it's from
@@ -56,9 +56,9 @@
   // the drawer: a line icon on each row; a folder becomes a small clay heading with its rooms under it
   var IC = { chat: '<path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/>',
     listen: '<path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
-    attic: '<path d="M3 10l9-6 9 6"/><path d="M5 9v11h14V9"/><path d="M9 20v-6h6v6"/><path d="M8 12h.01M16 12h.01"/>',
-    room: '<path d="M6 20V9a6 6 0 0 1 12 0v11"/><path d="M4 20h16"/><path d="M14.5 14h.01"/>',
-    bedroom: '<path d="M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6"/><path d="M3 18h18M5 10V6.5A1.5 1.5 0 0 1 6.5 5h11A1.5 1.5 0 0 1 19 6.5V10"/><path d="M7 10h4v-2H7zM13 10h4v-2h-4z"/>',
+    today: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    shelf: '<path d="M4 20V5.5h4V20M8 20V4h4.5v16M12.5 20V7l4-1 3 13.5"/><path d="M3 20h18"/>',
+    kept: '<path d="M7 4h10v16l-5-3.6L7 20z"/>',
     memory: '<path d="M12 3.5c.8 5 3.5 7.7 8.5 8.5-5 .8-7.7 3.5-8.5 8.5-.8-5-3.5-7.7-8.5-8.5 5-.8 7.7-3.5 8.5-8.5Z"/>',
     board: '<rect x="3.5" y="4" width="17" height="16" rx="2.2"/><path d="M9 4v16M15 4v16"/><path d="M5.5 8h1.8M11 8h1.8M11 11.5h1.8M17 8h1.8"/>',
     sessions: '<path d="M7 4.5h11.5v13"/><path d="M4.5 7h11.5v13H4.5z"/><path d="M7.5 11h5.5M7.5 14h5.5M7.5 17h3"/>',

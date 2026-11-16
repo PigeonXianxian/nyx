@@ -30,17 +30,12 @@ window.NYX = {
     { id: "listen", en: "Listen", zh: "一起听", href: "listen.html", art: "sampling" },
     { id: "life", en: "Life", zh: "生活", art: "context", apps: [
       { id: "kitchen", en: "Kitchen", zh: "厨房", d: "做饭，端给它吃", href: "kitchen.html" }] },
-    { id: "home", en: "Home", zh: "小家", art: "clusters", apps: [
-      { id: "attic", en: "Attic", zh: "杂物间", d: "收着的小东西", href: "attic.html" },
-      { id: "room", en: "Room", zh: "房间", d: "一间空屋子，自己摆家具", href: "room.html" }] }
+    // Read: the reading library (墨阅) brought into the house — the day's sheet, the shelf, what was kept (read.html, relay/nyx_read.py)
+    { id: "read", en: "Read", zh: "一起读", art: "clusters", apps: [
+      { id: "today", en: "Today", zh: "今日", d: "今天的新鲜事", href: "read.html#today" },
+      { id: "shelf", en: "Shelf", zh: "书架", d: "收来的文章，一天一天排好", href: "read.html#shelf" },
+      { id: "kept", en: "Kept", zh: "收藏", d: "读到一半的，和留着的", href: "read.html#kept" }] }
   ],
-
-  // Room: an empty room to furnish with .glb files — docs/room-blender.md
-  room: {
-    name: "Room",
-    size: [3.4, 2.7, 4.4],
-    items: []
-  },
 
   // Listen: "files" plays the tracks below; "netease" plays your own NetEase account (docs/listen-netease.md).
   // lines: the two small lines under "Listen with me".
