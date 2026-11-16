@@ -5,7 +5,7 @@ import unittest
 
 HERE = pathlib.Path(__file__).parent
 sys.path.insert(0, str(HERE.parent))
-from nyx_question import box_text, read_dialog  # noqa: E402
+from nyx_question import box_text, input_box, read_dialog  # noqa: E402
 
 
 def screen(name):
@@ -45,6 +45,20 @@ class ReadDialog(unittest.TestCase):
     def test_no_question(self):
         for n in ("idle.txt", "busy.txt", "before-question.txt"):
             self.assertIsNone(read_dialog(screen(n)), n)
+
+    def test_words_over_several_lines_are_still_the_input_box(self):
+        # a long message wraps, and a picture adds an "[image] …" line: the box is still the input box, not a question
+        for n in ("long-input.txt", "numbered-input.txt"):
+            lines = screen(n).splitlines()
+            self.assertTrue(input_box(lines), n)
+            self.assertIsNone(read_dialog(screen(n)), n)
+        self.assertIn("[image] /root/repo/nyx/relay/uploads/att-example.png", box_text(screen("long-input.txt")))
+
+    def test_a_question_is_not_the_input_box(self):
+        for n in ("permission.txt", "question.txt", "review.txt", "claude-code-box.txt"):
+            self.assertFalse(input_box(screen(n).splitlines()), n)
+        for n in ("idle.txt", "busy.txt", "before-question.txt"):
+            self.assertTrue(input_box(screen(n).splitlines()), n)
 
     def test_sig_ignores_the_cursor(self):
         a = screen("question.txt")

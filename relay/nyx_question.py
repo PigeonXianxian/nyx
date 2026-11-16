@@ -27,9 +27,21 @@ OWN = re.compile(r"^(Type something\.?|Other|Something else)$", re.I)
 
 
 def input_box(lines):
-    """The ── ❯ ── input box is at the foot: nobody is being asked anything."""
-    return any(lines[i].startswith("───") and lines[i + 1].startswith("❯") and lines[i + 2].startswith("───")
-               for i in range(max(0, len(lines) - 20), len(lines) - 2))
+    """The input box is at the foot: a ─── rule, the ❯ line, the lines its words run on to (a long message wraps; a
+    picture adds an "[image] …" line), and the closing rule near the foot, with no key hints of a question under it or in it.
+    Then nobody is being asked anything."""
+    L = [l for l in lines if l.strip()]
+    n = len(L)
+    for j in range(n - 1, max(-1, n - 8), -1):   # the lower rule: only the status lines come after it
+        if not L[j].startswith("───"):
+            continue
+        if any(HINT.search(x) for x in L[j + 1:]):
+            return False
+        for i in range(j - 1, max(-1, j - 60), -1):   # the upper rule
+            if L[i].startswith("───"):
+                return L[i + 1].startswith("❯") and not any(HINT.search(x) for x in L[i + 1:j])
+        return False
+    return False
 
 
 def read_dialog(pane):

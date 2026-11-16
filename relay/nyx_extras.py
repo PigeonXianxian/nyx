@@ -202,10 +202,10 @@ def window_env(path=None, resume=""):
 
 
 def input_box_showing(pane):
-    """A confirmation box replaces the ── ❯ ── input box; the marks alone can just be scrolled-by text."""
-    lines = [l for l in (pane or "").rstrip().splitlines() if l.strip()]
-    return any(lines[i].startswith("───") and lines[i + 1].startswith("❯") and lines[i + 2].startswith("───")
-               for i in range(max(0, len(lines) - 20), len(lines) - 2))
+    """A question's box replaces the ── ❯ ── input box; the marks alone can just be scrolled-by text. (nyx_question: the box
+    may hold several lines — a long message wraps, a picture adds a line.)"""
+    import nyx_question
+    return nyx_question.input_box((pane or "").rstrip().splitlines())
 
 
 def register(app, g):
@@ -1158,8 +1158,7 @@ def register(app, g):
         out = {"effort": eff}
         # A confirm box replaces the input box at the bottom ("\u2500\u2500 \u276f \u2500\u2500"). Old command output scrolling by can contain the same words,
         # so if the input box is still there nobody is being asked anything.
-        input_box = any(lines[i].startswith("\u2500\u2500\u2500") and lines[i + 1].startswith("\u276f") and lines[i + 2].startswith("\u2500\u2500\u2500")
-                        for i in range(max(0, len(lines) - 8), len(lines) - 2))
+        input_box = input_box_showing(pane.stdout)
         if not input_box and any(s in "\n".join(lines[-12:]) for s in PROMPT_MARKS):
             wait_since.setdefault(name, time.time())
             if time.time() - wait_since[name] >= WAIT_DEBOUNCE:
