@@ -1,0 +1,35 @@
+❯ Use the AskUserQuestion tool to ask me two questions at once: which drink I want (tea, coffee, water) and which snack (cake, fruit). Then tell me what I
+  picked.
+
+● User declined to answer questions
+  ⎿  · Which drink would you like? (Tea / Coffee / Water)
+     · Which snack would you like? (Cake / Fruit)
+
+✻ Churned for 2s · done 5:43 AM
+
+❯ Create a file named note2.txt containing the word hello, using the Write tool.
+
+● Write(note2.txt)
+  ⎿  User rejected write to note2.txt
+      1 hello
+
+✻ Baked for 2s · done 5:43 AM
+
+❯ Use the AskUserQuestion tool to ask me two questions at once: which drink I want (tea, coffee, water) and which snack (cake, fruit). Then tell me what I
+  picked.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Drink  ☒ Snack  ✔ Submit  →
+
+Review your answers
+
+ ● Which drink would you like?
+   → Coffee
+ ● Which snack would you like?
+   → nuts
+
+Ready to submit your answers?
+
+❯ 1. Submit answers
+  2. Cancel
+

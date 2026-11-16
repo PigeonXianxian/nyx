@@ -1,0 +1,28 @@
+❯ Use the AskUserQuestion tool to ask me two questions at once: which drink I want (tea, coffee, water) and which snack (cake, fruit). Then tell me what I
+  picked.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Drink  ☐ Snack  ✔ Submit  →
+
+Which drink would you like?
+
+❯ 1. Tea
+     A cup of tea
+  2. Coffee
+     A cup of coffee
+  3. Water
+     A glass of water
+  4. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
