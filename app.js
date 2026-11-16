@@ -196,7 +196,7 @@
       }
       if (ev.type === "cc_sid") { liveTo(ev.sid || ""); return; }
       if (ev.type === "cc_windows") { setWins(ev); return; }
-      if (ev.type === "typing" && ev.sid && ev.sid !== view) return;
+      if (ev.type === "typing" && ev.sid && ev.sid !== view) { if (ev.active && isLive(ev.sid)) { wstate[ev.sid] = "busy"; paintTabs(); } return; }   // another tab took a prompt: its star turns now, not at the next poll
       if (ev.id != null && ev.from) { if (ev.kind === "term" && ev.meta && ev.meta.note && (!ev.meta.sid || ev.meta.sid === view)) localCard(ev.text, "", true); return; }   // the relay's own log is not this chat
     }
     if (ev.id != null && ev.from) { put(ev); fresh(ev); return; }
