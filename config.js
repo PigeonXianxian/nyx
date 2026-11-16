@@ -29,8 +29,7 @@ window.NYX = {
       { id: "heart", en: "Heart", zh: "心脏", d: "它的人设和后台，只读" }] },
     { id: "listen", en: "Listen", zh: "一起听", href: "listen.html", art: "sampling" },
     // Plan: what is to be done, day by day (plan.html, relay/nyx_plan.py). Your companion writes down what you say you have to do (relay/plan.py); you can write there too.
-    { id: "plan", en: "Plan", zh: "日程", href: "plan.html", art: "context",
-      svg: '<rect x="4" y="5.5" width="16" height="14.5" rx="1.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/><path d="M8.2 14.8l2.4 2.4 5-5"/>' },
+    { id: "plan", en: "Plan", zh: "日程", href: "plan.html", art: "context" },
     // Read: the reading library (墨阅) brought into the house — the day's sheet, the shelf, what was kept (read.html, relay/nyx_read.py)
     { id: "read", en: "Read", zh: "一起读", art: "clusters", apps: [
       { id: "today", en: "Today", zh: "今日", d: "今天的新鲜事", href: "read.html#today" },

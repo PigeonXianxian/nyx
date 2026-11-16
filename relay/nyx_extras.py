@@ -10,8 +10,6 @@
   Heart   GET  /app/heart · GET /app/heart/file?path=   read-only: the persona, the memory folder, the relay code
   Busy    GET  /app/busy · POST /app/busy   what the companion is doing right now: thinking, which tool for how long,
           or waiting for someone to say yes at the terminal (Claude Code: read off tmux; Codex: the bridge reports it)
-  Kitchen GET  /app/kitchen · POST /app/kitchen/{pantry,ask,recipe,photo,photo/comment,log,cooked}
-          your pots, seasonings and fridge; recipes your companion writes; what you ate, day by day
   Window  GET  /app/window · POST /app/window/{line,carry,compact,new,switch} · GET /app/window/list
           the context line (past it: save memory, then compact), compact now, a new window (it is handed the last
           hours of talk, word for word, up to a set length), go back to an old one.
@@ -204,10 +202,10 @@ def window_env(path=None, resume=""):
 
 
 def input_box_showing(pane):
-    """A confirmation box replaces the ── ❯ ── input box; the marks alone can just be scrolled-by text."""
-    lines = [l for l in (pane or "").rstrip().splitlines() if l.strip()]
-    return any(lines[i].startswith("───") and lines[i + 1].startswith("❯") and lines[i + 2].startswith("───")
-               for i in range(max(0, len(lines) - 20), len(lines) - 2))
+    """A question's box replaces the ── ❯ ── input box; the marks alone can just be scrolled-by text. (nyx_question: the box
+    may hold several lines — a long message wraps, a picture adds a line.)"""
+    import nyx_question
+    return nyx_question.input_box((pane or "").rstrip().splitlines())
 
 
 def register(app, g):
@@ -1160,8 +1158,7 @@ def register(app, g):
         out = {"effort": eff}
         # A confirm box replaces the input box at the bottom ("\u2500\u2500 \u276f \u2500\u2500"). Old command output scrolling by can contain the same words,
         # so if the input box is still there nobody is being asked anything.
-        input_box = any(lines[i].startswith("\u2500\u2500\u2500") and lines[i + 1].startswith("\u276f") and lines[i + 2].startswith("\u2500\u2500\u2500")
-                        for i in range(max(0, len(lines) - 8), len(lines) - 2))
+        input_box = input_box_showing(pane.stdout)
         if not input_box and any(s in "\n".join(lines[-12:]) for s in PROMPT_MARKS):
             wait_since.setdefault(name, time.time())
             if time.time() - wait_since[name] >= WAIT_DEBOUNCE:
@@ -1239,134 +1236,6 @@ def register(app, g):
                     bridge_busy.pop(k, None)
         return {"ok": True}
 
-
-    # ---- Kitchen: the pantry, recipes the companion writes, photos of what got made, a timeline of meals ----
-    kitchen_file, ai = data_dir / "kitchen.json", g.get("AI_NAME", "AI")
-    pub = g.get("PUBLIC_PREFIX", "")
-
-    def kload():
-        try:
-            d = json.loads(kitchen_file.read_text(encoding="utf-8"))
-        except Exception:
-            d = {}
-        d.setdefault("pantry", {"tools": [], "seasonings": [], "ingredients": []})
-        d["pantry"].setdefault("staples", [])
-        d.setdefault("recipes", []); d.setdefault("log", [])
-        return d
-
-    def ksave(d):
-        tmp = kitchen_file.with_suffix(".tmp")
-        tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8"); tmp.replace(kitchen_file)
-
-    def strs(v, n=80):
-        return [str(x).strip()[:40] for x in (v if isinstance(v, list) else []) if str(x).strip()][:n]
-
-    async def tell_ai(text, attachments=None):
-        await broadcast(plugin_subs, {"content": text, "user": "kitchen", "ts": now_iso(), "attachments": attachments or []})
-
-    @app.get("/app/kitchen")
-    async def kitchen_get(request: Request):
-        check_auth(request)
-        return kload()
-
-    @app.post("/app/kitchen/pantry")
-    async def kitchen_pantry(request: Request):
-        check_auth(request)
-        b = await request.json(); d = kload()
-        d["pantry"] = {k: strs(b.get(k)) for k in ("tools", "seasonings", "ingredients", "staples")}
-        ksave(d)
-        return {"ok": True, "pantry": d["pantry"]}
-
-    @app.post("/app/kitchen/ask")
-    async def kitchen_ask(request: Request):
-        """Nothing in the recipes fits what they picked: the companion gets a note and writes one."""
-        check_auth(request)
-        picked = strs((await request.json()).get("picked"), 20)
-        if not picked:
-            raise HTTPException(status_code=400, detail="empty")
-        p = kload()["pantry"]
-        await tell_ai(f"(Kitchen, not typed by {human}.) {human} picked: {', '.join(picked)} — no recipe for that yet. "
-                      f"Pots: {', '.join(p['tools']) or 'not listed'}; seasonings: {', '.join(p['seasonings']) or 'not listed'}; "
-                      f"in the fridge: {', '.join(p['ingredients']) or 'not listed'}. Write one into {kitchen_file} under "
-                      f"recipes (or POST /app/kitchen/recipe with name, ingredients, seasonings, tools, steps, tip), then tell {human} in the chat.")
-        return {"ok": True}
-
-    @app.post("/app/kitchen/recipe")
-    async def kitchen_recipe(request: Request):
-        check_auth(request)
-        b = await request.json()
-        name = str(b.get("name") or "").strip()[:60]
-        steps = [str(x).strip()[:400] for x in (b.get("steps") or []) if str(x).strip()][:30]
-        if not name or not steps:
-            raise HTTPException(status_code=400, detail="name and steps required")
-        d = kload()
-        r = {"id": secrets.token_hex(4), "name": name, "ingredients": strs(b.get("ingredients"), 20), "seasonings": strs(b.get("seasonings"), 20),
-             "tools": strs(b.get("tools"), 10), "steps": steps, "tip": str(b.get("tip") or "").strip()[:400], "at": now_iso()}
-        d["recipes"].append(r); ksave(d)
-        return {"ok": True, "recipe": r}
-
-    @app.post("/app/kitchen/photo")
-    async def kitchen_photo(request: Request):
-        """A photo of the finished dish (uploaded first through /app/upload); the companion is asked for a word on it."""
-        check_auth(request)
-        b = await request.json()
-        rid, file = str(b.get("id") or ""), fname(b.get("file"))
-        if not file or not (upload_dir / file).is_file():
-            raise HTTPException(status_code=400, detail="no such upload")
-        d = kload()
-        for r in d["recipes"]:
-            if r.get("id") == rid:
-                ph = {"file": file, "at": now_iso(), "comment": str(b.get("comment") or "").strip()[:400]}
-                r.setdefault("photos", []).append(ph); ksave(d)
-                if not ph["comment"]:
-                    await tell_ai(f"(Kitchen, not typed by {human}.) {human} made 「{r['name']}」 and sent a photo. Look at it and write a line back: "
-                                  f"POST /app/kitchen/photo/comment {{id: {rid}, file: {file}, comment}} (or edit {kitchen_file}), then say something in the chat.",
-                                  [{"url": f"{pub}/uploads/{file}", "name": file, "kind": "image", "mime": "image/jpeg"}])
-                return {"ok": True, "photo": ph}
-        raise HTTPException(status_code=404, detail="no such recipe")
-
-    @app.post("/app/kitchen/photo/comment")
-    async def kitchen_photo_comment(request: Request):
-        check_auth(request)
-        b = await request.json()
-        rid, file, d = str(b.get("id") or ""), str(b.get("file") or ""), kload()
-        for r in d["recipes"]:
-            if r.get("id") == rid:
-                for ph in r.get("photos", []):
-                    if ph.get("file") == file:
-                        ph["comment"] = str(b.get("comment") or "").strip()[:400]; ksave(d)
-                        return {"ok": True, "photo": ph}
-        raise HTTPException(status_code=404, detail="no such photo")
-
-    @app.post("/app/kitchen/log")
-    async def kitchen_log(request: Request):
-        """A meal on the timeline (takeaway counts); {delete: <at>} removes one."""
-        check_auth(request)
-        b = await request.json(); d = kload()
-        if b.get("delete"):
-            d["log"] = [x for x in d["log"] if x.get("at") != str(b["delete"])]
-        else:
-            name = str(b.get("name") or "").strip()[:80]
-            if not name:
-                raise HTTPException(status_code=400, detail="empty")
-            e = {"at": str(b.get("at") or now_iso())[:40], "name": name, "ingredients": strs(b.get("ingredients"), 20)}
-            if b.get("note"):
-                e["note"] = str(b["note"]).strip()[:200]
-            d["log"].append(e)
-        d["log"].sort(key=lambda x: x.get("at", "")); ksave(d)
-        return {"ok": True, "log": d["log"]}
-
-    @app.post("/app/kitchen/cooked")
-    async def kitchen_cooked(request: Request):
-        check_auth(request)
-        rid, d = str((await request.json()).get("id") or ""), kload()
-        for r in d["recipes"]:
-            if r.get("id") == rid:
-                r["cooked"] = int(r.get("cooked") or 0) + 1; r["lastCooked"] = now_iso()
-                d["log"].append({"at": now_iso(), "name": r["name"], "recipe": rid, "ingredients": r.get("ingredients", [])})
-                ksave(d)
-                return {"ok": True, "recipe": r}
-        raise HTTPException(status_code=404, detail="no such recipe")
 
     # ---- Read (一起读): the reading library next door, behind the house's own key (nyx_read.py) ----
     import nyx_read

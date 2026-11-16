@@ -1,0 +1,8 @@
+✻ Crunched for 1m 44s · done 6:29 AM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Please read the paper in that folder on the lab server and tell me what could be improved, and which experiments are still worth running; also check that it matches the copy on Overleaf, and update it if
+  it does not.
+  [image] /root/repo/nyx/relay/uploads/att-example.png
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.2 · five_hour 11% · seven_day 11%
+  ⏵⏵ auto mode on (shift+tab to cycle)

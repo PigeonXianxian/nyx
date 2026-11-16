@@ -977,6 +977,8 @@ def register(app, g, x):
 
     def tool_line(name, inp):
         inp = inp if isinstance(inp, dict) else {}
+        if name == "AskUserQuestion" and isinstance(inp.get("questions"), list):   # what it asked (the answers fold in under it)
+            return " · ".join(str((q or {}).get("question") or "") for q in inp["questions"] if isinstance(q, dict))[:300]
         for k in ("description", "command", "file_path", "pattern", "url", "query", "skill", "prompt", "path", "subject"):
             v = inp.get(k)
             if isinstance(v, str) and v.strip():
@@ -1046,6 +1048,16 @@ def register(app, g, x):
                     add("note", "ai", "compacted" + (f" · {cm.get('preTokens', 0) // 1000}k → {cm.get('postTokens', 0) // 1000}k" if cm.get("preTokens") else ""))
                 elif st == "away_summary":
                     add("note", "ai", "recap · " + re.sub(r"\s*\(disable recaps in /config\)\s*$", "", str(d.get("content") or "")))
+                elif st == "api_error":   # the API said no and Claude Code is trying again: without this the window just looks stuck
+                    e = d.get("error") if isinstance(d.get("error"), dict) else {}
+                    k, top = int(d.get("retryAttempt") or 0), int(d.get("maxRetries") or 0)
+                    what = str(e.get("formatted") or e.get("message") or "an error")[:160]
+                    if k <= 1:
+                        add("note", "ai", f"the API answered {what} · trying again" + (f" (up to {top} times)" if top else ""))
+                    elif top and k >= top:
+                        add("note", "ai", f"the API answered {what} · gave up after {k} tries")
+                elif st == "informational" and str(d.get("content") or "").strip():   # Claude Code's own word: "Unknown command: /x", …
+                    add("note", "ai", re.sub(r"\s*·\s*turn off with .*$", "", str(d["content"]).strip())[:400])
                 continue
             if t == "attachment":
                 # Something you wrote while it was working: Claude Code hands it to Claude at the next step of the same
@@ -1105,6 +1117,9 @@ def register(app, g, x):
                         add("note", "ai", "reacted " + str(inp.get("emoji") or ""), j)
                     elif name.endswith("companion__hand_over"):   # shown when its result comes, as the file itself
                         memo[b.get("id")] = {"path": str(inp.get("path") or ""), "note": str(inp.get("note") or "")}
+                    elif name == "ExitPlanMode" and str(inp.get("plan") or "").strip():   # the plan it asks you to approve, set out to read
+                        add("reply", "ai", "**The plan**\n\n" + str(inp["plan"]).strip(), j)
+                        add("tool", "ai", "asks to go ahead with this plan", j + 1, tool=name, tid=b.get("id"))
                     else:
                         add("tool", "ai", tool_line(name, inp), j, tool=name.replace("mcp__", "").replace("__", " · "), tid=b.get("id"))
         return out
