@@ -290,3 +290,55 @@ footer.write .line{ position:relative; }
 .files .fx{ border:0; background:none; padding:4px 0; color:var(--blue); font:italic 14px var(--latin); letter-spacing:.04em; cursor:pointer; }
 .files .fx.rm{ color:var(--faint); } .files .fx.rm:hover{ color:var(--accent); }
 @media (max-width:520px){ .files .fx:not(.rm){ display:none; } }
+
+/* ── tabs: one for each window open at once (tabs.js). Index tabs on the page's top edge, which runs from the margin rule
+   to the right: the open tab is the page itself, standing up out of it; the others are slips behind, a shade darker. ── */
+.tabs{ flex:none; display:flex; align-items:flex-end; gap:5px; margin:2px 18px 0 38px; padding:8px 10px 0 9px; overflow-x:auto; overflow-y:hidden;
+  scrollbar-width:none; background:linear-gradient(var(--river), var(--river)) no-repeat left bottom / 100% 1px; }
+.tabs::-webkit-scrollbar{ display:none; }
+.tabs[hidden]{ display:none; }
+.tab{ position:relative; flex:0 1 auto; min-width:0; max-width:min(52%, 220px); display:flex; align-items:center; height:28px; border-radius:2px 2px 0 0;
+  background:color-mix(in srgb, var(--paper) 93%, var(--ink)); box-shadow:inset 0 0 0 1px var(--hair); }
+.tab .tb{ flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:6px; height:100%; padding:0 10px; border:0; background:none; color:var(--soft);
+  font:italic 400 13px/1 var(--latin); font-synthesis:none; letter-spacing:.04em; cursor:pointer; white-space:nowrap; }   /* Chinese stays upright: no made-up italic */
+.tab .tb > span{ overflow:hidden; text-overflow:ellipsis; }
+.tab.untitled .tb > span{ color:var(--faint); }
+.tab .te{ flex:none; width:15px; height:9px; fill:none; stroke:currentColor; stroke-width:2.6; }
+.tab .te circle{ fill:var(--blue); stroke:none; }
+/* the open one: the page's own paper, its edges carried up from the page, nothing under it */
+.tab.on{ z-index:1; height:31px; background:var(--paper); box-shadow:inset 1px 0 0 var(--river), inset -1px 0 0 var(--river), inset 0 1px 0 var(--river), 0 1px 0 var(--paper); }
+.tab.on .tb{ color:var(--ink); cursor:default; }
+.tab.on::before{ content:""; position:absolute; left:9px; top:-1px; width:16px; height:2px; background:var(--blue); }
+/* marks before the name: the star while it works, a question when it waits on a yes, a blue dot for something unread */
+.tab .mk{ display:none; flex:none; font-style:normal; color:var(--blue); }
+.tab.busy .mk{ display:inline-block; width:9px; height:9px; }
+.tab.busy .mk::before{ content:"\273B"; display:block; font:11px/9px var(--latin); text-align:center; animation:tabspin 2.4s linear infinite; }
+.tab.ask .mk{ display:inline-block; font:italic 600 13px/1 var(--latin); } .tab.ask .mk::before{ content:"?"; }
+.tab.new:not(.busy):not(.ask) .mk{ display:inline-block; width:5px; height:5px; border-radius:50%; background:var(--blue); }
+.tab.new .tb{ color:var(--ink); }
+@keyframes tabspin{ to{ transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce){ .tab.busy .mk::before{ animation:none; } }
+/* ×: on the open tab always, on the others under a mouse */
+.tab .tx{ flex:none; display:none; width:22px; height:100%; margin-left:-6px; padding:0; border:0; background:none; color:var(--faint); cursor:pointer; }
+.tab .tx svg{ width:9px; height:9px; fill:none; stroke:currentColor; stroke-width:1.2; }
+.tab .tx:hover{ color:var(--ink); }
+.tab.on .tx{ display:block; }
+@media (hover:hover){ .tab:hover .tx{ display:block; } }
+/* reading an earlier window: a tab of its own, drawn in pencil, until it is opened in a tab or left */
+.tab.read{ background:var(--paper); box-shadow:none; outline:1px dashed var(--river); outline-offset:-1px; }
+.tab.read .tb{ cursor:default; color:var(--soft); } .tab.read em{ color:var(--accent); }
+.tab.wait .tb{ cursor:default; color:var(--faint); animation:tabwait 1.6s ease-in-out infinite alternate; }
+@keyframes tabwait{ from{ opacity:.45; } to{ opacity:1; } }
+.tadd{ flex:none; width:28px; height:26px; margin-bottom:1px; padding:0; border:0; background:none; color:var(--soft); cursor:pointer; }
+.tadd svg{ width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:1.2; }
+.tadd:hover{ color:var(--blue); } .tadd.full{ opacity:.35; }
+.tabbed #log{ padding-top:10px; }
+@media (min-width:1000px) and (min-aspect-ratio:5/4){
+  .tabs{ margin:clamp(34px, 6.5vh, 70px) 0 0 calc(var(--lp) + var(--rm) + var(--m)); width:var(--col); padding:10px 12px 0 calc(var(--u) * .5); gap:6px; }
+  .tab{ height:calc(var(--u) * 1.75); max-width:calc(var(--u) * 13); }
+  .tab.on{ height:calc(var(--u) * 1.95); }
+  .tab .tb{ font-size:calc(var(--u) * .8); padding:0 calc(var(--u) * .7); gap:calc(var(--u) * .4); }
+  .tab .te{ width:calc(var(--u) * .95); height:calc(var(--u) * .56); }
+  .tadd{ width:calc(var(--u) * 1.8); height:calc(var(--u) * 1.6); }
+  .tabbed #log{ padding-top:calc(var(--u) * 1.2); }
+}

@@ -47,13 +47,15 @@ if [ "$WD" != "$DIR" ]; then
   P="--append-system-prompt-file $(printf %q "$PF")"
 fi
 cd "$WD" || exit 1
-tmux new-session -d -s "$S" -x 200 -y 50 "$CL --dangerously-load-development-channels server:companion --mcp-config $CFG --permission-mode $PM $M $E $R $P" || exit 1
+# NYX_SIDE=1: a side window (a tab next to the main one); its channel leaves the app's notes to the main window. Always set
+# on the session, so a main window never inherits a side one's from the tmux server's environment.
+tmux new-session -d -s "$S" -e "NYX_SIDE=${NYX_SIDE:-0}" -x 200 -y 50 "$CL --dangerously-load-development-channels server:companion --mcp-config $CFG --permission-mode $PM $M $E $R $P" || exit 1
 for i in $(seq 1 30); do
   sleep 2
-  pane=$(tmux capture-pane -pt "$S" 2>/dev/null) || exit 1
-  if grep -q "I am using this for local development" <<<"$pane"; then tmux send-keys -t "$S" Enter
-  elif grep -q "Yes, I trust this folder" <<<"$pane"; then tmux send-keys -t "$S" Down Enter   # the folder is the one set up for it (workdir)
-  elif grep -q "Try the new fullscreen renderer" <<<"$pane"; then tmux send-keys -t "$S" Down Enter
+  pane=$(tmux capture-pane -pt "=$S:" 2>/dev/null) || exit 1   # =name: exactly that session ("companion" would also match "companion-2")
+  if grep -q "I am using this for local development" <<<"$pane"; then tmux send-keys -t "=$S:" Enter
+  elif grep -q "Yes, I trust this folder" <<<"$pane"; then tmux send-keys -t "=$S:" Down Enter   # the folder is the one set up for it (workdir)
+  elif grep -q "Try the new fullscreen renderer" <<<"$pane"; then tmux send-keys -t "=$S:" Down Enter
   elif grep -qE "(auto|plan|manual) mode on|accept edits on" <<<"$pane" && ! grep -q "Enter to confirm" <<<"$pane"; then exit 0
   fi
 done

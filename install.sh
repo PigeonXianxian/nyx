@@ -244,7 +244,7 @@ Type=oneshot
 User=$USER
 Environment=PATH=$(dirname "$CLAUDE"):$(dirname "$BUN"):/usr/local/bin:/usr/bin:/bin
 ExecStart=$DIR/channel/start-channel.sh $TM $CDIR $DIR/channel/mcp.json $DIR/relay/model
-ExecStop=/usr/bin/tmux kill-session -t $TM
+ExecStop=/usr/bin/tmux kill-session -t =$TM
 RemainAfterExit=yes
 TimeoutStartSec=120
 

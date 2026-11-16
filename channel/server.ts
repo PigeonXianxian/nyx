@@ -501,4 +501,7 @@ setInterval(() => {
 }, 5000).unref()
 
 // Kick off the inbound SSE stream last — now that shuttingDown is initialized.
-void streamInbound()
+// A side window (a second tab on the chat page, started with NYX_SIDE=1) doesn't take the app's notes: the hand-over, the
+// context line, the kitchen and the group chat all go to the main window, once. Its tools (reply, hand_over …) still work.
+if (process.env.NYX_SIDE === '1') tlog('boot', 'side window: the app\'s notes go to the main window, not here')
+else void streamInbound()

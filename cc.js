@@ -33,7 +33,7 @@
   var KIND = { here: ["here", "本页"], terminal: ["terminal", "终端"], skill: ["skills", "技能"] };
   var FALLBACK = [   // what the page can do even before the relay has said which commands there are
     ["model", "[model]", "Pick the model"], ["effort", "[low|medium|high|xhigh|max]", "How hard it thinks"], ["mode", "[ask|edits|plan|auto]", "Permission mode"],
-    ["compact", "", "Summarise the window so far to free up context"], ["new", "", "A new window"], ["sessions", "", "All windows, in groups"],
+    ["compact", "", "Summarise the window so far to free up context"], ["new", "", "Another window, in a tab of its own"], ["sessions", "", "All windows, in groups"],
     ["rename", "<title>", "Name this window"], ["files", "", "Files handed over to you, to download"], ["usage", "", "Limits: 5 hours, the week, per model"], ["help", "", "What the slash commands do"]
   ].map(function (c) { return { name: c[0], hint: c[1], desc: c[2], kind: "here" }; });
 
@@ -90,6 +90,7 @@
     var M = null, cmds = FALLBACK.slice(), cmdsAt = 0, $ = function (id) { return document.getElementById(id); };
     var text = o.text, write = document.querySelector("footer.write");
     function post(path, body) { return o.api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }); }
+    function tab(body) { var t = o.sid ? o.sid() : ""; if (t) body.sid = t; return body; }   // what the legend changes, it changes in the tab on the page
     function why(e) { var s = String(e && e.message || e); return /409/.test(s) ? "it's busy or waiting on a question" : /503/.test(s) ? "the window isn't open" : s; }
 
     /* ---------- the legend under the writing line ---------- */
@@ -265,19 +266,19 @@
     }
     function setModel(id, note) {
       close(); var x = ((M && M.models) || []).filter(function (y) { return y.id === id; })[0];
-      return post("/app/cc/model", { model: id, note: !!note }).then(function (r) { after(r, "Model → " + (x ? (x.id === "default" ? "default" : x.name) : id)); }, function (e) { o.toast("Model didn’t change: " + why(e)); });
+      return post("/app/cc/model", tab({ model: id, note: !!note })).then(function (r) { after(r, "Model → " + (x ? (x.id === "default" ? "default" : x.name) : id)); }, function (e) { o.toast("Model didn’t change: " + why(e)); });
     }
     function setEffort(lv, note) {
       close();
-      return post("/app/cc/effort", { level: lv, note: !!note }).then(function (r) { if (M) M.effort = r.pending ? M.effort : lv; paint(); after(r, "Effort → " + lv); }, function (e) { o.toast("Effort didn’t change: " + why(e)); });
+      return post("/app/cc/effort", tab({ level: lv, note: !!note })).then(function (r) { if (M) M.effort = r.pending ? M.effort : lv; paint(); after(r, "Effort → " + lv); }, function (e) { o.toast("Effort didn’t change: " + why(e)); });
     }
     function setMode(md, note) {
       close(); if (M) { M.mode = md; paint(); }
-      return post("/app/cc/mode", { mode: md, note: !!note }).then(function () { after(null, "Mode → " + MODE[md].name); }, function (e) { o.toast("Mode didn’t change: " + why(e)); o.reload(); });
+      return post("/app/cc/mode", tab({ mode: md, note: !!note })).then(function () { after(null, "Mode → " + MODE[md].name); }, function (e) { o.toast("Mode didn’t change: " + why(e)); o.reload(); });
     }
     function runTerminal(t) {
       var g = o.ghost(t, "typing it into the window…");
-      return post("/app/cc/run", { text: t, side: document.documentElement.dataset.side }).then(function (d) {
+      return post("/app/cc/run", tab({ text: t, side: document.documentElement.dataset.side })).then(function (d) {
           if (!o.ccmode || !o.ccmode()) { o.put(d.cmd); o.put(d.out); return; }
           if (d.out && d.out.meta && d.out.meta.dialog) o.local(d.out.text, t.split(" ")[0]);   // a dialog never reaches the transcript
           setTimeout(function () { if (g.isConnected && g.classList.contains("pending")) g.remove(); }, 5000);
@@ -310,12 +311,13 @@
           if (!md) { open("mode"); return true; }
           setMode(md, true); return true;
         case "compact": o.compact(arg); return true;
-        case "clear": case "new": o.newWin(); return true;
+        case "clear": case "new": if (o.newTab && o.ccmode && o.ccmode()) o.newTab(); else o.newWin(); return true;
         case "sessions": case "resume": sessions(); return true;
         case "rename":
           (arg ? Promise.resolve(arg) : ask.prompt("Name this session", { placeholder: "a title", ok: "name it" })).then(function (t2) {
             if (!t2) return;
-            o.api("/app/window").then(function (w) { if (!w.sid) throw new Error("no window"); return post("/app/cc/sessions/meta", { sid: w.sid, title: t2 }); })
+            var here = o.sid ? o.sid() : "";
+            (here ? Promise.resolve({ sid: here }) : o.api("/app/window")).then(function (w) { if (!w.sid) throw new Error("no window"); return post("/app/cc/sessions/meta", { sid: w.sid, title: t2 }); })
               .then(function () { o.toast("Named “" + t2 + "”"); }, function (e) { o.toast("Couldn’t name it: " + why(e)); });
           });
           return true;
@@ -371,20 +373,21 @@
     }
     function note(t) { if (S) S.querySelector("#sessNote").textContent = t || ""; }
     function load() { return o.api("/app/cc/sessions").then(function (d) { data = d; render(); }, function (e) { S.querySelector(".sb").innerHTML = '<p class="none">Couldn’t get the list: ' + esc(why(e)) + "</p>"; }); }
-    function sname(w) { return w.title || (w.current ? "this window" : "untitled"); }
+    function sname(w) { return w.title || (w.open ? "new window" : "untitled"); }
     var CC = function () { return !!(o.ccmode && o.ccmode()); };
     // a row: tap it to open that conversation; ⋯ for the rest (carry it on here, rename, file under a group, archive);
     // with a mouse it can also be dragged onto a group's heading
     function rowHTML(w) {
       var groups = data.groups || [], open_ = openRow === w.sid, showing = CC() && o.viewing && o.viewing() === w.sid;
-      var meta = [w.current ? '<b class="now">live</b>' : "", w.elsewhere ? '<b class="away">' + (w.elsewhere === "vscode" ? "open in VS Code" : "open elsewhere") + "</b>" : "", w.folder ? '<b class="away">' + esc(w.folder) + " · read only</b>" : "", esc(when(w.last) || when(w.started)), w.messages ? w.messages + (w.messages === 1 ? " message" : " messages") : "", w.usage_tokens ? Math.round(w.usage_tokens / 1000) + "k" : "", esc(String(w.model || "").replace(/^claude-/, ""))].filter(Boolean).join(" · ");
-      return '<div class="srow' + (w.current ? " cur" : "") + (showing ? " shown" : "") + (w.archived ? " arch" : "") + (open_ ? " open" : "") + '" data-sid="' + esc(w.sid) + '"' + (fine ? ' draggable="true"' : "") + ">" +
+      var meta = [w.open ? '<b class="now">' + (w.current ? "main window" : "open in a tab") + "</b>" : "", w.elsewhere ? '<b class="away">' + (w.elsewhere === "vscode" ? "open in VS Code" : "open elsewhere") + "</b>" : "", w.folder ? '<b class="away">' + esc(w.folder) + " · read only</b>" : "", esc(when(w.last) || when(w.started)), w.messages ? w.messages + (w.messages === 1 ? " message" : " messages") : "", w.usage_tokens ? Math.round(w.usage_tokens / 1000) + "k" : "", esc(String(w.model || "").replace(/^claude-/, ""))].filter(Boolean).join(" · ");
+      return '<div class="srow' + (w.open ? " cur" : "") + (showing ? " shown" : "") + (w.archived ? " arch" : "") + (open_ ? " open" : "") + '" data-sid="' + esc(w.sid) + '"' + (fine ? ' draggable="true"' : "") + ">" +
         '<button type="button" class="st" data-a="pick"><i class="dot"></i><span class="tt">' + esc(sname(w)) + '</span><span class="mt">' + meta + "</span>" +
         (w.last_text && w.last_text !== w.title ? '<span class="lx">' + esc(w.last_text) + "</span>" : "") + "</button>" +
         '<button type="button" class="more" data-a="row" aria-label="More for this session" aria-expanded="' + open_ + '"><i></i><i></i><i></i></button>' +
-        (open_ ? '<div class="sa">' + (CC() && !w.current && !w.readonly ? '<button type="button" data-a="carry">carry it on here</button>' : "") + '<button type="button" data-a="rename">rename</button>' +
+        (open_ ? '<div class="sa">' + (CC() && !w.open && !w.readonly ? '<button type="button" data-a="tab">open in a tab</button><button type="button" data-a="carry">carry on in the main window</button>' : "") +
+          (CC() && w.open && !w.current ? '<button type="button" data-a="close">close its tab</button>' : "") + '<button type="button" data-a="rename">rename</button>' +
           '<span class="fl"><em>group</em>' + [{ id: "", name: "none" }].concat(groups).map(function (g) { return '<button type="button" data-a="file" data-g="' + esc(g.id) + '"' + ((w.group || "") === g.id ? ' class="on"' : "") + ">" + esc(g.name) + "</button>"; }).join("") +
-          '<button type="button" data-a="file" data-g="+" class="add">+ new</button></span>' + (w.current ? "" : '<button type="button" data-a="arch">' + (w.archived ? "unarchive" : "archive") + "</button>") + "</div>" : "") + "</div>";
+          '<button type="button" data-a="file" data-g="+" class="add">+ new</button></span>' + (w.open ? "" : '<button type="button" data-a="arch">' + (w.archived ? "unarchive" : "archive") + "</button>") + "</div>" : "") + "</div>";
     }
     var fine = !(window.matchMedia && matchMedia("(pointer: coarse)").matches);   // anything but a finger: rows can be dragged
     function render() {
@@ -401,7 +404,7 @@
       var loose = live.filter(function (w) { return !w.group; });
       if (loose.length || !gs.length) h += '<div class="gbox" data-g="">' + (gs.length ? '<div class="gh loose" data-g=""><span class="gn"><i></i>ungrouped<small>' + loose.length + "</small></span></div>" : "") + (loose.length ? loose.map(rowHTML).join("") : '<p class="none">No sessions yet.</p>') + "</div>";
       if (arch.length) h += '<div class="gh arch' + (showArch ? "" : " fold") + '"><button type="button" data-a="showarch" class="gn"><i></i>archived<small>' + arch.length + "</small></button></div>" + (showArch ? arch.map(rowHTML).join("") : "");
-      if (data.chat === "cc") h += '<p class="none sm foot">The same sessions as Claude Code in this folder, VS Code’s included. One session is best open in one place at a time.</p>';
+      if (data.chat === "cc") h += '<p class="none sm foot">The same sessions as Claude Code in this folder, VS Code’s included. Up to ' + (data.max || 3) + ' can be open at once, each in a tab; one session is best open in one place at a time.</p>';
       S.querySelector(".sb").innerHTML = h;
     }
     function find_(sid) { return (data.sessions || []).filter(function (w) { return w.sid === sid; })[0]; }
@@ -425,6 +428,8 @@
         });
       }
       else if (a === "carry" && w) { S.hidden = true; o.view(sid); o.carry(sid, w.elsewhere); }
+      else if (a === "tab" && w) { S.hidden = true; o.openInTab(sid); }
+      else if (a === "close" && w) { S.hidden = true; o.closeTab(sid); }
       else if (a === "rename" && w) ask.prompt("Name this session", { value: w.title || "", placeholder: "a title", ok: "name it" }).then(function (t) { if (t != null) setMeta(sid, { title: t }); });
       else if (a === "arch" && w) setMeta(sid, { archived: !w.archived }).then(function () { openRow = null; render(); });
       else if (a === "fold" && g) group({ op: "fold", id: gid, fold: !g.fold });
@@ -450,6 +455,7 @@
       S.addEventListener("drop", function (e) { var b = box(e); if (!b) return; e.preventDefault(); b.classList.remove("drop"); var sid = dragSid, w = find_(sid); dragSid = null; if (w && (w.group || "") !== b.dataset.g) setMeta(sid, { group: b.dataset.g || null }); });
     }
     function newIn(g) {
+      if (CC() && o.newTab) { S.hidden = true; o.newTab(g ? g.id : null); return; }   // a tab of its own, next to the others
       ask.confirm("Open a new window" + (g ? " in “" + g.name + "”" : "") + "?", { body: "The one in use closes; it stays in this list. " + o.carryNote(), ok: "open it" }).then(function (yes) {
         if (!yes) return;
         S.hidden = true;
