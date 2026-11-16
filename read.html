@@ -58,19 +58,21 @@
 </svg>
 
 <div class="rdx" id="rdx">
-  <!-- the spine: the room's name, the day, where to go. On a wide screen it is the dark left page; on a phone, the head of the sheet. -->
+  <!-- the spine: the room's name and where to go. On a wide screen it is the dark left page, with one instrument on it; on a phone, the head of the sheet. -->
   <aside class="spine" id="spine">
     <header class="sp-top">
       <button class="back" id="back" type="button" aria-label="回到首页"><i class="sw"></i></button>
       <h1 class="ttl"><b>Read</b><small>一起读</small></h1>
+      <p class="sp-date" id="spDate"></p>
     </header>
-    <div class="sp-day" id="spDay" aria-hidden="true"></div>
+    <!-- a phone goes by these three words; a wide screen by the instrument below -->
     <nav class="sp-nav" id="spNav" aria-label="去哪里">
-      <a href="#today" data-v="today"><i>Today</i><b>今日</b><small id="nToday"></small></a>
-      <a href="#shelf" data-v="shelf"><i>Shelf</i><b>书架</b><small id="nShelf"></small></a>
-      <a href="#kept" data-v="kept"><i>Kept</i><b>收藏</b><small id="nKept"></small></a>
+      <a href="#today" data-v="today"><i>Today</i><b>今日</b></a>
+      <a href="#shelf" data-v="shelf"><i>Shelf</i><b>书架</b></a>
+      <a href="#kept" data-v="kept"><i>Kept</i><b>收藏</b></a>
     </nav>
-    <div class="sp-cal" id="spCal"></div>
+    <!-- the instrument: tonight's moon, the days before going round it, the three places on the outer track (read.js lays it) -->
+    <div class="dial" id="dial"></div>
     <footer class="sp-foot" id="spFoot"></footer>
   </aside>
 
