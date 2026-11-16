@@ -15,6 +15,7 @@ carries the page's requests to it, so that the house's own key is the one key:
   GET   /app/read/sources · /categories · /status
   POST  /app/read/collect                     look for new things now
   GET   /app/read/cover/<id>                  the article's first figure, made small (WebP, at most 720 px wide)
+  GET   /app/read/figure/<id>/<n>             the picture at block n of the article, as it stands (WebP, at most 1600 px wide)
 
 Anything else is refused here. The library is reached on loopback with its proxy secret (read from its own
 config, never copied elsewhere); its answers are passed back as they are.
@@ -169,6 +170,67 @@ def register(app, check_auth):
         for c in cards:
             if isinstance(c, dict) and c.get("cover") and isinstance(c.get("id"), str) and re.fullmatch(ID, c["id"]):
                 cover_job(c["id"])
+
+    # ---- figures: a picture where it stands in an article (the block's index in the article says which) ----
+    figures = Path(os.environ.get("RELAY_READ_FIGURES", str(Path.home() / ".cache" / "nyx-read-figures")))
+    listing = {}   # article id → (when asked, {block index: url}, the article's own address), for the last few articles
+
+    async def figure_url(aid, n):
+        hit = listing.get(aid)
+        if not hit or time.time() - hit[0] > 600:
+            base, token, client = library()
+            r = await client.get(f"{base}/api/articles/{aid}", headers={"X-Reading-Proxy-Token": token}, timeout=25.0)
+            article = r.json() if r.status_code == 200 else {}
+            urls = {i: b["url"] for i, b in enumerate(article.get("blocks") or [])
+                    if isinstance(b, dict) and b.get("type") == "image" and isinstance(b.get("url"), str) and b["url"].startswith("https://")}
+            hit = listing[aid] = (time.time(), urls, article.get("url"))
+            for old in sorted(listing, key=lambda k: listing[k][0])[:-8]:
+                listing.pop(old, None)
+        return hit[1].get(n), hit[2]
+
+    async def make_figure(aid, n, out, none):
+        raw = out.with_suffix(".raw")
+        try:
+            url, page = await figure_url(aid, n)
+            data = await fetch_image(url, page) if url else None
+            if data:
+                raw.write_bytes(data)
+                async with gate:
+                    proc = await asyncio.create_subprocess_exec("/usr/bin/python3", "-I", str(shrinker), "--figure", str(out), str(raw),
+                                                                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                    try:
+                        await asyncio.wait_for(proc.wait(), timeout=60)
+                    except asyncio.TimeoutError:
+                        proc.kill()
+        except (httpx.HTTPError, OSError, ValueError):
+            pass   # the page shows the caption and the way to the original instead
+        finally:
+            raw.unlink(missing_ok=True)
+        if not out.exists():
+            none.write_text(str(int(time.time())))
+        kept = sorted(figures.glob("*.webp"), key=lambda p: p.stat().st_mtime)
+        for old in kept[:-1500]:   # a shelf of figures, not an archive of them
+            old.unlink(missing_ok=True)
+
+    @app.get("/app/read/figure/{aid}/{n}")
+    async def read_figure(aid: str, n: int, request: Request):
+        check_auth(request)
+        if not re.fullmatch(ID, aid) or not 0 <= n < 5000:
+            raise HTTPException(status_code=404, detail="no such figure")
+        figures.mkdir(parents=True, exist_ok=True)
+        out, none = figures / f"{aid}-{n}.webp", figures / f"{aid}-{n}.none"
+        if not out.exists():
+            if none.exists() and time.time() - none.stat().st_mtime < 3600:
+                raise HTTPException(status_code=404, detail="no figure")
+            key = f"{aid}/{n}"
+            job = making.get(key)
+            if job is None:
+                job = making[key] = asyncio.ensure_future(make_figure(aid, n, out, none))
+                job.add_done_callback(lambda _f: making.pop(key, None))
+            await asyncio.shield(job)
+            if not out.exists():
+                raise HTTPException(status_code=404, detail="no figure")
+        return FileResponse(out, media_type="image/webp", headers={"Cache-Control": "private, max-age=604800"})
 
     @app.get("/app/read/cover/{aid}")
     async def read_cover(aid: str, request: Request):

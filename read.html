@@ -23,6 +23,7 @@
     if (window.NYX_READ_EARLY) for (var x in window.NYX_READ_EARLY) if (window.NYX_READ_EARLY[x] && window.NYX_READ_EARLY[x].catch) window.NYX_READ_EARLY[x].catch(function () {});
   })(); } catch (e) {}
 </script>
+<link rel="preload" as="image" href="eye/moon.webp"><link rel="preload" as="image" href="eye/seals.webp">   <!-- the moon and the seals are on every sheet: ask for them at once -->
 <link rel="stylesheet" href="eye/ink.css">
 <link rel="stylesheet" href="read.css">
 <style>
@@ -46,46 +47,42 @@
       <feFuncB type="table" tableValues=".620 .740 .840 .890 .886"/>
     </feComponentTransfer>
   </filter>
-  <!-- by night: black → the night's ground, the middle → a dusk blue, white → a pale blue chalk, held back -->
+  <!-- by night: black → the night's ground, the middle → a dusk blue, white → no lighter than a slate blue, so that a white diagram does not glare -->
   <filter id="rd-print-n" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
     <feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  0 0 0 1 0"/>
     <feComponentTransfer>
-      <feFuncR type="table" tableValues=".125 .200 .330 .520 .720"/>
-      <feFuncG type="table" tableValues=".125 .215 .360 .550 .735"/>
-      <feFuncB type="table" tableValues=".160 .340 .560 .740 .840"/>
+      <feFuncR type="table" tableValues=".118 .170 .245 .335 .430"/>
+      <feFuncG type="table" tableValues=".116 .182 .268 .362 .455"/>
+      <feFuncB type="table" tableValues=".150 .270 .400 .520 .610"/>
     </feComponentTransfer>
   </filter>
 </svg>
 
 <div class="rdx" id="rdx">
-  <!-- the spine: the room's name and where to go. On a wide screen it is the dark left page, with one instrument on it; on a phone, the head of the sheet. -->
+  <!-- the spine: the room's name and one instrument to go by. On a wide screen it is the dark left page; on a phone, the head of the sheet (pulled up, it leaves its bar). -->
   <aside class="spine" id="spine">
     <header class="sp-top">
       <button class="back" id="back" type="button" aria-label="回到首页"><i class="sw"></i></button>
       <h1 class="ttl"><b>Read</b><small>一起读</small></h1>
       <p class="sp-date" id="spDate"></p>
     </header>
-    <!-- a phone goes by these three words; a wide screen by the instrument below -->
-    <nav class="sp-nav" id="spNav" aria-label="去哪里">
-      <a href="#today" data-v="today"><i>Today</i><b>今日</b></a>
-      <a href="#shelf" data-v="shelf"><i>Shelf</i><b>书架</b></a>
-      <a href="#kept" data-v="kept"><i>Kept</i><b>收藏</b></a>
-    </nav>
-    <!-- the instrument: tonight's moon, the days before going round it, the three places on the outer track (read.js lays it) -->
+    <!-- the instrument: tonight's moon, the days before going round it, the three places on the outer track (read.js lays it; it is turned by hand) -->
     <div class="dial" id="dial"></div>
     <footer class="sp-foot" id="spFoot"></footer>
   </aside>
 
   <main class="stage" id="stage">
+    <div class="leaf" aria-hidden="true"></div>   <!-- far behind the sheet, a leaf of the sketchbook: the swallow study by day, the swallow among the stars by night -->
     <!-- looking: the day's sheet, the shelf, what was kept -->
     <section class="browse" id="browse" tabindex="-1"><div class="view" id="view" aria-live="polite"></div></section>
 
-    <!-- reading: the list stays beside the sheet -->
+    <!-- reading: the piece alone, or with the pile it came from beside it (the button at its head) -->
     <section class="reading" id="reading" hidden>
       <nav class="rail" id="rail" aria-label="这一叠"></nav>
       <article class="ar" id="ar" tabindex="-1">
         <header class="ah" id="ah">
           <button class="shut" id="aback" type="button"><i class="sw"></i><span>回去</span></button>
+          <button class="pileb" id="pileb" type="button" aria-pressed="false" title="这一篇是从哪一叠里来的"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h9"/></svg><span>这一叠</span><i id="pilen"></i></button>
           <span class="step"><button type="button" id="prev" aria-label="上一篇"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><button type="button" id="next" aria-label="下一篇"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span>
           <span class="prog" id="prog"></span>
           <nav class="tools" id="tools"></nav>
@@ -108,7 +105,6 @@
 <script src="eye/birds.js"></script>
 <script src="eye/orrery.js"></script>
 <script src="eye/postmark.js"></script>
-<script src="eye/plate.js"></script>
 <script src="ask.js"></script>
 <script src="read.js"></script>
 </body>
