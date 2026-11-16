@@ -222,9 +222,13 @@
   function ccLog(sid) {
     return api("/app/cc/log?sid=" + encodeURIComponent(sid || "") + "&tail=200").then(function (d) { view = d.sid || sid; viewInfo = d; return d; });
   }
+  var parked = new Map();   // tab → your messages there that hadn't gone in when you left it
   function openView(sid) {   // show a session: an open tab to write in, or any other to read (and open in a tab if you like)
     var moved = sid !== view;
+    var keep = log.querySelectorAll(".msg.pending, .msg.failed");   // messages of yours not in yet (on their way, held, or failed): they stay with their tab
+    if (keep.length) parked.set(view, Array.prototype.slice.call(keep));
     view = sid; log.innerHTML = ""; byId.clear(); msgs.clear(); tools.clear(); lastId = 0; loadDeleted();
+    (parked.get(sid) || []).forEach(function (n) { log.appendChild(n); }); parked.delete(sid);   // the log's own copy replaces one as it loads
     delete unread[sid]; typing(false); paintTabs();
     if (qcard) { qcard.clear(); if (isLive(sid)) qcard.load(); }
     if (isLive(sid)) { try { localStorage.setItem("nyx_tab", sid); } catch (e) {} }
@@ -805,7 +809,7 @@
     var t = text.value.trim(); if ((!t && !tray.length) || !key) return;
     if (CCMODE && !isLive(view)) { toast("This is an earlier window — open it in a tab first"); return; }
     if (cc && !tray.length && t.charAt(0) === "/" && cc.slash(t)) { text.value = ""; grow(); return; }   // a / command the page or the window takes (cc.js)
-    var items = tray.slice(), q = quote;
+    var items = tray.slice(), q = quote, tab = view;   // the tab it was written in, whichever is on the page when it is retried
     tray = []; trayEl.innerHTML = ""; trayEl.hidden = true;
     text.value = ""; grow(); setQuote(null);
     var local = items.map(function (x) { return x.local ? { kind: "image", name: x.name } : { kind: "file", name: x.name }; });
@@ -813,7 +817,9 @@
     pending.querySelectorAll(".att img[data-i]").forEach(function (im) { var x = items[+im.dataset.i]; if (x && x.local) im.src = x.local; });
     pending.classList.add("pending"); pending.dataset.text = t; log.appendChild(pending); keepTyping(); toBottom();
     function mark(state, label, onTap) { pending.classList.remove("pending", "failed"); pending.classList.add(state); if (label) pending.querySelector(".t").textContent = label; pending.onclick = onTap || null; }
-    function fail(e) { mark("failed", e && e.auth ? "key rejected" : "not sent" + (CCMODE && e && e.message && !/HTTP/.test(e.message) ? ": " + e.message : "") + " — tap to retry", function () { pending.remove(); text.value = t; grow(); send(); }); if (e && e.auth) logout(); }
+    // tapping a message that didn't go sends that same message again — its words, pictures, quote, to its own tab — and leaves
+    // whatever you have started writing since where it is
+    function fail(e) { mark("failed", e && e.auth ? "key rejected" : "not sent" + (CCMODE && e && e.message && !/HTTP/.test(e.message) ? ": " + e.message : "") + " — tap to retry", e && e.auth ? null : retry); if (e && e.auth) logout(); }
     function missing() { return items.some(function (x) { return x.file && !x.done; }); }
     function retry() {
       mark("pending"); pending.querySelector(".t").innerHTML = hm(new Date().toISOString()) + MARK_WAIT;
@@ -825,7 +831,7 @@
     function go() {
       var atts = items.filter(function (x) { return x.done; }).map(function (x) { return x.done; });
       if (!t && !atts.length) { fail(); return; }
-      var body = { text: t, side: root.dataset.side }; if (q) body.quote = q; if (atts.length) body.attachments = atts; if (CCMODE) body.sid = view;
+      var body = { text: t, side: root.dataset.side }; if (q) body.quote = q; if (atts.length) body.attachments = atts; if (CCMODE) body.sid = tab;
       if (CCMODE) return api("/app/cc/say", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })   // typed into the window as a prompt
         .then(function (r) {
           if (r && r.held) { pending.querySelector(".t").textContent = r.check ? "a question came up as it went in — it goes in once that's answered" : "waits for the question at the terminal"; if (qcard) qcard.load(); return; }
