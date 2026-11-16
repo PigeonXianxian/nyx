@@ -13,7 +13,7 @@ from pathlib import Path
 from PIL import Image, ImageStat
 
 Image.MAX_IMAGE_PIXELS = 60_000_000   # a figure, not a poster wall
-ENOUGH = 30.0                         # the least spread of tone (0–127) a cover must have
+ENOUGH = 13.0                         # the least spread of tone (0–127) a cover must have: a pale diagram passes, a blank sheet does not
 
 
 def load(path):

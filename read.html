@@ -25,10 +25,37 @@
 </script>
 <link rel="stylesheet" href="eye/ink.css">
 <link rel="stylesheet" href="read.css">
+<style>
+  /* a figure is printed in the house's three inks (the filter below): its darks in ink, its middle tones in the blue,
+     its lights left as paper; under the pointer it shows its own colours */
+  .cv.has{ filter:url(#rd-print); }
+  :root[data-side="moon"] .cv.has{ filter:url(#rd-print-n); }
+  @media (hover:hover){ a:hover > .cv.has, :root[data-side="moon"] a:hover > .cv.has{ filter:none; } }
+</style>
 </head>
 <body class="read">
 <div id="paper" aria-hidden="true"></div>
 <svg id="drops" aria-hidden="true" hidden></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <!-- tone to ink: black → ink, the middle → the house's blue, white → paper (by day) -->
+  <filter id="rd-print" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
+    <feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  0 0 0 1 0"/>
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues=".106 .130 .200 .610 .925"/>
+      <feFuncG type="table" tableValues=".106 .150 .240 .640 .914"/>
+      <feFuncB type="table" tableValues=".125 .390 .700 .850 .886"/>
+    </feComponentTransfer>
+  </filter>
+  <!-- by night: black → the night's ground, the middle → its blue, white → a chalk white held back a little -->
+  <filter id="rd-print-n" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
+    <feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  0 0 0 1 0"/>
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues=".106 .150 .270 .580 .830"/>
+      <feFuncG type="table" tableValues=".102 .170 .310 .610 .820"/>
+      <feFuncB type="table" tableValues=".125 .480 .900 .880 .800"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
 
 <div class="rdx" id="rdx">
   <!-- the spine: the room's name, the day, where to go. On a wide screen it is the dark left page; on a phone, the head of the sheet. -->
