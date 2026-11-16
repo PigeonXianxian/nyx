@@ -384,7 +384,7 @@
   }
 
   /* ── one article ── */
-  var A = null, mode = null, saveT = 0, saved = { blockId: null, progress: -1 }, cur = { blockId: null, progress: 0 }, listY = 0, heads = [];
+  var A = null, mode = null, rawView = false, hosts = {}, saveT = 0, saved = { blockId: null, progress: -1 }, cur = { blockId: null, progress: 0 }, listY = 0, heads = [];
   var IC = { size: '<path d="M4 19l5-13h1l5 13M6 14.5h7M15.5 19l3-7.5h.6l3 7.5M16.6 16.5h4.4"/>', keep: '<path d="M7 4h10v16l-5-3.6L7 20z"/>',
     out: '<path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M17 14v5H5V7h5"/>', talk: '<path d="M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 20l1.7-4.9A7.5 7.5 0 1 1 20 11.5Z"/>' };
   function ico(n) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + IC[n] + "</svg>"; }
@@ -403,6 +403,10 @@
     if (b.type === "table") return "<pre" + ' class="' + cls + ' tb"' + ">" + t + "</pre>";
     if (b.type === "list") return "<p" + ' class="' + cls + ' li"' + (lang ? ' lang="' + lang + '"' : "") + ">" + t + "</p>";
     if (b.type === "quote") return "<blockquote" + at + ">" + t + "</blockquote>";
+    if (b.speaker && typeof b.speaker === "string") {   // a conversation (the library's edited transcript): who is speaking stands before a turn; a turn that goes on has no name
+      var who = b.speaker, own = b.turn && String(b.text || "").indexOf(who + "：") === 0;
+      return "<p" + ' class="' + cls + (own ? " turn" : " cont") + (hosts[who] ? " q" : "") + '"' + (lang ? ' lang="' + lang + '"' : "") + ">" + (own ? '<b class="spk">' + esc(who) + "：</b>" + esc(String(b.text).slice(who.length + 1)) : t) + "</p>";
+    }
     return "<p" + at + ">" + t + "</p>";
   }
   function figHtml(a, b, x, i) {   // the picture itself; under it what the piece says of it, and the way to the original
@@ -416,7 +420,12 @@
       a.coverage === "post" ? "X 上的单条推文" : a.coverage === "caption" ? "视频简介，没有字幕" : a.coverage === "text-and-images" ? "图文正文，图里的字没有转录" : "";
   }
   function renderArticle() {
-    var a = A, pr = pairs(a), isVideo = /^bilibili-/.test(a.sourceId || "") || a.contentKind === "video";
+    var a = A, isVideo = /^bilibili-/.test(a.sourceId || "") || a.contentKind === "video";
+    /* a programme's speech as the library edited it (punctuated, in paragraphs; a conversation turn by turn), or — asked for — the subtitles as they came */
+    var edited = a.hasEditedBody && a.content && a.content.edited && Array.isArray(a.content.edited.originalBlocks) && a.content.edited.originalBlocks.length ? a.content.edited : null;
+    if (!edited) rawView = false;
+    var blocks = rawView ? edited.originalBlocks : (a.blocks || []), pr = rawView ? null : pairs(a);
+    hosts = {}; ((edited && edited.speakers) || []).forEach(function (s) { if (s && /主持/.test(s.role || "")) hosts[s.name] = 1; });
     if (!pr) mode = "src"; else if (!mode || mode === "src0") mode = ls("read_lang") || (wide() ? "both" : "zh");
     var zhTitle = pr && a.translation.title && a.translation.title !== a.title ? a.translation.title : "";
     var meta = [a.author && a.author !== a.sourceName && shortSource(a.sourceName).indexOf(a.author) < 0 ? esc(a.author) : "", zhDate(a.publishedAt || a.fetchedAt) || esc(a.dateLabel || ""),
@@ -428,7 +437,9 @@
     if ((a.tags || []).length) h += '<p class="tags">' + a.tags.map(function (t) { return "<span>" + esc(t) + "</span>"; }).join("") + "</p>";
     h += "</header>";
     if (a.summary || a.recommendation || a.evidence) h += '<aside class="lead"><b>导读</b>' + (a.summary ? "<p>" + esc(a.summary) + "</p>" : "") +
-      (a.recommendation && a.recommendation !== a.evidence ? '<p class="how">' + esc(a.recommendation) + "</p>" : "") + (a.evidence || coverage(a) ? '<p class="how">' + esc(a.evidence || coverage(a)) + "</p>" : "") + "</aside>";
+      (a.recommendation && a.recommendation !== a.evidence ? '<p class="how">' + esc(a.recommendation) + "</p>" : "") + (a.evidence || coverage(a) ? '<p class="how">' + esc(a.evidence || coverage(a)) + "</p>" : "") +
+      (edited ? '<p class="how">' + (rawView ? "现在看的是" + (a.contentBasis === "transcript" ? "原转写" : "原字幕") + "，没有整理过。" : "这是整理稿：字幕加了标点、分了段，去掉了口头的重复" + (edited.speakers && edited.speakers.length ? "；谁在说话是整理时按上下文判断的，可能有错" : "") + "。") +
+        '<button type="button" class="lnk" id="edn">' + (rawView ? "回到整理稿" : "看" + (a.contentBasis === "transcript" ? "原转写" : "原字幕")) + "</button></p>" : "") + "</aside>";
     var chapters = (a.chapters || []).filter(function (c) { return c && typeof c.title === "string" && c.title.indexOf("商单") < 0; });
     if (chapters.length) {   // the programme's chapters: beads on a line, each with its time
       var base = safeUrl(a.url);
@@ -437,7 +448,7 @@
     if (a.blockId && a.progress > .03 && !a.completed) h += '<p class="resume"><button type="button" id="resume">上次读到 ' + Math.round(a.progress * 100) + "% ，接着读</button></p>";
     if (!a.hasReadableBody) h += '<p class="none">这一篇没有可读的正文' + (isVideo ? "，只有节目信息。" : "。") + "</p>";
     heads = [];
-    h += '<div class="body ' + mode + '" id="body">' + (a.blocks || []).map(function (b, i) {
+    h += '<div class="body ' + mode + '" id="body">' + blocks.map(function (b, i) {
       var x = pr && pr[i], inner;
       if (b.type === "heading" && i < 2 && (b.text === a.title || b.text === zhTitle)) return '<div class="blk dup" id="b-' + esc(b.id) + '" data-id="' + esc(b.id) + '"></div>';   // the title again, as the body's first line
       if (b.type === "image") return '<div class="blk figb" id="b-' + esc(b.id) + '" data-id="' + esc(b.id) + '">' + figHtml(a, b, x && mode !== "src" ? x : null, i) + "</div>";
@@ -450,18 +461,19 @@
     h += '<footer class="end"><p class="rate" id="rate"><span>这一篇值几颗月亮</span>' + [1, 2, 3, 4, 5].map(function (n) { return '<button type="button" data-n="' + n + '" aria-label="' + n + ' 颗">' + moonTag((a.rating || 0) >= n ? 1 : 0, true, 11, dark(), "", 26) + '</button>'; }).join("") + "</p>" +
       '<p class="act"><button type="button" id="done"' + (a.completed ? ' class="on"' : "") + ">" + (a.completed ? "读完了 · 已记下" : "读完了") + '</button><button type="button" id="nextb">下一篇</button></p></footer>';
     sheet.innerHTML = h; sheet.dataset.size = ls("read_size") || "1"; $("ar").classList.toggle("both", mode === "both" && !!pr);
-    tools(pr); toc(); figures(sheet);
+    tools(pr, edited); toc(); figures(sheet);
     var rs = $("resume"); if (rs) rs.onclick = function () { var el = document.getElementById("b-" + A.blockId); if (el) el.scrollIntoView({ block: "start", behavior: "smooth" }); rs.parentNode.remove(); };
     $("done").onclick = function () { state({ read: true, completed: !A.completed }).then(function () { $("done").textContent = A.completed ? "读完了 · 已记下" : "读完了"; $("done").classList.toggle("on", !!A.completed); }); };
     $("nextb").onclick = function () { step(1); }; $("nextb").hidden = at(1) == null;
     $("rate").querySelectorAll("button").forEach(function (b) { b.onclick = function () { var n = +b.dataset.n; state({ rating: A.rating === n ? null : n }).then(function () { $("rate").querySelectorAll("img").forEach(function (im, i) { var f = (A.rating || 0) > i ? 1 : 0; im.dataset.moon = [f, 1, 11, dark() ? 1 : 0].join("|"); im.src = moonUrl(f, true, 11, dark()); }); }); }; });
   }
-  function tools(pr) {
+  function tools(pr, edited) {
     var a = A, t = "";
     if (pr) t += '<span class="seg" id="seg">' + [["zh", "中文"], ["both", "对照"], ["src", "原文"]].map(function (m) { return '<button type="button" data-m="' + m[0] + '"' + (mode === m[0] ? ' class="on"' : "") + ">" + m[1] + "</button>"; }).join("") + "</span>";
     t += '<button type="button" class="tb" id="size" title="字的大小">' + ico("size") + '<span>字号</span></button><button type="button" class="tb' + (a.favorite ? " on" : "") + '" id="keep">' + ico("keep") + "<span>" + (a.favorite ? "留着了" : "留着") + "</span></button>" +
       '<button type="button" class="tb" id="orig">' + ico("out") + '<span>原文</span></button><button type="button" class="tb go" id="talk"><i class="sw"></i><span>拿去聊</span></button>';
     $("tools").innerHTML = t;
+    if (edited && $("edn")) $("edn").onclick = function () { flush(); rawView = !rawView; renderArticle(); (wide() ? $("ar") : document.scrollingElement).scrollTop = 0; };   // the edited transcript, or the subtitles as they came
     if (pr) $("seg").querySelectorAll("button").forEach(function (b) { b.onclick = function () { var keepAt = cur.blockId; mode = b.dataset.m; ls("read_lang", mode); renderArticle(); var el = keepAt && document.getElementById("b-" + keepAt); if (el) el.scrollIntoView({ block: "start" }); }; });
     $("size").onclick = function () { var n = (+(ls("read_size") || 1) + 1) % 3; ls("read_size", String(n)); sheet.dataset.size = n; };
     $("keep").onclick = function () { state({ favorite: !A.favorite }).then(function () { $("keep").classList.toggle("on", !!A.favorite); $("keep").querySelector("span").textContent = A.favorite ? "留着了" : "留着"; spineFoot(); }); };
@@ -505,7 +517,7 @@
   }
   function flush(keep) {
     clearTimeout(saveT);
-    if (!A || !A.hasReadableBody || !cur.blockId || (cur.blockId === saved.blockId && Math.abs(cur.progress - saved.progress) < .01)) return;
+    if (!A || rawView || !A.hasReadableBody || !cur.blockId || (cur.blockId === saved.blockId && Math.abs(cur.progress - saved.progress) < .01)) return;
     if (A.completed && cur.progress < A.progress) return;   // a finished piece is not un-read by scrolling back up
     saved = { blockId: cur.blockId, progress: cur.progress };
     api("articles/" + A.id + "/state", { method: "PATCH", body: saved, keep: keep === true }).then(function (s) { if (A) for (var k in s) A[k] = s[k]; }).catch(function () {});
@@ -533,7 +545,7 @@
     A = null; saved = { blockId: null, progress: -1 }; cur = { blockId: null, progress: 0 };
     api("articles/" + encodeURIComponent(id)).then(function (a) {
       if ((location.hash || "").slice(3) !== id) return;   // another piece was asked for meanwhile
-      A = a; saved = { blockId: a.blockId, progress: a.progress || 0 }; mode = mode === "src" ? "src0" : mode; renderArticle();
+      A = a; rawView = false; saved = { blockId: a.blockId, progress: a.progress || 0 }; mode = mode === "src" ? "src0" : mode; renderArticle();
       $("prev").disabled = at(-1) == null; $("next").disabled = at(1) == null;
       if (a.hasReadableBody && !a.read) api("articles/" + a.id + "/open", { method: "POST", body: {} }).then(function (s) { if (A && A.id === a.id) for (var k in s) A[k] = s[k]; remember(a.id, s); }).catch(function () {});
     }).catch(function (e) { sheet.innerHTML = trouble(e); });
