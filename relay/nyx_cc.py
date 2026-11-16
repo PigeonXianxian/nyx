@@ -1047,6 +1047,21 @@ def register(app, g, x):
                 elif st == "away_summary":
                     add("note", "ai", "recap · " + re.sub(r"\s*\(disable recaps in /config\)\s*$", "", str(d.get("content") or "")))
                 continue
+            if t == "attachment":
+                # Something you wrote while it was working: Claude Code hands it to Claude at the next step of the same
+                # turn ("absorbed mid-turn") and keeps it only as this attachment, never as a user message of its own.
+                a = d.get("attachment") or {}
+                if a.get("type") == "queued_command" and (a.get("origin") or {}).get("kind") == "human" and a.get("commandMode", "prompt") == "prompt":
+                    p = a.get("prompt")
+                    if isinstance(p, list):
+                        p = "\n".join([str(x.get("text") or "") for x in p if isinstance(x, dict) and x.get("type") == "text"] +
+                                      ["[image]" for x in p if isinstance(x, dict) and x.get("type") == "image"])
+                    k0 = len(out)
+                    words(str(p or ""))
+                    for m in out[k0:]:
+                        if m["kind"] == "user":
+                            m["meta"]["mid"] = True
+                continue
             if t not in ("user", "assistant") or d.get("isMeta"):
                 continue
             c = (d.get("message") or {}).get("content")
@@ -1189,7 +1204,8 @@ def register(app, g, x):
     @app.post("/app/cc/say")
     async def cc_say(request: Request):
         """What you write goes into the window as an ordinary prompt (pasted, so line breaks stay); mid-turn, Claude Code
-        queues it, as it does when you type ahead."""
+        queues it, as it does when you type ahead. While the window waits on a question it is held ({held: true}) and goes
+        in once the question is answered; it is never typed into the question's box."""
         check_auth(request)
         b = await request.json()
         text = str(b.get("text") or "").strip()
@@ -1212,19 +1228,241 @@ def register(app, g, x):
         pane = await asyncio.to_thread(capture, 0, name)
         if pane is None:
             raise HTTPException(status_code=503, detail="the window isn't open")
-        if not input_box_showing(pane):
-            raise HTTPException(status_code=409, detail="the window is waiting on a question")
+        tab = sid or str(session_meta(name).get("sessionId") or "")
+        if not input_box_showing(pane) or held.get(tab):   # a question is up (or others wait before it): it goes in once that is answered (held_watch)
+            hold(tab, text)
+            await tell_question(name, tab)
+            return {"ok": True, "held": True}
+        went = await submit(name, text)
+        if went == "dialog":   # a question came up just as it went in: make sure of it once that is answered
+            hold(tab, text, check=True)
+            await tell_question(name, tab)
+            return {"ok": True, "held": True, "check": True}
+        if went == "stuck":
+            raise HTTPException(status_code=504, detail="it is still in the window's input box; Enter didn't take")
+        if went == "gone":
+            raise HTTPException(status_code=503, detail="the window isn't open")
+        await broadcast(g["app_subs"], {"type": "typing", "active": True, "sid": tab})
+        return {"ok": True, "queued": st.get("state") == "busy"}
+
+    def squash(t):
+        return re.sub(r"\s+", "", t or "")
+
+    async def submit(name, text):
+        """Paste into the window's input box and press Enter, then make sure it went: "sent" once the box is empty (or the
+        text moved up into the queue); Enter again while it is still sitting there; "dialog" if a question took the window
+        as it went in (then nobody can tell from the screen whether it got in: the caller checks the transcript later)."""
         buf = "nyxsay-" + secrets.token_hex(4)   # a buffer of its own: two tabs may be sending at once
+        long = "\n" in text or len(text) > 800   # Claude Code shows a long paste as "[Pasted text #1 +12 lines]"
+        head = squash(text)[:24]
         async with type_lock(name):
             r = await asyncio.to_thread(subprocess_run, ["tmux", "load-buffer", "-b", buf, "-"], text)
             if r.returncode != 0:
                 raise HTTPException(status_code=502, detail="couldn't reach the window")
             await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "C-u")
             await asyncio.to_thread(tmux, "paste-buffer", "-p", "-d", "-b", buf, "-t", tgt(name))
-            await asyncio.sleep(0.35 + min(1.5, len(text) / 20000))
+            # Enter only once the words are in the input box, and never into a question: a permission prompt that comes up
+            # between the paste and the Enter would take the Enter as its "Yes". So: look, then press at once.
+            t0 = time.monotonic()
+            while True:
+                await asyncio.sleep(0.06)
+                pane = await asyncio.to_thread(capture, 0, name)
+                if pane is None:
+                    return "gone"
+                if not input_box_showing(pane):
+                    return "dialog"   # the words wait behind it, in the box; held_watch types them again afterwards
+                box = squash(nyx_question.box_text(pane) or "")
+                if (long and "[Pastedtext" in box) or (head and head in box) or time.monotonic() - t0 > 1.5 + len(text) / 20000:
+                    break
             await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "Enter")
-        await broadcast(g["app_subs"], {"type": "typing", "active": True, "sid": sid or str(session_meta(name).get("sessionId") or "")})
-        return {"ok": True, "queued": st.get("state") == "busy"}
+            for i in range(12):
+                await asyncio.sleep(0.4)
+                pane = await asyncio.to_thread(capture, 0, name)
+                if pane is None:
+                    return "gone"
+                if not input_box_showing(pane):
+                    return "dialog"
+                box = squash(nyx_question.box_text(pane) or "")
+                if (long and "[Pastedtext" in box) or (head and head in box):
+                    if i in (2, 5, 8):   # still sitting there: Enter didn't take
+                        await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "Enter")
+                    continue
+                return "sent"
+            return "stuck"
+
+    # ---------------- the question at the terminal (nyx_question.py reads it off the screen) ----------------
+    # While a window waits on a question — a permission prompt, Claude's own AskUserQuestion, a box of Claude Code's —
+    # the page shows it (GET /app/cc/question, and a cc_question event when it comes, changes or goes) and answers it
+    # (POST /app/cc/question/answer). What is written meanwhile is held, by session, and typed in once the input box is
+    # back (held_watch); a message that a question cut into is typed again only if the transcript never got it.
+    import nyx_question
+    held_file = data_dir / "cc_held.json"
+    try:
+        held = {k: v for k, v in json.loads(held_file.read_text()).items() if isinstance(v, list)}
+    except Exception:
+        held = {}
+    asked = {}   # sid -> {"sig", "q", "seen"}: the box last told to the page
+    KEYS = {"Up", "Down", "Left", "Right", "Enter", "Escape", "Tab", "BTab", "Space"}
+
+    def held_save():
+        try:
+            tmp = held_file.with_suffix(".tmp")
+            tmp.write_text(json.dumps({k: v for k, v in held.items() if v}, ensure_ascii=False))
+            os.replace(tmp, held_file)
+        except OSError:
+            pass
+
+    def hold(sid, text, check=False):
+        q = held.setdefault(sid, [])
+        if not any(h["text"] == text for h in q):
+            q.append({"text": text, "at": time.time(), "check": check})
+            del q[:-10]
+        held_save()
+
+    def held_texts(sid):
+        return [h["text"] for h in held.get(sid, [])]
+
+    def question_of(name):
+        pane = capture(0, name)
+        return None if pane is None else nyx_question.read_dialog(pane)
+
+    async def tell_question(name, sid, q=False):
+        if q is False:
+            q = await asyncio.to_thread(question_of, name)
+        asked[sid] = {"sig": q and q["sig"], "q": q, "seen": time.time()}
+        await broadcast(g["app_subs"], {"type": "cc_question", "sid": sid, "q": q, "held": held_texts(sid)})
+
+    def in_transcript(sid, text, since):
+        L = read_log(sid)
+        head = squash(text)[:40]
+        for m in reversed((L or {}).get("msgs", [])[-60:]):
+            if m.get("kind") == "user" and head and squash(m.get("text"))[:40] == head:
+                try:
+                    if datetime.fromisoformat(str(m.get("ts")).replace("Z", "+00:00")).timestamp() >= since - 30:
+                        return True
+                except ValueError:
+                    return True
+        return False
+
+    @app.get("/app/cc/question")
+    async def cc_question(request: Request, sid: str = ""):
+        check_auth(request)
+        name = await win(sid)
+        tab = sid or str(session_meta(name).get("sessionId") or "")
+        return {"sid": tab, "q": await asyncio.to_thread(question_of, name), "held": held_texts(tab)}
+
+    @app.post("/app/cc/question/answer")
+    async def cc_question_answer(request: Request):
+        """{sid, sig, pick?: n, text?: words for a "Type something." choice, key?: Up|Down|Left|Right|Enter|Escape|Tab|Space}.
+        sig is the box the page was showing: if the window has moved on to another question meanwhile, nothing is pressed."""
+        check_auth(request)
+        b = await request.json()
+        sid = str(b.get("sid") or "")
+        name = await win(sid)
+        tab = sid or str(session_meta(name).get("sessionId") or "")
+        key, pick, words = str(b.get("key") or ""), b.get("pick"), str(b.get("text") or "")
+        async with type_lock(name):
+            q = await asyncio.to_thread(question_of, name)
+            if not q:
+                raise HTTPException(status_code=409, detail="there's no question up any more")
+            if b.get("sig") and b["sig"] != q["sig"]:
+                await tell_question(name, tab, q)
+                raise HTTPException(status_code=409, detail="the question has changed; look again")
+            send = lambda *a: asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), *a)
+            if key:
+                if key not in KEYS:
+                    raise HTTPException(status_code=400, detail="not a key the page can press")
+                await send(key)
+            elif pick is not None:
+                o = next((o for o in q["options"] if o["n"] == int(pick)), None)
+                if not o:
+                    raise HTTPException(status_code=400, detail="no such choice")
+                if o["n"] <= 9:
+                    await send("-l", str(o["n"]))   # Claude Code takes the digit as the pick
+                else:
+                    at = next((i for i, x in enumerate(q["options"]) if x["on"]), 0)
+                    to = q["options"].index(o)
+                    for _ in range(abs(to - at)):
+                        await send("Down" if to > at else "Up")
+                    await send("Enter")
+                if o["own"] and words.strip():   # an answer of your own: the choice becomes a line to write in
+                    await asyncio.sleep(0.3)
+                    await send("-l", words.strip().replace("\n", " ")[:2000])
+                    await asyncio.sleep(0.2)
+                    await send("Enter")
+            else:
+                raise HTTPException(status_code=400, detail="pick a choice or press a key")
+        await asyncio.sleep(0.7)
+        q2 = await asyncio.to_thread(question_of, name)
+        await tell_question(name, tab, q2)
+        return {"ok": True, "q": q2}
+
+    async def held_watch():
+        """Types in what was held once its window's input box is back; tells the page when a question comes, changes or goes."""
+        while True:
+            await asyncio.sleep(1.0)
+            if CHAT_MODE != "cc":
+                await asyncio.sleep(10)
+                continue
+            try:
+                ws = [w for w in await asyncio.to_thread(live_windows) if w["sid"]]
+                by_sid = {w["sid"]: w["name"] for w in ws}
+                for w in ws:   # the questions
+                    q = await asyncio.to_thread(question_of, w["name"])
+                    a = asked.get(w["sid"]) or {"sig": None, "pend": None}
+                    sig = q and q["sig"]
+                    if sig != a.get("sig"):
+                        if a.get("pend") == sig:   # the same twice running: auto mode's boxes that flash by are let be
+                            await tell_question(w["name"], w["sid"], q)
+                        else:
+                            a["pend"] = sig
+                            asked[w["sid"]] = a
+                    else:
+                        a["pend"] = sig
+                for sid in [k for k, v in held.items() if v]:   # what was held
+                    name = by_sid.get(sid)
+                    h = held[sid][0]
+                    if not name:
+                        if time.time() - h["at"] > 900:   # its window has gone: let it go
+                            held[sid] = []
+                            held_save()
+                        continue
+                    pane = await asyncio.to_thread(capture, 0, name)
+                    if pane is None or not input_box_showing(pane):
+                        h.pop("box_at", None)
+                        continue
+                    if h.get("check"):
+                        if not h.get("box_at"):
+                            h["box_at"] = time.time()   # the box is back: give the window a moment to write down what it had
+                            continue
+                        if time.time() - h["box_at"] < 3:
+                            continue
+                        if await asyncio.to_thread(in_transcript, sid, h["text"], h["at"]):
+                            held[sid].pop(0)
+                            held_save()
+                            await tell_question(name, sid, None)
+                            continue
+                    went = await submit(name, h["text"])
+                    if went == "sent":
+                        held[sid].pop(0)
+                        held_save()
+                        await broadcast(g["app_subs"], {"type": "typing", "active": True, "sid": sid})
+                        await tell_question(name, sid, None)
+                    elif went == "dialog":
+                        h["check"], h["at"] = True, time.time()
+                        h.pop("box_at", None)
+                        held_save()
+                    else:
+                        h["tries"] = h.get("tries", 0) + 1
+                        if h["tries"] >= 3:
+                            held[sid].pop(0)
+                            held_save()
+                            await broadcast(g["app_subs"], {"type": "cc_held_failed", "sid": sid, "text": h["text"]})
+            except Exception:
+                continue
+
+    g.setdefault("NYX_STARTUP", []).append(held_watch)
+
 
     def subprocess_run(cmd, data):
         import subprocess

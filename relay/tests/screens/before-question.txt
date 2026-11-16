@@ -1,0 +1,8 @@
+❯ Use the AskUserQuestion tool to ask me two questions at once: which drink I want (tea, coffee, water) and which snack (cake, fruit). Then tell me what I
+  picked.
+  Waiting for permission…
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 23nuts
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 5.5 · five_hour 9% · seven_day 11%
+  ⏸ manual mode on

@@ -152,7 +152,7 @@
     if (GROUP) return;
     if (!key || document.hidden || $("room").hidden) { busyT = setTimeout(pollBusy, 5000); return; }
     api("/app/busy" + tabQ()).then(function (d) { var was = busy && busy.state; d.at = Date.now(); busy = d; paintState();
-      if (CCMODE) { room(d); tabStates(d.windows); if (isLive(view)) typing(d.state === "busy"); }
+      if (CCMODE) { room(d); tabStates(d.windows); if (isLive(view)) typing(d.state === "busy"); if (qcard && (qcard.shown() || d.state === "waiting")) qcard.load(); }
       if (CCMODE && (was === "offline") !== (d.state === "offline")) refreshLive(); }).catch(function () { busy = null; })
       .then(function () { var any = busy && (busy.state === "busy" || (busy.windows || []).some(function (w) { return w.state === "busy"; })); busyT = setTimeout(pollBusy, any ? 2500 : 5000); });
   }
@@ -197,6 +197,12 @@
         return;
       }
       if (ev.type === "cc_sid") { liveTo(ev.sid || ""); return; }
+      if (ev.type === "cc_question") {   // a window stopped to ask, or the question changed, or it was answered
+        if (ev.sid === view && qcard) qcard.set(ev.q, ev.held);
+        if (isLive(ev.sid) && (ev.q || wstate[ev.sid] === "waiting")) { wstate[ev.sid] = ev.q ? "waiting" : "busy"; paintTabs(); }
+        return;
+      }
+      if (ev.type === "cc_held_failed") { if (ev.sid === view) toast("A message didn’t go in after the question — send it again"); return; }
       if (ev.type === "cc_windows") { setWins(ev); return; }
       if (ev.type === "typing" && ev.sid && ev.sid !== view) { if (ev.active && isLive(ev.sid)) { wstate[ev.sid] = "busy"; paintTabs(); } return; }   // another tab took a prompt: its star turns now, not at the next poll
       if (ev.id != null && ev.from) { if (ev.kind === "term" && ev.meta && ev.meta.note && (!ev.meta.sid || ev.meta.sid === view)) localCard(ev.text, "", true); return; }   // the relay's own log is not this chat
@@ -208,6 +214,7 @@
     }
   }
   function catchUp() {
+    if (CCMODE && qcard) qcard.load();   // a question may have come or gone while the line was down
     if (CCMODE) return view ? api("/app/cc/log?sid=" + view + "&after=" + lastId).then(function (d) { (d.messages || []).forEach(put); }).catch(function (e) { if (e.auth) logout(); }) : Promise.resolve();
     return api("/app/history?since=" + lastId + "&limit=200").then(function (d) { (d.messages || []).forEach(put); }).catch(function (e) { if (e.auth) logout(); });
   }
@@ -219,6 +226,7 @@
     var moved = sid !== view;
     view = sid; log.innerHTML = ""; byId.clear(); msgs.clear(); tools.clear(); lastId = 0; loadDeleted();
     delete unread[sid]; typing(false); paintTabs();
+    if (qcard) { qcard.clear(); if (isLive(sid)) qcard.load(); }
     if (isLive(sid)) { try { localStorage.setItem("nyx_tab", sid); } catch (e) {} }
     if (moved && key) { loadMeter(); loadWin(); pollBusy(); }   // the gauge, the legend and the state line follow the tab
     return ccLog(sid).then(function (d) { (d.messages || []).forEach(put); earlier(d.more); paintRo(); toBottom(); }).catch(function (e) { toast("Couldn't open it: " + e.message); });
@@ -398,6 +406,9 @@
   // the proof: a file handed over, looked at here without downloading it (proof.js)
   var proof = window.NyxProof ? NyxProof({ api: api, blob: blobOf, download: download, size: size, toast: toast,
     md: function (t) { return window.NyxCC && NyxCC.md ? NyxCC.md(t) : esc(t); } }) : null;
+  // the question at the terminal: a slip above the writing line while the tab's window waits on one (question.js)
+  var qcard = window.NyxQuestion ? NyxQuestion({ api: api, toast: toast, host: document.querySelector("footer.write"), before: document.querySelector("footer.write .line"),
+    sid: function () { return CCMODE && isLive(view) ? view : ""; } }) : null;
   function fresh(m) { if (proof && m && m.meta && m.meta.attachments) m.meta.attachments.forEach(function (a) { proof.arrived(a); }); }   // a new version of the open file
   function wireAtts(el, atts) {
     el.querySelectorAll(".att [data-i]").forEach(function (n) {
@@ -510,6 +521,7 @@
       var atts = (m.meta && m.meta.attachments) || [];
       if (atts.length) inner += attHTML(atts);
       inner += me && /^\/[A-Za-z0-9][\w:-]*/.test(m.text || "") ? rich(m.text).replace(/^\/[A-Za-z0-9][\w:-]*/, function (c) { return '<b class="cmdn">' + c + "</b>"; }) : rich(m.text);   // a /skill sent to the companion
+      if (me && m.meta && m.meta.mid) inner += '<span class="mid">while it was working · it read this at its next step</span>';   // absorbed into the turn that was running
       if (C.stickers && !atts.length && String(m.text || "").replace(STK, "").trim() === "" && STK.test(m.text || "")) el.classList.add("only-stk");
       if (!String(m.text || "").trim() && atts.length === 1 && /^sticker-/.test(atts[0].name || "")) el.classList.add("only-stk", "stk-att");   // your own sticker went up as a picture; show it like a sticker
       STK.lastIndex = 0;
@@ -815,7 +827,9 @@
       if (!t && !atts.length) { fail(); return; }
       var body = { text: t, side: root.dataset.side }; if (q) body.quote = q; if (atts.length) body.attachments = atts; if (CCMODE) body.sid = view;
       if (CCMODE) return api("/app/cc/say", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })   // typed into the window as a prompt
-        .then(function (r) { if (r && r.queued) pending.querySelector(".t").textContent = "queued — after this turn"; typing(true); setTimeout(pollBusy, 1500); })
+        .then(function (r) {
+          if (r && r.held) { pending.querySelector(".t").textContent = r.check ? "a question came up as it went in — it goes in once that's answered" : "waits for the question at the terminal"; if (qcard) qcard.load(); return; }
+          if (r && r.queued) pending.querySelector(".t").textContent = "queued — after this turn"; typing(true); setTimeout(pollBusy, 1500); })
         .catch(function (e) { fail(/409/.test(e.message) ? { message: "it's waiting on a question at the terminal" } : e); });
       return api("/app/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
         .then(function () { setTimeout(catchUp, 1500); }).catch(fail);   // the stream normally echoes it; this is the safety net
