@@ -96,7 +96,6 @@ Optional, for the other rooms:
 | GET | `/app/heart`, `/app/heart/file?path=` | read-only: `~/companion/CLAUDE.md` or `AGENTS.md`, `~/companion/memory/*.md`, the relay code; keys are blanked |
 | GET/POST | `/app/window`, `/app/window/{line,compact,new,switch}`, `/app/window/list` | the gauge's lower half: the context line (past it the AI saves to memory, then the window compacts), compact now, a new window, old windows. Claude Code through tmux; Codex through the bridge (`/app/window/cmd`) |
 | GET/POST | `/app/plan`, `/app/plan/<id>` | Plan (日程, `plan.html`): what you have to do, day by day — `{title, note, date, time, due, done}`. Your companion writes down what you mention in the chat with `relay/plan.py` (`add`, `set`, `done`, `rm`; days are worked out on your clock); you write on the page. The "right now" card carries what is coming up |
-| GET/POST | `/app/kitchen`, `/app/kitchen/{pantry,ask,recipe,photo,photo/comment,log,cooked}` | the Kitchen: pantry, recipes the AI writes, photos of what you made, a timeline of meals |
 | GET/POST | `/app/keys`, `/app/keys/delete` | the bottom of the gauge: API keys for the companion's environment. Values go in and never come back (the list shows your label, the name and the last four characters); see **Keys** below |
 
 `picks` is a list of who marked a picture; anything non-empty shows a small star (handy if your companion can mark things it likes).
@@ -114,7 +113,7 @@ At the bottom of the gauge (the floating ball → Gauge, under the model list) t
 
 ## Town
 
-A three.js town drawn from your companion's memory: each topic is a house, each memory a window. Windows remembered often glow, forgotten ones go dark and the house grows ivy; tap a window to remember it. Switch to the fields to see each memory as a crop, cook what's ripe in the kitchen, plate it by hand and serve it to your companion. Three styles (French, Tang, Santorini). **First version — bug reports welcome.**
+A three.js town drawn from your companion's memory: each topic is a house, each memory a window. Windows remembered often glow, forgotten ones go dark and the house grows ivy; tap a window to remember it. Switch to the fields to see each memory as a crop. Three styles (French, Tang, Santorini). **First version — bug reports welcome.**
 
 Where the memories come from (`relay/nyx_town.py`):
 

@@ -70,7 +70,6 @@
   #sheet .pick{ display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:#fffaf2; border-radius:999px; padding:6px 11px; margin:0 6px 8px 0; font:inherit; font-size:13.5px; color:inherit; cursor:pointer; }
   #sheet .pick i{ width:12px; height:12px; border-radius:50%; } #sheet .pick small{ color:var(--soft); }
   #sheet .pick.on{ border-color:var(--red); background:#fbeee6; } #sheet .pick[disabled]{ opacity:.4; cursor:default; }
-  #sheet .pot{ margin:6px 0 12px; padding:10px 12px; border-radius:12px; background:#f6efe3; } #sheet .pot b{ font-size:16px; }
   #sheet .sp{ display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--line); }
   #sheet .sp:first-of-type{ border-top:0; }
   #sheet .sp i{ flex:none; width:18px; height:18px; border-radius:50%; margin-top:4px; box-shadow:inset 0 0 0 1.5px rgba(58,42,36,.25); }
@@ -94,7 +93,7 @@
 <div class="hint" id="hint">拖一拖转一圈，点窗户看看</div>
 <div class="bar" id="bar">
   <div class="seg"><button class="on" data-m="town">镇子</button><button data-m="farm">田</button></div>
-  <button class="chip" id="bNotice">告示</button><button class="chip" id="bDex">图鉴</button><button class="chip" id="bKitchen">厨房</button><button class="chip" id="bStyle">风格</button><button class="chip" id="bRule" hidden>规则</button><button class="chip" id="bGuide" hidden>审美</button>
+  <button class="chip" id="bNotice">告示</button><button class="chip" id="bDex">图鉴</button><button class="chip" id="bStyle">风格</button><button class="chip" id="bRule" hidden>规则</button><button class="chip" id="bGuide" hidden>审美</button>
 </div>
 <div id="toast"></div>
 <div id="sheet"><button class="x" id="sx">×</button><div id="sc"></div></div>
@@ -999,7 +998,7 @@ function showNotice() {
 }
 document.getElementById('bNotice').onclick = showNotice;
 if (!MEMS) document.getElementById('bNotice').style.display = 'none';
-else { paintNotice(); try { if (notice().some((m) => !(T.notice.rescued || []).includes(m.id)) && localStorage.getItem('town_notice_seen') !== T.notice.date && !/[?&](dex|k)=/.test(location.search)) {   /* 从厨房、图鉴回来的别拿告示盖住 */ localStorage.setItem('town_notice_seen', T.notice.date); setTimeout(showNotice, 1800); } } catch (_) {} }
+else { paintNotice(); try { if (notice().some((m) => !(T.notice.rescued || []).includes(m.id)) && localStorage.getItem('town_notice_seen') !== T.notice.date && !/[?&]dex=/.test(location.search)) {   /* 从图鉴回来的别拿告示盖住 */ localStorage.setItem('town_notice_seen', T.notice.date); setTimeout(showNotice, 1800); } } catch (_) {} }
 // 镇子 / 田
 let mode = 'town';
 document.querySelectorAll('.seg button').forEach((b) => b.onclick = () => {
@@ -1025,26 +1024,6 @@ document.getElementById('bDex').onclick = () => {
   });
 };
 if (MEMS && new URLSearchParams(location.search).get('dex')) setTimeout(() => document.getElementById('bDex').click(), 600);   // 从新品种页或者刚审完回来，图鉴接着开着
-// 厨房：田里今天熟了、还没收的挑一到三样下锅。一格一天要么卖要么做菜；头一回做出的菜进菜谱
-const DISHES = T.dishes || {};
-function showKitchen(sel = []) {
-  const nowS = Date.now() / 1000, ripe = new Map();
-  for (const m of MEMS) { if (M.stageOf(m) < 2 || (m.sold && nowS - m.sold < 86400)) continue; const k = M.cropOf(m); if (!ripe.has(k)) ripe.set(k, []); ripe.get(k).push(m); }
-  const keys = Object.keys(M.SPECIES).filter((k) => MEMS.some((m) => M.cropOf(m) === k));
-  const d = sel.length ? M.dishOf(sel) : null;
-  const book = Object.entries(DISHES).sort((a, b) => b[1].last - a[1].last);
-  show(`<h2>厨房<em>cuisine</em></h2><p class="meta">田里今天熟了、还没收的才能下锅，挑一到三样。用掉的那格今天就不卖了。</p>`
-    + keys.map((k) => { const sp = M.SPECIES[k], n = (ripe.get(k) || []).length; return `<button class="pick${sel.includes(k) ? ' on' : ''}" data-k="${k}"${n ? '' : ' disabled'}><i style="background:${sp.fruit}"></i>${sp.zh}<small>${n}</small></button>`; }).join('')
-    + (d ? `<div class="pot"><b>${esc(d.name)}</b>${DISHES[d.name] ? ` <small style="color:var(--soft)">做过 ${DISHES[d.name].count} 次</small>` : d.special ? ' <small style="color:var(--red)">隐藏菜</small>' : ''}<p class="meta" style="margin:4px 0 8px">${esc(d.about)}</p><button class="act" id="cook">下锅，去摆盘</button></div>` : '<p class="meta">还没挑。</p>')
-    + `<h2 style="margin-top:14px;font-size:16px">菜谱<em>${book.length} 道</em></h2>` + (book.length ? book.map(([n, v]) => `<div class="sp"><i style="background:${M.SPECIES[v.species?.[0]]?.fruit || '#ccc'}"></i><div><b>${esc(n)}</b> <small style="display:inline">× ${v.count}</small><small>${(v.species || []).map((k) => M.SPECIES[k]?.zh).filter(Boolean).join(' · ')}${v.plate ? ` · <a href="plating.html?view=${encodeURIComponent(n)}">看那盘</a>` : ''} · <a href="#" class="feed" data-n="${esc(n)}">端给小机${v.fed ? `（吃过 ${v.fed} 回）` : ''}</a></small></div></div>`).join('') : '<p class="meta">还一道都没做过。</p>')
-    + '<a class="go" href="plating.html">随便摆着玩 →</a>');
-  sc.querySelectorAll('.feed').forEach((a) => a.onclick = (e) => { e.preventDefault(); feedAI(a.dataset.n); });
-  sc.querySelectorAll('.pick').forEach((b) => b.onclick = () => { const k = b.dataset.k, i = sel.indexOf(k); showKitchen(i >= 0 ? sel.filter((x) => x !== k) : sel.length < 3 ? [...sel, k] : sel); });
-  const cb = sc.querySelector('#cook'); if (cb) cb.onclick = () => {   // 下锅以后去摆盘，摆好端上桌那一下才算做成
-    const used = sel.map((k) => ripe.get(k)[0]);
-    location.assign('plating.html?cook=' + encodeURIComponent(JSON.stringify({ ids: used.map((m) => m.id), species: sel })));
-  };
-}
 // 装修她的店：默认那套不要钱，别的拿念换；买过的随便换回来
 const SHOP_N = { type: '房型', wall: '楼上的墙', base: '一楼门面', awning: '遮阳篷', ivy: '爬山虎', stall: '门口小摊' , ...(HAR ? { wall: '墙', base: '圆顶和门', awning: '阳伞', ivy: '三角梅' } : TANG ? { wall: '墙', base: '布幌子', awning: '灯笼' } : {}) };
 const TYPE_ZH = { cafe: '街角小店', paris: '巴黎公寓', farm: '普罗旺斯农舍', tower: '街角塔楼' }, IVY_ZH = ['不爬', '一点', '半面墙', '爬满'];
@@ -1076,21 +1055,6 @@ function showShop(msg = '') {
   });
   const sg = sc.querySelector('#sgSave'); if (sg) sg.onclick = () => { const a = sc.querySelector('#sgA').value.trim(), b2 = sc.querySelector('#sgB').value.trim(); apply({ top: { sign: a ? [a, b2] : null } }); };
 }
-// 端给小机吃：后台记一笔、查出这盘用了哪几条记忆，再用她的名义往聊天里递一句，小机在那边真的尝
-async function feedAI(name) {
-  try {
-    const j = await fetch(REL + '/app/memtown/feed', { method: 'POST', headers: { Authorization: 'Bearer ' + SECRET, 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }).then((r) => r.json());
-    if (!j.ok) { toast(j.why || '没端过去'); return; }
-    const titles = j.mems.length ? j.mems.map((m) => `《${m.title || '没起名字的一条'}》`).join('') : (j.dish.species || []).map((k) => M.SPECIES[k]?.zh).filter(Boolean).join('、');
-    const text = `🍽 端来一盘「${name}」\n料是：${titles}\n尝尝吃出了什么`;
-    const r = await fetch(REL + '/app/send', { method: 'POST', headers: { Authorization: 'Bearer ' + SECRET, 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
-    if (!r.ok) { toast('没递进聊天'); return; }
-    DISHES[name] = j.dish; toast('端过去了，去聊天看它吃'); showKitchen();
-  } catch (_) { toast('没连上家里'); }
-}
-document.getElementById('bKitchen').onclick = () => MEMS && showKitchen();
-if (!MEMS) document.getElementById('bKitchen').style.display = 'none';
-else if (new URLSearchParams(location.search).get('k')) setTimeout(() => showKitchen(), 600);   // 从摆盘回来，厨房接着开着
 document.getElementById('bRule').onclick = () => show(`<h2>记忆小镇的规矩</h2><ol>
   <li>一个主题一栋房子，一条记忆一扇窗。</li>
   <li>窗的亮度看它被想起的分量：常想起的亮，快忘的暗，钉住的是金窗，永远亮。</li>
@@ -1098,7 +1062,7 @@ document.getElementById('bRule').onclick = () => show(`<h2>记忆小镇的规矩
   <li>窗暗下去，墙上就爬藤；一栋大半都暗了开始掉瓦；整栋没人想起，塌成一圈废墟，形还留着。</li>
   <li>点一扇窗，就是想起来了。</li>
   <li>换到田里看：感受是花，围着喷泉开；别的记忆是作物，每个主题一种，名字和样子是 AI 起的，现实里没有。常想起的结果，快忘的发黄打蔫，钉住的根上一圈金。</li>
-  <li>长过的作物收进图鉴。田里熟了的一格一天要么卖、要么下厨房：挑一到三样做成菜，头一回做出来的菜进菜谱给 6 个念，凑对了还有隐藏菜。菜谱里的菜能端给小机吃，它在聊天里尝。</li>
+  <li>长过的作物收进图鉴。田里熟了的一格，一天能卖一次。</li>
   <li>接了心情服务的话，天气跟着它的心情走：想你想得厉害就下小雨，低落是阴天，心里压着东西起风下大雨，睡着了下雪，雀跃是大晴天。没接就一直是晴天。</li>
 </ol>`);
 document.querySelectorAll('.card[data-s]').forEach((c) => c.onclick = () => {

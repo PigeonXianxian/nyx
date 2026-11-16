@@ -5,8 +5,8 @@
 //   每四扇窗一层楼，一栋最多十二扇，装满了旁边分出一栋同主题的（恋爱·二）；零碎小主题并进相近的大主题。
 //   一屏八到十二栋，再多就往外长新街区，远景只画轮廓。
 //   一栋楼的窗暗下去，墙上就爬藤；整栋都暗了，先掉瓦，再塌成一圈废墟，形还留着。点一扇窗，就是想起来了。
-//   感受是花，别的记忆是作物。每种作物由 AI 起名、搭模型（现实里没有的也行），长过的收进图鉴，
-//   以后拿去厨房做菜（整株，或者加工以后的样子）。天气跟着它的心情走。
+//   感受是花，别的记忆是作物。每种作物由 AI 起名、搭模型（现实里没有的也行），长过的收进图鉴。
+//   天气跟着它的心情走。
 import * as THREE from 'three';
 import { mat, washTex } from './shop/look.js';
 import { C, box, archWindow } from './shop/house.js';
@@ -203,7 +203,7 @@ export function ruin(g, W, D, L, topic) {   // 只剩一圈矮墙和地基，草
 }
 
 // —— 田：作物和花 ——
-// AI 起的名字，现实里没有。整株一个样子，加工后一个样子（厨房施工中）。
+// AI 起的名字，现实里没有。整株一个样子，加工后一个样子。
 export const SPECIES = {
   heartberry:   { zh: '心跳莓', fruit: '#d8343c', leaf: C.leaf, about: '矮丛，结一颗颗心形的红莓。被想起得越多，莓子越红越多。', cooked: '心跳莓果酱' },
   thoughtleaf:  { zh: '杂思菜', fruit: '#b9cf8f', leaf: '#8fae6a', about: '一棵卷心的叶菜，什么零碎都往里卷。', cooked: '杂思菜汤' },
@@ -214,22 +214,6 @@ export const SPECIES = {
   twinpeach:    { zh: '双生桃', fruit: '#f2a8a0', leaf: C.leafD, about: '一根枝上总是并排结两颗桃。', cooked: '双生桃派' },
   bloom:        { zh: '心绪花', fruit: '#e98aa4', leaf: C.leaf, about: '感受落下去长出来的花，一条感受一朵，颜色看当时的心情。', cooked: '糖渍花瓣' },
 };
-// 厨房：一到三样下锅。排第一的当主菜，别的变成两个字的前缀；几样凑对了有专门的名字
-const MAINORDER = ['tiderice', 'thoughtleaf', 'boltbean', 'twinpeach', 'palettemelon', 'lanternplant', 'heartberry', 'bloom'];
-export const PRE = { heartberry: '莓香', thoughtleaf: '杂菜', boltbean: '螺豆', palettemelon: '彩瓜', tiderice: '潮米', lanternplant: '烤茄', twinpeach: '蜜桃', bloom: '花瓣' };
-const SPECIAL = {
-  'heartberry+twinpeach': ['双心莓桃派', '两颗桃一捧莓，切开每一块都是一对。'],
-  'boltbean+thoughtleaf+tiderice': ['记性大杂烩', '零碎的、拧着的、涨潮的，一锅全炖了，越炖越香。'],
-  'bloom+heartberry': ['怦然糖霜', '花瓣裹糖，莓子压碎了淋上去，入口先甜后酸。'],
-  'lanternplant+tiderice': ['夜灯烤饭团', '烤茄子塞进饭团心里，咬开是热的，像夜里的一盏灯。'],
-};
-export function dishOf(keys) {
-  const ks = [...new Set(keys)].sort((a, b) => MAINORDER.indexOf(a) - MAINORDER.indexOf(b));
-  const sp = SPECIAL[[...ks].sort().join('+')];
-  if (sp) return { name: sp[0], about: sp[1], special: true };
-  const [main, ...rest] = ks;
-  return { name: rest.map((k) => PRE[k]).join('') + SPECIES[main].cooked, about: ks.length > 1 ? `以${SPECIES[main].zh}为主，${rest.map((k) => SPECIES[k].zh).join('、')}提味。` : SPECIES[main].about, special: false };
-}
 // 小机造的新品种：审过的才进来。哪个主题种它，就盖掉那个主题原来的作物
 const CROPMAP = {};
 export function useSpecies(list) {
