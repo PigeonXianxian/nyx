@@ -109,7 +109,7 @@
   });
 
   /* ── swallows, as the home draws them (eye/birds.js): the outline of one instant of the wingbeat as a mask for small
-     marks (--sw: on every piece not yet read, on the line that says how far down a piece one is, on the way back) … ── */
+     marks (--sw: on every piece not yet read, on the line that says how far down a piece one is, on the way back) ── */
   function swallowMask(hour) {
     var P = G && G.BIRDPTS && (G.BIRDPTS[hour] || G.BIRDPTS[11]); if (!P) return "";
     var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, d = "", i;
@@ -117,55 +117,71 @@
     return 'url("data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + [x0, y0, x1 - x0, y1 - y0].map(function (v) { return v.toFixed(3); }).join(" ") + '"><path d="' + d + 'Z"/></svg>') + '")';
   }
   if (G && G.BIRDPTS) root.style.setProperty("--sw", swallowMask(11));
-  /* … and a flight of them at the head of a sheet, one for each thing it holds: a line rising to the right as an eyelid of
-     the home's eye does, the leader largest; they ride on raised wings and now and then give one beat (G.flight) */
-  function flight(host, n) {
-    if (!G || !G.swallow || !host || !wide()) return;
-    var cv = document.createElement("canvas"), x = cv.getContext("2d"), t0 = performance.now(); cv.className = "fl"; cv.setAttribute("aria-hidden", "true"); host.appendChild(cv);
-    n = Math.max(1, Math.min(11, n | 0));
-    (function draw() {
-      if (!cv.isConnected) return;
-      var r = cv.getBoundingClientRect();
+
+  /* ── the instrument on the spine (wide screens): the house's orbits about tonight's moon, and on two of its tracks the
+     places to go (outer) and the days before (inner, one moon a day). Choosing one turns its ring until the choice lies
+     at the hand — and the orbits behind turn with it, each ring at its own rate, as they do on the home when the menu is
+     turned (G.orrery's `orb`); left alone they only flow. They are laid in the other side's hand, as the spine is the
+     other side's ground: chalk by day, pencil by night. ── */
+  var PLACES = [["today", "今日", "Today"], ["shelf", "书架", "Shelf"], ["kept", "收藏", "Kept"]], STEP_P = 27, STEP_D = 15, RADN = Math.PI / 180;
+  var cal = { dates: [], cur: null }, dial = { built: false, v: "today", date: null, orb: 0, to: 0 };
+  function dialBuild() {   // laid again whenever the days become known
+    var el = $("dial"); if (!el || !wide()) return;
+    var onDark = !dark(), t = today(), tn = sky(t);
+    el.innerHTML = '<span class="hub">' + moonTag(tn.lit, tn.wax, 62, onDark, "", 128) + '</span><i class="hand"></i>' +
+      '<div class="ring days">' + cal.dates.slice(0, 12).map(function (d, i) { var k = sky(d); return '<a href="#today' + (d === t ? "" : "/" + d) + '" data-d="' + d + '" style="--a:' + (i * STEP_D) + 'deg" title="' + zhDate(d + "T04:00:00Z") + '的简报">' + moonTag(k.lit, k.wax, 12, onDark, "", 26) + "<i>" + (+d.slice(8)) + "</i></a>"; }).join("") + "</div>" +
+      '<div class="ring places">' + PLACES.map(function (pl, i) { return '<a href="#' + pl[0] + '" data-v="' + pl[0] + '" style="--a:' + (i * STEP_P) + 'deg"><b></b><span><em>' + pl[1] + "</em><i>" + pl[2] + "</i></span></a>"; }).join("") + "</div>";
+    dial.built = true; dialSet(dial.v, dial.date, true);
+  }
+  function dialSet(v, date, still) {
+    if (v) dial.v = v; if (date !== undefined) dial.date = date;
+    var el = $("dial"); if (!el || !dial.built) return;
+    var pi = Math.max(0, PLACES.findIndex(function (pl) { return pl[0] === dial.v; })), day = dial.date || today(), di = Math.max(0, cal.dates.indexOf(day));
+    el.style.setProperty("--tp", (-pi * STEP_P) + "deg"); el.style.setProperty("--td", (-di * STEP_D) + "deg");
+    el.querySelectorAll(".places a").forEach(function (l) { l.classList.toggle("on", l.dataset.v === dial.v); });
+    el.querySelectorAll(".days a").forEach(function (l) { l.classList.toggle("on", dial.v === "today" && l.dataset.d === day); });
+    dial.to = pi * .5 + di * .2;   // the orbits behind are geared to both rings
+    if (still) dial.orb = dial.to;
+    backTurn(dial.to, still);
+  }
+  function instrument() {
+    if (!G || !G.orrery || !wide()) return;
+    var host = $("spine"), cv = document.createElement("canvas"), x = cv.getContext("2d"), born = performance.now(), w = 0, h = 0, dpr = 1, c = { x: 40, y: 480 };
+    cv.className = "plate"; cv.setAttribute("aria-hidden", "true"); host.insertBefore(cv, host.firstChild);
+    (function frame() {
+      var r = host.getBoundingClientRect(), now = performance.now(), moving = Math.abs(dial.to - dial.orb) > .0015;
       if (r.width > 4 && !document.hidden) {
-        var dpr = Math.min(window.devicePixelRatio || 1, 2), W = r.width, H = r.height, t = (performance.now() - t0) / 1000, col = dark() ? "#8C95FF" : G.C.blue, i;
-        if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
-        x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
-        for (i = 0; i < n; i++) {
-          var k = n - 1 - i, u = 1 - k / 10, px = W - 34 - k * (W - 60) / 10.5, py = 16 + (H - 34) * Math.pow(k / 10, 1.25) * 1.05 + Math.sin(t * .6 + i * 1.9) * 1.6;   // k: how many from the leader
-          G.swallow(x, px, py, 11 + 17 * u * u, -(.2 + .42 * u) + Math.sin(t * .45 + i) * .035, col, { f: G.flight ? G.flight(t * .8, i + 5) : 11, rim: false });
+        var nd = Math.min(window.devicePixelRatio || 1, 2);
+        if (Math.round(r.width) !== w || Math.round(r.height) !== h || nd !== dpr) {   // the measure of the spine: where the hub lies and how wide its tracks are
+          w = Math.round(r.width); h = Math.round(r.height); dpr = nd; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+          var rp = Math.min(w * .575, h * .28), d = $("dial"); c = { x: Math.round(w * .115), y: Math.round(h * .55) };
+          d.style.setProperty("--cx", c.x + "px"); d.style.setProperty("--cy", c.y + "px"); d.style.setProperty("--rp", rp.toFixed(1) + "px"); d.style.setProperty("--rd", (rp * .64).toFixed(1) + "px"); d.style.setProperty("--hub", (rp * .64).toFixed(1) + "px");
         }
+        dial.orb = moving ? dial.orb + (dial.to - dial.orb) * .085 : dial.to;
+        var sc = h / 1400, k = sc * dpr;
+        x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.setTransform(k, 0, 0, k, 0, 0);
+        G.orrery(x, { cx: c.x / sc, cy: c.y / sc, K: .8, tilt: 58 * RADN, q: .62, night: !dark(), orb: dial.orb, time: now / 1000, a: dark() ? .34 : .46, rv: G.clamp((now - born) / 2200, 0, 1), foot: null });
       }
-      setTimeout(draw, 80);
+      if (moving) requestAnimationFrame(frame); else setTimeout(frame, 75);
     })();
   }
-
-  /* ── the plates behind (wide screens): the house's orbits going slowly round, and on the spine a leaf of its sketchbook —
-     laid in the OTHER side's hand, as the spine is the other side's ground: by day the swallow among the stars, in chalk;
-     by night the pencil study of the swallow ── */
-  var leaves = {}, leafWait = [];
-  if (G && !G.sheet) { G.sheet = function (name) { return leaves[name] || { im: null, kn: null }; }; G.sketchReady = function (fn) { if (fn) leafWait.push(fn); }; }
-  function leaf(name, ground) {
-    if (leaves[name]) return; var L = leaves[name] = { im: null, kn: null }, tell = function () { leafWait.forEach(function (f) { f(); }); };
-    var im = new Image(); im.onload = function () { L.im = im; tell(); }; im.src = "eye/" + name + ".webp";
-    var mk = new Image(); mk.onload = function () { var c = document.createElement("canvas"); c.width = mk.naturalWidth; c.height = mk.naturalHeight; var g = c.getContext("2d"); g.drawImage(mk, 0, 0); g.globalCompositeOperation = "source-in"; g.fillStyle = ground; g.fillRect(0, 0, c.width, c.height); L.kn = c; tell(); }; mk.src = "eye/" + name + "-m.webp";
-  }
-  function plates() {
-    if (!G || !G.plate || !G.orrery || !wide()) return;
-    if (dark()) leaf("draft-day-a", "#ECE9E2"); else leaf("draft-night-a", "#1B1A20");
-    G.plate($("spine"), { flip: true, lay: function (night, W, H) {
-      return { orb: { x: W * .12, y: H * .8, K: 1.02, tilt: 58, q: .62, a: night ? .36 : .28 },
-        sheets: [night ? { name: "draft-night-a", x: W * .5, y: H * .132, sx: .47, sy: .5, w: W * 1.2, rot: -4, a: .94 } : { name: "draft-day-a", x: W * .5, y: H * .13, sx: .55, sy: .42, w: W * 1.3, rot: -10, a: .9 }] };
-    } });
-    backdrop(); var rt = 0; window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(backdrop, 300); });
-  }
-  /* far behind the sheet, the same orbits large and pale — drawn once and left still (a sheet for reading does not move under the words) */
+  /* far behind the sheet, the same orbits large and pale. They lie still under the words; when a ring of the instrument is
+     turned they turn too, then lie still again. */
+  var back = { orb: 0, to: 0, raf: 0 };
   function backdrop() {
+    if (!G || !G.orrery || !wide()) return;
     var host = $("stage"), cv = host.querySelector("canvas.plate") || host.insertBefore(Object.assign(document.createElement("canvas"), { className: "plate" }), host.firstChild);
-    var r = host.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2), night = dark(), k = r.height / 1400 * dpr, W = r.width / (r.height / 1400), x = cv.getContext("2d");
-    if (r.width < 4 || !wide()) return;
-    cv.setAttribute("aria-hidden", "true"); cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
-    x.setTransform(k, 0, 0, k, 0, 0); x.clearRect(0, 0, W, 1400);
-    G.orrery(x, { cx: W * .34, cy: 1400 * .9, K: 2.2, tilt: 58 * Math.PI / 180, q: .62, night: night, orb: 0, time: 31, a: night ? .26 : .13, rv: 1, foot: null });
+    var r = host.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 1.5), night = dark(), k = r.height / 1400 * dpr, W = r.width / (r.height / 1400), x = cv.getContext("2d");
+    if (r.width < 4) return;
+    cv.setAttribute("aria-hidden", "true");
+    if (cv.width !== Math.round(r.width * dpr) || cv.height !== Math.round(r.height * dpr)) { cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); }
+    x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.setTransform(k, 0, 0, k, 0, 0);
+    G.orrery(x, { cx: W * .34, cy: 1400 * .9, K: 2.2, tilt: 58 * RADN, q: .62, night: night, orb: back.orb, time: 31, a: night ? .26 : .13, rv: 1, foot: null });
+  }
+  function backTurn(to, still) {
+    back.to = to; if (still) { back.orb = to; backdrop(); return; }
+    if (back.raf || !wide()) return;
+    (function step() { var d = back.to - back.orb; if (Math.abs(d) < .003) { back.orb = back.to; back.raf = 0; backdrop(); return; } back.orb += d * .11; backdrop(); back.raf = requestAnimationFrame(step); })();
   }
 
   /* ── covers: the first figure of a piece, small, fetched as the card comes near ── */
@@ -212,36 +228,13 @@
   }
   function ofCard(a) { var t = titles(a); return { id: a.id, title: t.main, sourceId: a.sourceId, meta: metaOf(a), read: a.read }; }
 
-  /* ── the spine: the day and its moon, the days before, the last look for new things ── */
-  var cal = { dates: [], cur: null };
-  function spineDay() {
-    if (!G) return;
-    var t = today(), d = new Date(t + "T00:00:00Z"), onDark = !dark();   // the spine is laid in the other side's ground
-    $("spDay").innerHTML = '<b class="dn">' + d.getUTCDate() + '</b><span class="dm"><i>' + WEEKDAY[d.getUTCDay()] + "</i><i>" + MONTH[d.getUTCMonth()] + " " + d.getUTCFullYear() + "</i></span>" +
-      '<span class="sk">' + moonTag(sky(t).lit, sky(t).wax, 34, onDark, "sky", 70) + "<small>age " + G.moonAge(new Date()).toFixed(1) + " d</small></span>";
-  }
-  function spineCal() {   // the days before, set as moons along two star-tracks that run off the spine
-    var onDark = !dark(), t = today(), list = cal.dates.slice(0, 12), el = $("spCal");
-    if (!list.length) { el.innerHTML = ""; return; }
-    var W = 280, H = 172, cx = W / 2, cy = 356, RAD = Math.PI / 180, at = function (R, deg) { return [cx + R * Math.cos(deg * RAD), cy + R * Math.sin(deg * RAD)]; };
-    var arc = function (R, d0, d1) { var p = at(R, d0), q = at(R, d1); return "M" + p[0].toFixed(1) + " " + p[1].toFixed(1) + "A" + R + " " + R + " 0 0 1 " + q[0].toFixed(1) + " " + q[1].toFixed(1); };
-    var ticks = "", d, h = "", i;
-    for (d = -128; d <= -52; d += 2) { var p0 = at(300, d), p1 = at(300 + (Math.round(d) % 10 === 0 ? 6 : 3), d); ticks += "M" + p0[0].toFixed(1) + " " + p0[1].toFixed(1) + "L" + p1[0].toFixed(1) + " " + p1[1].toFixed(1); }
-    for (i = 0; i < list.length; i++) {
-      var day = list[i], outer = i < 6, R = outer ? 300 : 250, deg = outer ? -112.25 + i * 8.9 : -64 - (i - 6) * 10.4, pt = at(R, deg), sk = sky(day);   // the outer track left to right, the inner one back again
-      h += '<a href="#today' + (day === t ? "" : "/" + day) + '"' + (day === cal.cur ? ' class="on"' : "") + ' style="left:' + (pt[0] / W * 100).toFixed(2) + "%;top:" + (pt[1] / H * 100).toFixed(2) + '%" title="' + zhDate(day + "T04:00:00Z") + '的简报">' + moonTag(sk.lit, sk.wax, 14, onDark, "", 30) + "<i>" + (+day.slice(8)) + "</i></a>";
-    }
-    var lead = at(300, -120.5);
-    el.innerHTML = '<h4><span>往日简报</span><i>the days before</i></h4><div class="trk"><svg viewBox="0 0 ' + W + " " + H + '" aria-hidden="true"><path class="o" d="' + arc(300, -130, -50) + '"/><path class="i" d="' + arc(250, -128, -52) + '"/><path class="t" d="' + ticks + '"/></svg>' +
-      '<i class="sw" style="left:' + (lead[0] / W * 100).toFixed(2) + "%;top:" + (lead[1] / H * 100).toFixed(2) + '%"></i>' + h + "</div>";
-  }
+  /* ── the rest of the spine: the day in a line under the name, and at its foot how much is on the shelf and the last look for new things ── */
   var polling = 0;
   function spineFoot() {
-    Promise.all([api("status"), api("articles?filter=unread&limit=1").catch(function () { return {}; }), api("articles?filter=favorites&limit=1").catch(function () { return {}; })]).then(function (r) {
+    Promise.all([api("status"), api("articles?filter=unread&limit=1").catch(function () { return {}; })]).then(function (r) {
       var s = r[0];
-      $("nShelf").textContent = s.articleCount ? s.articleCount + " 篇" + (r[1].total ? " · " + r[1].total + " 没读" : "") : "";
-      $("nKept").textContent = r[2].total ? r[2].total + " 篇" : "";
-      $("spFoot").innerHTML = "<p>" + (s.collecting ? "正在找新的……" : "上次去找 · " + (clock(s.lastCollectionAt) || "还没有")) + '</p><button type="button" id="collect"' + (s.collecting ? " disabled" : "") + ">去找新的</button>";
+      $("spFoot").innerHTML = "<p>" + (s.articleCount ? s.articleCount + " 篇" + (r[1].total ? " · " + r[1].total + " 没读" : "") : "") + "</p><p>" + (s.collecting ? "正在找新的……" : "上次去找 " + (clock(s.lastCollectionAt) || "还没有")) +
+        ' · <button type="button" id="collect"' + (s.collecting ? " disabled" : "") + ">去找新的</button></p>";
       $("collect").onclick = function () {
         this.disabled = true;
         api("collect", { method: "POST", body: {} }).then(function () { toast("去找了，过一会儿回来看"); watch(); }, function (e) { toast(e.message || "没去成"); spineFoot(); });
@@ -283,8 +276,8 @@
       var others = (b.dates || []).filter(function (d) { return d !== b.date; }).slice(0, 9);
       if (others.length) h += '<nav class="days"><span>前几天</span>' + (isToday ? "" : '<a href="#today">今天</a>') + others.map(function (d) { return '<a href="#today/' + d + '">' + (+d.slice(5, 7)) + "." + (+d.slice(8)) + "</a>"; }).join("") + "</nav>";
       h += '</div><div class="col picks" id="picks">' + WAIT + "</div>";
-      view.innerHTML = h; stamps(view); pile(mine.concat(picked)); flight(view.querySelector(".hd"), items.length || 1);
-      cal.dates = b.dates || []; cal.cur = b.date; spineCal();
+      view.innerHTML = h; stamps(view); pile(mine.concat(picked));
+      if ((b.dates || []).join() !== cal.dates.join()) { cal.dates = b.dates || []; dialBuild(); }
       var rg = $("regen"); if (rg) rg.onclick = function () {
         ask.confirm("现在写今天的简报？", { body: "要用两次模型调用，今天还剩 " + b.budget.remaining + " 次。", ok: "写", cancel: "先不" }).then(function (yes) {
           if (!yes) return; rg.disabled = true; rg.textContent = "在写……";
@@ -323,7 +316,6 @@
       $("more").hidden = shelf.items.length >= shelf.total;
       $("count").textContent = shelf.total ? shelf.total + " 篇" : "";
       covers($("list")); pile(shelf.items.map(ofCard));
-      if (!more && !view.querySelector(".fl")) flight(view.querySelector(".hd"), shelf.items.filter(function (a) { return !a.read; }).length || 1);   // one for each piece not yet read, of those in sight
     }).catch(function (e) { shelf.busy = false; if ($("list")) $("list").innerHTML = trouble(e); });
   }
   function viewShelf() {
@@ -348,7 +340,7 @@
       if (r[0].items.length) h += '<h3 class="sec"><span>读到一半</span></h3><div class="list grid">' + r[0].items.map(function (a) { return card(a); }).join("") + "</div>";
       if (r[1].items.length) h += '<h3 class="sec"><span>留着的</span></h3><div class="list grid">' + r[1].items.map(function (a) { return card(a); }).join("") + "</div>";
       if (!r[0].items.length && !r[1].items.length) h += '<p class="none">还没有留下什么。读到想留的，在文章上面点「留着」。</p>';
-      view.innerHTML = h; covers(view); pile(r[0].items.concat(r[1].items).map(ofCard)); flight(view.querySelector(".hd"), r[0].items.length + r[1].items.length || 1);
+      view.innerHTML = h; covers(view); pile(r[0].items.concat(r[1].items).map(ofCard));
     }).catch(function (e) { view.innerHTML = trouble(e); });
   }
 
@@ -518,11 +510,11 @@
   var shown = null;
   function route() {
     var h = (location.hash || "#today").slice(1), m = h.match(/^a\/([A-Za-z0-9_-]{1,128})$/);
-    if (m) { if (!shown) { shown = "shelf"; mark("shelf"); viewShelf(); } openArticle(m[1]); return; }
+    if (m) { if (!shown) { shown = "shelf"; mark("shelf"); dialSet("shelf", undefined, true); viewShelf(); } openArticle(m[1]); return; }
     if (!$("reading").hidden) closeArticle();
     var d = h.match(/^today\/(\d{4}-\d{2}-\d{2})$/), v = d ? "today" : (h === "shelf" || h === "kept") ? h : "today", id = v + (d ? "/" + d[1] : "");
     if (shown === id) return;
-    shown = id; mark(v);
+    shown = id; mark(v); dialSet(v, v === "today" ? (d ? d[1] : null) : undefined);
     if (v === "today") viewToday(d && d[1]); else if (v === "shelf") viewShelf(); else viewKept();
   }
   function mark(v) { $("spNav").querySelectorAll("a").forEach(function (a) { a.classList.toggle("on", a.dataset.v === v); }); }
@@ -548,6 +540,8 @@
     $("rdx").style.setProperty("--edge", 'url("' + cx[0].toDataURL("image/png") + '")');
   }
   if (G) edge();
-  spineDay(); route(); setTimeout(spineFoot, 1200); plates();
-  setTimeout(function () { if (!cal.dates.length && wide()) api("briefs").then(function (b) { if (!cal.dates.length) { cal.dates = b.dates || []; cal.cur = null; spineCal(); } }).catch(function () {}); }, 1500);   // the days before, when the page did not open on Today   // the sheet first; the counts on the spine can follow
+  $("spDate").textContent = latinDay(today());
+  dialBuild(); instrument(); route(); setTimeout(spineFoot, 1200);
+  var rz = 0; window.addEventListener("resize", function () { clearTimeout(rz); rz = setTimeout(backdrop, 300); });
+  setTimeout(function () { if (!cal.dates.length && wide()) api("briefs").then(function (b) { if (!cal.dates.length) { cal.dates = b.dates || []; dialBuild(); } }).catch(function () {}); }, 1500);   // the days before, when the page did not open on Today
 })();
