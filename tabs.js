@@ -5,7 +5,7 @@
    side window (its session stays in Sessions); + opens another, while there is room on the machine.
    NyxTabs(o) → { paint(model) }        o: { host (the element the row goes before), pick(sid), close(sid), add() }
    model: { on, wins: [{sid, main, title}], view, reading: {sid, title} | null, state: {sid: "busy"|"idle"|"waiting"},
-            unread: {sid: true}, opening: n, adding: bool, max: n, ai: name } */
+            unread: {sid: true}, opening: n, adding: bool, max: n, tight: bool (the machine is short of memory), why, ai: name } */
 (function () {
   "use strict";
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
@@ -22,7 +22,7 @@
       el.hidden = !(m && m.on);
       document.documentElement.classList.toggle("tabbed", !el.hidden);
       if (el.hidden) return;
-      var busyN = (m.opening || 0) + (m.adding ? 1 : 0), full = m.wins.length + busyN >= m.max, h = "";
+      var busyN = (m.opening || 0) + (m.adding ? 1 : 0), capped = m.wins.length + busyN >= m.max, full = capped || !!m.tight, h = "";
       m.wins.forEach(function (w) {
         var st = m.state[w.sid] || "", on = w.sid === m.view, name = w.title || (w.main ? m.ai : "new window");
         h += '<div class="tab' + (on ? " on" : "") + (w.main ? " main" : "") + (st === "busy" ? " busy" : st === "waiting" ? " ask" : "") +
@@ -34,7 +34,7 @@
       if (m.reading) h += '<div class="tab on read" data-sid="' + esc(m.reading.sid) + '"><span class="tb"><em>reading</em><span>' + esc(m.reading.title || "an earlier window") + "</span></span></div>";
       for (var i = 0; i < busyN; i++) h += '<div class="tab wait"><span class="tb"><span>opening…</span></span></div>';
       h += '<button type="button" class="tadd' + (full ? " full" : "") + '" data-a="add" aria-label="' + (full ? "No room for another window" : "Open another window") + '" title="' +
-        (full ? m.max + " windows is all this machine takes" : "Another window, alongside") + '">' + PLUS + "</button>";
+        esc(capped ? m.max + " windows at once is the most" : m.tight ? (m.why || "the server is short of memory right now") : "Another window, alongside") + '">' + PLUS + "</button>";
       if (h === lastHtml) return;   // drawn again only when something changed, so a tap never lands on a row being replaced
       el.innerHTML = lastHtml = h;
       var on = el.querySelector(".tab.on");

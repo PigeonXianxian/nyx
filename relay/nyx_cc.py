@@ -116,6 +116,7 @@ def register(app, g, x):
     # takes its tmux name; the main window's picks are kept in the data dir for its next start, a side window's only here.
     tgt, live_windows, window_of, is_window = x["tgt"], x["live_windows"], x["window_of"], x["is_window"]
     open_side, close_side, side_picks, MAX_WINDOWS = x["open_side"], x["close_side"], x["side_picks"], x["MAX_WINDOWS"]
+    window_room = x["window_room"]
     side_pending = {}   # sid -> {"model": …, "effort": …} waiting for a side window to be quiet
 
     async def win(sid):
@@ -1156,8 +1157,9 @@ def register(app, g, x):
         check_auth(request)
         ws = await asyncio.to_thread(windows_now)
         main = next((w["sid"] for w in ws if w["main"]), "")
+        room, why_not, free = window_room(len(ws))
         return {"chat": CHAT_MODE, "sid": main or None, "workdir": str(WORK_DIR), "windows": [w for w in ws if w["sid"]],
-                "opening": sum(1 for w in ws if not w["sid"]), "max": MAX_WINDOWS}
+                "opening": sum(1 for w in ws if not w["sid"]), "max": MAX_WINDOWS, "room": room, "room_why": why_not, "free_mb": free}
 
     @app.get("/app/cc/log")
     async def cc_log(request: Request, sid: str = "", after: int = -1, before: int = 0, tail: int = 200):

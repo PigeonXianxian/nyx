@@ -20,7 +20,8 @@
   // unread, the tabs that have said something since you last looked; adding: true while a new tab opens, or the sid of an
   // earlier session being opened in one.
   var CCMODE = false, view = "", liveSid = "", viewInfo = {}, tools = new Map(), carrying = false;
-  var wins = [], wmax = 3, wopen = 0, wstate = {}, unread = {}, adding = false, tabs = null;
+  var wins = [], wmax = 5, wopen = 0, wstate = {}, unread = {}, adding = false, tabs = null;
+  var wroom = true, wroomWhy = "";   // whether the machine has room for one more window right now (the relay looks at its free memory), and if not, why
   var log = $("log"), text = $("text"), sendBtn = $("send");
 
   var paintSide = NyxPaper.paint;
@@ -112,7 +113,8 @@
     opt = opt || {}; opt.headers = Object.assign({ "Authorization": "Bearer " + k }, opt.headers || {});
     return fetch(base + path, opt).then(function (r) {
       if (r.status === 401) { var e = new Error("unauthorized"); e.auth = true; throw e; }
-      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (!r.ok) return r.json().then(function (d) { return d && d.detail; }, function () { return null; }).then(function (why) {
+        var e2 = new Error("HTTP " + r.status); if (typeof why === "string") e2.detail = why; throw e2; });   // .detail: the relay's own reason, when it gave one
       return r.json();
     });
   }
@@ -150,7 +152,7 @@
     if (GROUP) return;
     if (!key || document.hidden || $("room").hidden) { busyT = setTimeout(pollBusy, 5000); return; }
     api("/app/busy" + tabQ()).then(function (d) { var was = busy && busy.state; d.at = Date.now(); busy = d; paintState();
-      if (CCMODE) { tabStates(d.windows); if (isLive(view)) typing(d.state === "busy"); }
+      if (CCMODE) { room(d); tabStates(d.windows); if (isLive(view)) typing(d.state === "busy"); }
       if (CCMODE && (was === "offline") !== (d.state === "offline")) refreshLive(); }).catch(function () { busy = null; })
       .then(function () { var any = busy && (busy.state === "busy" || (busy.windows || []).some(function (w) { return w.state === "busy"; })); busyT = setTimeout(pollBusy, any ? 2500 : 5000); });
   }
@@ -226,10 +228,15 @@
   function winOf(sid) { return wins.filter(function (w) { return w.sid === sid; })[0] || null; }
   function tabQ() { return CCMODE && isLive(view) ? "?sid=" + encodeURIComponent(view) : ""; }   // the gauge and the state line speak of the tab on the page
   function full() { return wins.length + wopen + (adding === true ? 1 : 0) >= wmax; }
+  function room(d) { if (d && "room" in d) { wroom = d.room !== false; wroomWhy = d.room_why || ""; } if (d && d.max) wmax = d.max; }
+  function refuse(why) {   // no window opened: say why on a slip, in the relay's words when it gave some (how much memory is free)
+    var t = why ? why.charAt(0).toUpperCase() + why.slice(1) + "." : "Close a tab first.";
+    if (ask.alert) ask.alert("No room for another window", { body: t, ok: "all right" }); else toast(t);
+  }
   function paintTabs() {
     if (!tabs) return;
     tabs.paint({ on: CCMODE && !GROUP, wins: wins, view: view, reading: CCMODE && view && !isLive(view) ? { sid: view, title: viewInfo.title } : null, state: wstate,
-      unread: unread, opening: Math.max(wopen, adding === true ? 1 : 0), max: wmax, ai: AI });
+      unread: unread, opening: Math.max(wopen, adding === true ? 1 : 0), max: wmax, tight: !wroom, why: wroomWhy, ai: AI });
   }
   function tabStates(list) {   // a tab that stops working while you're elsewhere has something for you
     if (!list) return;
@@ -240,7 +247,7 @@
   function setWins(d) {   // the windows open now (cc_windows, /app/cc/where)
     if (!d || !d.windows) return;
     var was = wins.map(function (w) { return w.sid; });
-    wins = d.windows; wopen = d.opening || 0; if (d.max) wmax = d.max;
+    wins = d.windows; wopen = d.opening || 0; room(d);
     var fresh_ = wins.filter(function (w) { return was.indexOf(w.sid) < 0; });
     if (adding === true && fresh_.length && !fresh_[0].main) { adding = false; openView(fresh_[0].sid); return; }   // the new tab is up: go to it
     if (adding && adding !== true && isLive(adding)) adding = false;                                              // the earlier one is open in a tab now
@@ -250,7 +257,7 @@
   }
   function newTab(group) {   // + : another window alongside, with a fresh session
     if (adding) { toast("A window is already opening…"); return; }
-    if (full()) { toast(wmax + " windows are open, all this machine takes. Close a tab first."); return; }
+    if (full()) { refuse(wmax + " windows are open, the most at once; close a tab first"); return; }
     adding = true; paintTabs();
     var body = { alongside: true }; if (group) body.group = group;
     api("/app/cc/sessions/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(function (r) {
@@ -260,20 +267,20 @@
       if (adding !== true) return;
       if (/50[24]|fetch|network/i.test(e.message)) { setTimeout(function () { if (adding === true) { adding = false; paintTabs(); refreshLive(); } }, 90000); return; }   // the proxy stopped waiting; it may still come up
       adding = false; paintTabs(); refreshLive();
-      toast(/409/.test(e.message) ? "No room for another window right now. Close a tab first." : "Didn't open: " + e.message);
+      if (/409/.test(e.message)) refuse(e.detail); else toast("Didn't open: " + (e.detail || e.message));
     });
   }
   function openInTab(sid) {   // an earlier session, carried on in a tab of its own (the main window stays as it is)
     if (isLive(sid)) { openView(sid); return; }
     if (adding) { toast("A window is already opening…"); return; }
-    if (full()) { toast(wmax + " windows are open, all this machine takes. Close a tab first."); return; }
+    if (full()) { refuse(wmax + " windows are open, the most at once; close a tab first"); return; }
     adding = sid; if (view !== sid) openView(sid); else paintRo();
     api("/app/window/switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: sid, alongside: true }) }).then(function () {
       if (adding === sid) adding = false; refreshLive(); setTimeout(refreshLive, 2500);
     }, function (e) {
       if (adding !== sid) return;
       adding = false; paintRo(); refreshLive();
-      toast(/409/.test(e.message) ? "Couldn't: it's open elsewhere, or there's no room. Close a tab first." : "Didn't open it: " + e.message);
+      if (/409/.test(e.message)) refuse(e.detail || "it's open elsewhere, or there's no room"); else toast("Didn't open it: " + (e.detail || e.message));
     });
   }
   function closeTab(sid) {
@@ -1056,7 +1063,7 @@
     }).then(function (w) {
       CCMODE = !!(w && w.chat === "cc"); root.classList.toggle("ccmode", CCMODE);
       if (CCMODE) {
-        liveSid = w.sid || ""; wins = w.windows || []; wopen = w.opening || 0; if (w.max) wmax = w.max;
+        liveSid = w.sid || ""; wins = w.windows || []; wopen = w.opening || 0; room(w);
         var t0 = null; try { t0 = localStorage.getItem("nyx_tab"); } catch (e) {}
         var first = isLive(t0) ? t0 : liveSid || (wins[0] && wins[0].sid) || "";
         return first ? ccLog(first) : { messages: [] };

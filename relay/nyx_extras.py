@@ -78,7 +78,10 @@ TMUX = os.environ.get("RELAY_TMUX_SESSION", "companion")
 # Side windows: more Claude Code sessions running at once, each in its own tmux session TMUX-2 … TMUX-9 (tabs on the chat
 # page). The main window keeps the channel's notes; a side window only works and answers. Each Claude Code is ~400 MB.
 SIDE_RE = re.compile(r"^" + re.escape(TMUX) + r"-([2-9])$")
-MAX_WINDOWS = max(1, min(8, int(os.environ.get("RELAY_MAX_WINDOWS", "3") or 3)))   # the main window and the side ones together
+MAX_WINDOWS = max(1, min(8, int(os.environ.get("RELAY_MAX_WINDOWS", "5") or 5)))   # the main window and the side ones together, at the very most
+# How many really fit is asked of the machine each time: a new window is only opened while this much memory is free —
+# ~400 MB for itself, the rest so the windows already working (and their commands) aren't pushed out. Swap doesn't count.
+WINDOW_NEED_MB = max(0, int(os.environ.get("RELAY_WINDOW_NEED_MB", "800") or 800))
 
 
 def tgt(name, pane=True):
@@ -159,6 +162,28 @@ def live_windows():
             "started": (metas.get(n) or {}).get("startedAt")} for n in names]
     out.sort(key=lambda w: (not w["main"], w["started"] or float("inf"), w["name"]))   # a new tab goes at the end, whatever number it got
     return out
+
+
+def mem_free_mb():
+    """MemAvailable in MB (what the kernel says could be had without swapping), or None where it can't be read."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
+def window_room(n):
+    """Whether one more window can open next to the n there are: (yes, why not, MB free)."""
+    free = mem_free_mb()
+    if n >= MAX_WINDOWS:
+        return False, f"{n} windows are open, the most at once; close a tab first", free
+    if free is not None and free < WINDOW_NEED_MB:
+        return False, f"only {free} MB of memory is free on the server and a new window wants {WINDOW_NEED_MB}; close a tab first, or try again later", free
+    return True, "", free
 
 
 def window_of(sid):
@@ -832,8 +857,9 @@ def register(app, g):
             ws = await asyncio.to_thread(live_windows)
             if resume and any(w["sid"] == resume for w in ws):
                 raise HTTPException(status_code=409, detail="that session is already open in a tab")
-            if len(ws) >= MAX_WINDOWS:
-                raise HTTPException(status_code=409, detail=f"{len(ws)} windows are open, the most this machine takes; close one first")
+            ok, why_not, _ = window_room(len(ws))
+            if not ok:
+                raise HTTPException(status_code=409, detail=why_not)
             cmd, unit_path = start_cmd()
             if len(cmd) < 2 or cmd[1] != TMUX:
                 raise HTTPException(status_code=503, detail="the start command doesn't name the tmux session " + TMUX)
@@ -1169,6 +1195,8 @@ def register(app, g):
             if w["sid"]:
                 out.append({"sid": w["sid"], "main": w["main"], "state": st.get("state") if w["name"] == name else claude_busy(w["name"]).get("state")})
         st["windows"] = out
+        st["room"], st["room_why"], st["free_mb"] = window_room(len(ws))   # can another tab open right now: the page asks with every poll
+        st["max"] = MAX_WINDOWS
         return st
 
     @app.get("/app/busy")

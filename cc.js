@@ -404,7 +404,7 @@
       var loose = live.filter(function (w) { return !w.group; });
       if (loose.length || !gs.length) h += '<div class="gbox" data-g="">' + (gs.length ? '<div class="gh loose" data-g=""><span class="gn"><i></i>ungrouped<small>' + loose.length + "</small></span></div>" : "") + (loose.length ? loose.map(rowHTML).join("") : '<p class="none">No sessions yet.</p>') + "</div>";
       if (arch.length) h += '<div class="gh arch' + (showArch ? "" : " fold") + '"><button type="button" data-a="showarch" class="gn"><i></i>archived<small>' + arch.length + "</small></button></div>" + (showArch ? arch.map(rowHTML).join("") : "");
-      if (data.chat === "cc") h += '<p class="none sm foot">The same sessions as Claude Code in this folder, VS Code’s included. Up to ' + (data.max || 3) + ' can be open at once, each in a tab; one session is best open in one place at a time.</p>';
+      if (data.chat === "cc") h += '<p class="none sm foot">The same sessions as Claude Code in this folder, VS Code’s included. Up to ' + (data.max || 5) + ' can be open at once, each in a tab, while the server has memory for them; one session is best open in one place at a time.</p>';
       S.querySelector(".sb").innerHTML = h;
     }
     function find_(sid) { return (data.sessions || []).filter(function (w) { return w.sid === sid; })[0]; }
