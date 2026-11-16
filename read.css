@@ -4,7 +4,8 @@
    sheet beside it; and, once a piece is open, the pile it came from as a rail with the piece next to it.
    A phone is one column: the spine becomes the head of the sheet, an open piece takes the screen.
    What gives the eye somewhere to land: large numerals on the brief, each source's seal, a small figure beside a card
-   (printed grey like a newspaper cut, in colour under the pointer), a short blue bar at every heading.
+   (printed in ink, blue and paper like a newspaper cut; in its own colours under the pointer), the moon as a pencil
+   study (eye/moon.webp) wherever a moon is shown, a short blue bar at every heading.
    (app.css, the chat's stylesheet, is not loaded here — its class names collide with these.) */
 *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html, body{ margin:0; min-height:100%; background:var(--paper); color:var(--ink); }
@@ -79,16 +80,15 @@ html.is-reading .spine{ display:none; }
 .sm{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; font:400 13.5px/1.72 var(--han); letter-spacing:.02em; color:var(--soft); }
 .card:not(.new) .sm, .ft:not(.new) .sm{ color:var(--faint); }
 .mt{ display:flex; align-items:center; gap:7px; margin-top:2px; font:400 11.5px/1.3 var(--han); letter-spacing:.1em; color:var(--faint); }
-.mt .mn{ flex:none; width:18px; height:18px; }
+.mt .mn{ flex:none; width:20px; height:20px; }
 .mt .kp{ font-style:normal; color:var(--blue); }
-/* the figure: printed grey on the paper like a cut in a newspaper; its own colours under the pointer */
-.cv{ display:block; width:92px; height:68px; margin-top:3px; background:color-mix(in srgb, var(--ink) 7%, transparent) center / cover no-repeat; filter:grayscale(1) contrast(1.06); mix-blend-mode:multiply; transition:filter .25s; }
+/* the figure: printed in the house's three inks — ink, the blue, paper — like a cut in a newspaper; its own colours under the pointer */
+.cv{ display:block; width:92px; height:68px; margin-top:3px; background:color-mix(in srgb, var(--ink) 7%, transparent) center / cover no-repeat; transition:filter .25s; }   /* its inks: read.html */
 .cv:not(.has):not(.disc){ animation:rdwait 1.6s ease-in-out infinite alternate; }
 .cv.gone{ display:none; }
-:root[data-side="moon"] .cv{ mix-blend-mode:normal; filter:grayscale(1) brightness(.8) contrast(1.06); }
 @keyframes rdwait{ from{ opacity:.45; } to{ opacity:1; } }
 /* a programme has no figure: a record, with the blue at its middle */
-.cv.disc{ width:68px; height:68px; border-radius:50%; mix-blend-mode:normal; filter:none;
+.cv.disc{ width:68px; height:68px; border-radius:50%;
   background:radial-gradient(circle, var(--blue) 0 4px, transparent 4.6px), repeating-radial-gradient(circle, transparent 0 5px, var(--hair) 5px 6px); box-shadow:inset 0 0 0 1.5px var(--river); }
 .cv.disc i{ display:none; }
 .ft{ grid-template-columns:30px minmax(0, 1fr); gap:11px 12px; }
@@ -188,7 +188,7 @@ html.is-reading .spine{ display:none; }
 .end .rate{ margin:0; display:flex; align-items:center; gap:4px; }
 .end .rate span{ margin-right:10px; font:400 12.5px/1 var(--han); letter-spacing:.16em; color:var(--faint); }
 .end .rate button{ width:34px; height:34px; display:grid; place-items:center; }
-.end .rate img{ width:24px; height:24px; }
+.end .rate img{ width:26px; height:26px; }
 .end .act{ margin-top:18px; }
 
 .read .toast{ position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 40px); z-index:400; transform:translate(-50%, 10px); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; }
@@ -209,7 +209,6 @@ html.is-reading .spine{ display:none; }
   .bi, .card, .ft{ transition:background-color .15s; }
   .bi:hover, .card:hover, .ft:hover{ background:color-mix(in srgb, var(--blue) 5%, transparent); }
   .bi:hover .hl, .card:hover .tt, .ft:hover .tt{ color:var(--blue); }
-  a:hover > .cv, .ft:hover > .cv{ filter:none; }
   .flt button:not(.on):hover, .tb:not(.go):hover, .seg button:not(.on):hover, .act button:hover, .step button:not([disabled]):hover{ color:var(--blue); box-shadow:inset 0 0 0 1px var(--blue); }
   .tb.go:hover{ background:color-mix(in srgb, var(--blue) 86%, #000); }
   .days a:hover, .shut:hover{ color:var(--blue); border-color:var(--blue); }
@@ -235,7 +234,7 @@ html.is-reading .spine{ display:none; }
   .sp-day .dm{ display:flex; flex-direction:column; gap:7px; padding-bottom:4px; font:italic 400 19px/1 var(--latin); letter-spacing:.03em; }
   .sp-day .dm i:last-child{ font-size:15px; opacity:.6; }
   .sp-day .sk{ grid-column:1 / -1; display:flex; align-items:center; gap:14px; margin-top:22px; }
-  .sp-day .sky{ width:68px; height:68px; margin-left:-4px; }
+  .sp-day .sky{ width:88px; height:88px; margin-left:-2px; }
   .sp-day .sk small{ font:italic 400 14.5px/1.5 var(--latin); letter-spacing:.05em; opacity:.6; }
   .sp-nav{ flex-direction:column; gap:0; margin:26px -30px 0 -34px; border-bottom:1px solid color-mix(in srgb, var(--paper) 13%, transparent); }
   .sp-nav a{ flex-direction:row; align-items:baseline; gap:12px; padding:15px 30px 15px 34px; color:color-mix(in srgb, var(--paper) 62%, transparent); border-top:1px solid color-mix(in srgb, var(--paper) 13%, transparent); transition:background-color .15s, color .15s; }
@@ -250,7 +249,7 @@ html.is-reading .spine{ display:none; }
   .sp-cal h4 i{ font:italic 400 13.5px/1 var(--latin); letter-spacing:.05em; opacity:.7; }
   .cal{ display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:6px 2px; margin:0 -6px; }
   .cal a{ display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 0 7px; color:color-mix(in srgb, var(--paper) 60%, transparent); }
-  .cal a img{ width:26px; height:26px; }
+  .cal a img{ width:30px; height:30px; }
   .cal a i{ font:italic 400 14.5px/1 var(--latin); }
   .cal a:hover{ color:var(--paper); background:color-mix(in srgb, var(--paper) 7%, transparent); }
   .cal a.on{ color:var(--paper); box-shadow:inset 0 0 0 1px var(--sb); }

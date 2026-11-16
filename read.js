@@ -8,9 +8,10 @@
    A wide screen is laid out as a spread: the spine on the left (the name, the day and its moon, where to go, the days
    before), the sheet in the middle, and — once a piece is opened — the pile it came from as a rail with the piece
    beside it. A phone gets one column: the spine is the head of the sheet, and an open piece takes the whole screen.
-   What is drawn is drawn with the shared pencil case (G.sk, eye/orrery.js): the moon of the day, the days before as
-   moons, each source's seal, and the small moons that say how far a thing has been read (none: not opened — a blue
-   dot instead; new: opened; then waxing; full: read to the end). */
+   The moon is one pencil study (eye/moon.webp), shown lit as it is on the night in question: tonight's on the spine,
+   the days before as a row of moons, and small ones that say how far a thing has been read (none: not opened — a blue
+   dot instead; an empty ring: opened; then waxing; full: read to the end). Each source's seal is struck with the
+   shared pencil case (G.sk, eye/orrery.js). */
 (function () {
   "use strict";
   var C = window.NYX || {}, RELAY = C.relay || "/relay", root = document.documentElement;
@@ -57,16 +58,33 @@
   function dark() { return root.dataset.side === "moon"; }
   function sheetOf(w, h) { var S = 3, c = document.createElement("canvas"); c.width = w * S; c.height = h * S; var x = c.getContext("2d"); x.scale(S, S); return [c, x]; }
   function pens(x, onDark) { return { blue: SK.pen(x, onDark ? "rdBlueN" : "rdBlue", onDark ? [128, 138, 252] : [36, 46, 184], .92), lead: SK.pen(x, onDark ? "rdLeadN" : "rdLead", onDark ? [226, 223, 216] : [40, 40, 48], .6) }; }
-  /* a phase of the moon about the middle of its own small sheet: i 0 new … 4 full … 7 the last sliver; onDark: for a dark ground */
-  function moonImg(i, R, onDark) {
-    var k = "m" + i + "|" + R + "|" + (onDark ? 1 : 0); if (drawn[k]) return drawn[k]; if (!SK || !window.rough) return "";
-    var W = Math.ceil(R * 2 + 8), cx = sheetOf(W, W), x = cx[1], p = pens(x, onDark); x.translate(W / 2, W / 2); SK.wf(1);
-    SK.put(x, SK.moon(window.rough.generator(), R, i, p.blue, p.lead, 300 + i * 17 + Math.round(R)));
+  /* the moon: one pencil study of the full moon (eye/moon.webp — graphite, its seas in blue pencil, as the swallow of the
+     home is drawn), and for any night the part of it that is lit. What is in shadow is left as a fine outline on paper;
+     on a dark ground a ghost of the whole disc shows through, as earthshine does. lit 0…1; waxing: lit on the right. */
+  var moonSprite = new Image(), moonOk = false, BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==", TAU = Math.PI * 2;
+  moonSprite.onload = function () { moonOk = true; document.querySelectorAll("img[data-moon]").forEach(function (im) { var q = im.dataset.moon.split("|"); im.src = moonUrl(+q[0], q[1] === "1", +q[2], q[3] === "1"); }); };
+  moonSprite.src = "eye/moon.webp";
+  function moonUrl(lit, waxing, R, onDark) {
+    if (!moonOk) return BLANK;
+    var q = Math.round(Math.max(0, Math.min(1, lit)) * 24) / 24, k = "m" + q + (waxing ? "w" : "n") + "|" + R + "|" + (onDark ? 1 : 0); if (drawn[k]) return drawn[k];
+    var W = Math.ceil(R * 2 + 4), cx = sheetOf(W, W), x = cx[1], whole = function () { x.drawImage(moonSprite, -R, -R, R * 2, R * 2); };
+    x.translate(W / 2, W / 2); x.imageSmoothingQuality = "high";
+    if (onDark && q < .98) { x.save(); x.globalAlpha = .12; whole(); x.restore(); }
+    if (q > .02) {
+      x.save(); x.rotate(-.3); if (!waxing) x.scale(-1, 1);
+      x.beginPath();
+      if (q >= .98) x.arc(0, 0, R + 1, 0, TAU);
+      else { x.arc(0, 0, R + 1, -Math.PI / 2, Math.PI / 2, false); x.ellipse(0, 0, Math.max(.01, R * Math.abs(1 - 2 * q)), R + 1, 0, Math.PI / 2, -Math.PI / 2, q < .5); }   // the limb, then back along the terminator
+      x.closePath(); x.clip();
+      if (!waxing) x.scale(-1, 1); x.rotate(.3); whole(); x.restore();
+    }
+    x.strokeStyle = onDark ? "rgba(236,233,226,.4)" : "rgba(27,27,32,.42)"; x.lineWidth = Math.max(.5, R * .026); x.beginPath(); x.arc(0, 0, R - x.lineWidth / 2, 0, TAU); x.stroke();
     return (drawn[k] = cx[0].toDataURL("image/png"));
   }
-  function moon(i) { return moonImg(i, 7.4, dark()); }                       // how far a piece has been read
+  function moonTag(lit, waxing, R, onDark, cls, size) { return '<img class="' + cls + '" alt="" width="' + size + '" height="' + size + '" data-moon="' + [lit, waxing ? 1 : 0, R, onDark ? 1 : 0].join("|") + '" src="' + moonUrl(lit, waxing, R, onDark) + '">'; }
   function phase(a) { return a.completed ? 4 : a.progress > .66 ? 3 : a.progress > .33 ? 2 : a.progress > .02 ? 1 : a.read ? 0 : -1; }
-  function sky(day) { return G && G.moonAge ? Math.round(G.moonAge(new Date(day + "T12:00:00Z")) / 29.530588853 * 8) % 8 : 0; }   // the moon that night
+  var LIT = [0, .25, .5, .75, 1];                                              // how far a piece has been read, as a waxing moon
+  function sky(day) { var d = new Date(day + "T12:00:00Z"); return G && G.moonAge ? { lit: G.moonLit(d), wax: G.moonAge(d) < 14.765 } : { lit: 1, wax: true }; }   // the moon that night
   /* a source's seal: its mark in a ring struck a little crooked (a programme's in a square frame) */
   var SEALS = { "qbitai": "量", "qbitai-xhs": "量", "latepost": "晚", "anthropic-engineering": "A", "anthropic-research": "A", "claude-articles": "C", "openai-codex": "O", "boris-cherny": "B", "thariq-shihipar": "T",
     "bilibili-d7": "D7", "bilibili-zhangxiaojun": "珺", "bilibili-whynottv": "W", "x-anthropic": "X", "x-openai-devs": "X", "x-karpathy": "X" };
@@ -115,7 +133,7 @@
     return '<a class="' + kind + (a.read ? "" : " new") + (th ? " pic" : "") + '" href="#a/' + esc(a.id) + '" data-id="' + esc(a.id) + '">' + (kind === "ft" ? th : "") + sealImg(a.sourceId) +
       '<span class="tx"><b class="tt' + (t.latin ? " la" : "") + '">' + esc(t.main) + "</b>" + (t.orig ? '<span class="ot" lang="en">' + esc(t.orig) + "</span>" : "") +
       (a.summary ? '<span class="sm">' + esc(a.summary) + "</span>" : "") +
-      '<span class="mt">' + (ph >= 0 ? '<img class="mn" alt="" width="20" height="20" src="' + moon(ph) + '">' : "") + "<span>" + metaOf(a) + (a.favorite ? ' · <i class="kp">留着</i>' : "") + "</span></span></span>" + (kind === "ft" ? "" : th) + "</a>";
+      '<span class="mt">' + (ph >= 0 ? moonTag(LIT[ph], true, 9, dark(), "mn", 20) : "") + "<span>" + metaOf(a) + (a.favorite ? ' · <i class="kp">留着</i>' : "") + "</span></span></span>" + (kind === "ft" ? "" : th) + "</a>";
   }
   function strike(a) {   // the same card again, wherever it lies on the page, after its state has changed
     document.querySelectorAll('a.card[data-id="' + a.id + '"], a.ft[data-id="' + a.id + '"]').forEach(function (el) {
@@ -140,12 +158,12 @@
     if (!G) return;
     var t = today(), d = new Date(t + "T00:00:00Z"), onDark = !dark();   // the spine is laid in the other side's ground
     $("spDay").innerHTML = '<b class="dn">' + d.getUTCDate() + '</b><span class="dm"><i>' + WEEKDAY[d.getUTCDay()] + "</i><i>" + MONTH[d.getUTCMonth()] + " " + d.getUTCFullYear() + "</i></span>" +
-      '<span class="sk"><img class="sky" alt="" width="68" height="68" src="' + moonImg(sky(t), 30, onDark) + '"><small>the moon tonight<br>age ' + G.moonAge(new Date()).toFixed(1) + " d</small></span>";
+      '<span class="sk">' + moonTag(sky(t).lit, sky(t).wax, 42, onDark, "sky", 88) + '<small>the moon tonight<br>age ' + G.moonAge(new Date()).toFixed(1) + " d</small></span>";
   }
   function spineCal() {
     var onDark = !dark(), t = today(), list = cal.dates.slice(0, 12);
     $("spCal").innerHTML = list.length ? '<h4><span>往日简报</span><i>the days before</i></h4><div class="cal">' + list.map(function (d) {
-      return '<a href="#today' + (d === t ? "" : "/" + d) + '"' + (d === cal.cur ? ' class="on"' : "") + ' title="' + zhDate(d + "T04:00:00Z") + '的简报"><img alt="" width="26" height="26" src="' + moonImg(sky(d), 9, onDark) + '"><i>' + (+d.slice(8)) + "</i></a>"; }).join("") + "</div>" : "";
+      return '<a href="#today' + (d === t ? "" : "/" + d) + '"' + (d === cal.cur ? ' class="on"' : "") + ' title="' + zhDate(d + "T04:00:00Z") + '的简报">' + moonTag(sky(d).lit, sky(d).wax, 13, onDark, "", 30) + '<i>' + (+d.slice(8)) + "</i></a>"; }).join("") + "</div>" : "";
   }
   var polling = 0;
   function spineFoot() {
@@ -206,7 +224,7 @@
       return pr;
     }).then(function (rec) {
       if (shown !== token || !$("picks")) return;
-      var daily = (rec && rec.daily) || [], weekly = (rec && rec.weekly) || [], h = "";
+      var daily = (rec && rec.daily) || [], weekly = ((rec && rec.weekly) || []).filter(function (w) { return !daily.some(function (d) { return d.id === w.id; }); }), h = "";   // a piece is shown once
       if (daily.length) h += '<h3 class="sec"><span>值得一读</span><i>Worth reading today</i></h3><div class="fts">' + daily.map(function (a) { return card(a, "ft"); }).join("") + "</div>";
       if (weekly.length) h += '<h3 class="sec"><span>这一周的</span><i>This week</i></h3><div class="list">' + weekly.map(function (a) { return card(a); }).join("") + "</div>";
       $("picks").innerHTML = h || '<p class="none">今天没有另外挑出来的。</p>'; covers($("picks"));
@@ -322,14 +340,14 @@
       else inner = blockHtml(b, "one", pr ? "en" : "");
       return '<div class="blk' + (x && mode === "both" ? " pair" : "") + (b.type === "heading" ? " hd" : "") + '" id="b-' + esc(b.id) + '" data-id="' + esc(b.id) + '">' + inner + "</div>";
     }).join("") + "</div>";
-    h += '<footer class="end"><p class="rate" id="rate"><span>这一篇值几颗月亮</span>' + [1, 2, 3, 4, 5].map(function (n) { return '<button type="button" data-n="' + n + '" aria-label="' + n + ' 颗"><img alt="" width="24" height="24" src="' + moonImg((a.rating || 0) >= n ? 4 : 0, 8.4, dark()) + '"></button>'; }).join("") + "</p>" +
+    h += '<footer class="end"><p class="rate" id="rate"><span>这一篇值几颗月亮</span>' + [1, 2, 3, 4, 5].map(function (n) { return '<button type="button" data-n="' + n + '" aria-label="' + n + ' 颗">' + moonTag((a.rating || 0) >= n ? 1 : 0, true, 11, dark(), "", 26) + '</button>'; }).join("") + "</p>" +
       '<p class="act"><button type="button" id="done"' + (a.completed ? ' class="on"' : "") + ">" + (a.completed ? "读完了 · 已记下" : "读完了") + '</button><button type="button" id="nextb">下一篇</button></p></footer>';
     sheet.innerHTML = h; sheet.dataset.size = ls("read_size") || "1"; $("ar").classList.toggle("both", mode === "both" && !!pr);
     tools(pr); toc();
     var rs = $("resume"); if (rs) rs.onclick = function () { var el = document.getElementById("b-" + A.blockId); if (el) el.scrollIntoView({ block: "start", behavior: "smooth" }); rs.parentNode.remove(); };
     $("done").onclick = function () { state({ read: true, completed: !A.completed }).then(function () { $("done").textContent = A.completed ? "读完了 · 已记下" : "读完了"; $("done").classList.toggle("on", !!A.completed); }); };
     $("nextb").onclick = function () { step(1); }; $("nextb").hidden = at(1) == null;
-    $("rate").querySelectorAll("button").forEach(function (b) { b.onclick = function () { var n = +b.dataset.n; state({ rating: A.rating === n ? null : n }).then(function () { $("rate").querySelectorAll("img").forEach(function (im, i) { im.src = moonImg((A.rating || 0) > i ? 4 : 0, 8.4, dark()); }); }); }; });
+    $("rate").querySelectorAll("button").forEach(function (b) { b.onclick = function () { var n = +b.dataset.n; state({ rating: A.rating === n ? null : n }).then(function () { $("rate").querySelectorAll("img").forEach(function (im, i) { var f = (A.rating || 0) > i ? 1 : 0; im.dataset.moon = [f, 1, 11, dark() ? 1 : 0].join("|"); im.src = moonUrl(f, true, 11, dark()); }); }); }; });
   }
   function tools(pr) {
     var a = A, t = "";
