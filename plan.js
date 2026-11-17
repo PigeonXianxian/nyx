@@ -1,17 +1,20 @@
-/* Nyx — Plan (日程). A team's plan — four people, and what is to be done day by day — in the house's flat hand.
+/* Nyx — Plan (日程). A team's plan — four people, and what is to be done, hour by hour — in the house's flat hand.
    The entries are kept by the relay (relay/nyx_plan.py, /app/plan): each is one of the four's (they took it on) or
    nobody's yet. They get here two ways: the companion writes down what its human says in the chat (relay/plan.py), and
    people write on this page. Who is looking is chosen here, on each device (the four discs in the corner block): that
-   one is the blue one, their lane is washed blue, and what they take on goes to them.
-   The sheet is a chart. Across its head the days: every day's moon, drawn as the home draws its moons (a flat disc,
+   one is the blue one, and what they take on goes to them.
+   The sheet is a timetable. Across its head the days: every day's moon, drawn as the home draws its moons (a flat disc,
    the dark of it crumbling into grains), riding one dotted track — a tick where a day meets the next, a small cross
    where a week begins — with two fainter tracks of stars going by behind. Take hold and pull, and the days go by.
-   Under one heavy rule hang four lanes, one a person; a column a day; the plumb line hangs down today's. A thing is
-   carried by hand: to another day, into another's lane, or out again to wait. Touch the blank of a lane on some day
-   and a line opens to write on. Beside the board: a line for things nobody has taken yet, and the lists that have no
-   place on the board (waiting to be taken on, overdue, further on, done).
-   A phone shows one day at a time under a week of moons (the middle one is the day that is open), the four under one
-   another. */
+   Under one heavy rule the board: a column a day, the hours of the day down the side (8 to 24), and every thing that
+   has an hour a block standing where it begins and reaching to where it is over (an hour, when that was not said) —
+   ink for the others' and blue for whoever is looking, a dotted outline for what nobody has taken yet; where two
+   overlap they stand side by side. What has a day and no hour lies in the row above the hours. The plumb line hangs
+   down today's column as far as the hour it is now. A block is carried by hand to another hour or day, its foot is
+   pulled to say how long it runs; touch a blank hour and a line opens to write on, with the four to give it to.
+   Beside the board: a line for things nobody has taken yet, and the lists that have no place on the board (waiting to
+   be taken on, overdue, no day yet, further on, done).
+   A phone shows one day at a time under a week of moons (the middle one is the day that is open), its hours down the page. */
 (function () {
   "use strict";
   var C = window.NYX || {}, RELAY = C.relay || "/relay", root = document.documentElement, AI = C.aiName || "AI", ME = C.meName || "Me";
@@ -51,6 +54,18 @@
   function rel(n) { var k = n - T; return k === 0 ? "今天" : k === 1 ? "明天" : k === 2 ? "后天" : k === -1 ? "昨天" : k === -2 ? "前天" : ""; }
   function zhDay(n) { var d = dOf(n); return (d.getUTCFullYear() !== dOf(T).getUTCFullYear() ? d.getUTCFullYear() + "年" : "") + (d.getUTCMonth() + 1) + "月" + d.getUTCDate() + "日"; }
   function dayWords(n) { return zhDay(n) + " " + (rel(n) || WDZ[dOf(n).getUTCDay()]); }
+
+  /* ── hours. The board shows the day from H0 to H1; a thing with an hour is a block from when it begins to when it is
+     over — an hour long when that was not said, half an hour at the least, so that it can be read. ── */
+  var H0 = 8, H1 = 24, ROWS = H1 - H0, SNAP = 30;
+  function mins(t) { return t ? +t.slice(0, 2) * 60 + +t.slice(3, 5) : null; }
+  function hm(m) { return two(Math.floor(m / 60)) + ":" + two(m % 60); }
+  function hrs(it) { return it.time ? it.time + (it.end ? "–" + it.end : "") : ""; }
+  function span(it) {   // [from, to] in minutes, as the board draws it; null for what has no hour, or one before the board begins
+    var s = mins(it.time), e; if (s == null || s < H0 * 60) return null;
+    e = it.end ? mins(it.end) : s + 60; if (!(e > s)) e = s + 60;
+    e = Math.min(H1 * 60, Math.max(e, s + 30)); return [Math.min(s, e - 30), e];
+  }
 
   /* ── the flat hand: moons as the home draws them (eye/core.js, G.moon: the lit part a flat disc, the rest crumbling
      into grains), each made once ── */
@@ -95,9 +110,9 @@
     });
   }
 
-  /* ── a line as it is written: "周五 15:00 交报告" → the day, the hour, the thing. Only what stands at its head is
-     read as a day or an hour; "…前" after either makes it a last day. With `fixed` (written into a day's own column)
-     no day is looked for. ── */
+  /* ── a line as it is written: "周五 15:00 交报告", "明天 3点到5点 组会" → the day, the hour (and until when), the thing.
+     Only what stands at its head is read as a day or an hour; "…前" after either makes it a last day. With `fixed`
+     (written into a day's own column) no day is looked for. ── */
   var HAN7 = "一二三四五六日";
   function dayFromWord(w) {
     var m, d, t = dOf(T), wd = (t.getUTCDay() + 6) % 7;   // Monday 0
@@ -119,19 +134,31 @@
     if (!m[1] && !pm && !m[3] && h >= 1 && h <= 6) h += 12;   // "3点", said of something to do, is the afternoon's (3:00 written out is taken at its word)
     return h < 24 && mi < 60 ? [two(h) + ":" + two(mi), m[0].length] : null;
   }
-  function readTime(s) {   // the hour as typed on the slip: 15:30, 1530, 15, 下午3点半 → HH:MM; "" for none; null if it can't be read
+  function readTime(s, last) {   // the hour as typed on the slip: 15:30, 1530, 15, 下午3点半 → HH:MM; "" for none; null if it can't be read (last: when a thing is over — may be 24:00)
     s = s.trim(); if (!s) return "";
     var m = s.match(/^(\d{1,2})[:：.](\d{2})$/) || s.match(/^(\d{2})(\d{2})$/) || s.match(/^(\d{1,2})()$/), t;
-    if (m) return +m[1] < 24 && +(m[2] || 0) < 60 ? two(+m[1]) + ":" + two(+(m[2] || 0)) : null;
+    if (m) return (+m[1] < 24 && +(m[2] || 0) < 60) || (last && +m[1] === 24 && !+(m[2] || 0)) ? two(+m[1]) + ":" + two(+(m[2] || 0)) : null;
     t = timeAt(s); return t && t[1] === s.length ? t[0] : null;
   }
+  var TO_RE = /^\s*(?:-|–|—|~|～|到|至)\s*/;
   function parseLine(s, fixed) {
-    var all = s.trim(), rest = all, out = { title: all, date: null, time: "", due: false }, m, d, t, pm = false, SEP = /^\s*(之前|以前|前)?[\s,，、]*/;
+    var all = s.trim(), rest = all, out = { title: all, date: null, time: "", end: "", due: false }, m, d, t, t2, e, pm = false, SEP = /^\s*(之前|以前|前)?[\s,，、]*/;
     if (!fixed && (m = rest.match(/^(今天|今晚|明天|明晚|后天|大后天|下?(?:周|星期|礼拜)[一二三四五六日天]|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}月\d{1,2}[日号]?|\d{1,2}\/\d{1,2}(?![\d\/]))/)) && (d = dayFromWord(m[1])) != null) {
       out.date = d; pm = /晚$/.test(m[1]); rest = rest.slice(m[0].length); m = rest.match(SEP); if (m[1]) out.due = true; rest = rest.slice(m[0].length);
     }
-    if ((t = timeAt(rest, pm))) { out.time = t[0]; rest = rest.slice(t[1]); m = rest.match(SEP); if (m[1]) out.due = true; rest = rest.slice(m[0].length); }
-    if (!rest.trim()) return { title: all, date: null, time: "", due: false };   // nothing was left to do: it was not a day and an hour after all
+    if ((t = timeAt(rest, pm))) {
+      out.time = t[0]; rest = rest.slice(t[1]);
+      if ((m = rest.match(TO_RE))) {   // "…到5点", "…-17:00", "…-17": until when
+        var after = rest.slice(m[0].length), bare = after.match(/^(\d{1,2})(?![\d:：.点])/);
+        t2 = timeAt(after, pm) || (bare && +bare[1] <= 24 ? [two(+bare[1]) + ":00", bare[0].length] : null);
+        if (t2) {
+          e = t2[0]; if (e <= out.time && +e.slice(0, 2) < 12) e = two(+e.slice(0, 2) + 12) + e.slice(2);   // said after an afternoon's hour, it is the afternoon's too
+          out.end = e > out.time ? e : "24:00"; rest = after.slice(t2[1]);   // (past midnight: as far as the day goes)
+        } else if (/^\s*[-–—]\s/.test(rest)) rest = after;   // "15:00 - 交报告": only a dash
+      }
+      m = rest.match(SEP); if (m[1]) out.due = true; rest = rest.slice(m[0].length);
+    }
+    if (!rest.trim()) return { title: all, date: null, time: "", end: "", due: false };   // nothing was left to do: it was not a day and an hour after all
     if (out.time && out.date == null && !fixed) out.date = T;   // an hour and no day: today
     out.title = rest.trim(); return out;
   }
@@ -139,7 +166,8 @@
   /* ── the four, and what is written down ── */
   var IDS = ["m1", "m2", "m3", "m4"], members = [{ id: "m1", name: ME }, { id: "m2", name: "乙" }, { id: "m3", name: "丙" }, { id: "m4", name: "丁" }];
   var me = ls("plan_me"); if (IDS.indexOf(me) < 0) me = "m1";   // who is looking, on this device
-  var items = [], rev = -1, byCell = {}, byDay = {}, loaded = false, busy = 0, seq = 0, showDone = false;
+  var solo = ls("plan_solo") === "1";   // only what is the one looking's, or all four's
+  var items = [], rev = -1, byDate = {}, byDay = {}, loaded = false, busy = 0, seq = 0, showDone = false;
   function nameOf(id) { for (var i = 0; i < members.length; i++) if (members[i].id === id) return members[i].name; return ""; }
   function initial(name) { var c = Array.from(String(name || "?").trim())[0] || "?"; return /[a-z]/.test(c) ? c.toUpperCase() : c; }
   function pd(id, cls, more) { return '<span class="pd' + (id === me ? " me" : "") + (cls ? " " + cls : "") + '"' + (more || "") + ' title="' + esc(nameOf(id)) + '">' + esc(initial(nameOf(id))) + "</span>"; }
@@ -147,9 +175,24 @@
   function undone(it) { return !it.done; }
   function order(a, b) { var x = a.time || "99:99", y = b.time || "99:99"; return (a.done ? 1 : 0) - (b.done ? 1 : 0) || (x < y ? -1 : x > y ? 1 : 0) || a.no - b.no; }
   function index() {
-    byCell = {}; byDay = {};
-    items.forEach(function (it) { if (it.date && !it.done) byDay[it.date] = (byDay[it.date] || 0) + 1; if (it.owner) { var k = (it.date || "") + "|" + it.owner; (byCell[k] = byCell[k] || []).push(it); } });
-    for (var k in byCell) byCell[k].sort(order);
+    byDate = {}; byDay = {};
+    items.forEach(function (it) { if (!it.date) return; (byDate[it.date] = byDate[it.date] || []).push(it); if (!it.done) byDay[it.date] = (byDay[it.date] || 0) + 1; });
+    for (var k in byDate) byDate[k].sort(order);
+  }
+  /* a day, as the board holds it: `any` — what has no hour (or one before the board begins) — and `timed`, the blocks,
+     each with the share of the column's width it stands in (x, w): those that overlap stand side by side */
+  function rank(it) { var k = IDS.indexOf(it.owner); return k < 0 ? 9 : k; }
+  function dayParts(day) {
+    var any = [], timed = [], ends = [], group = [], gEnd = 0;
+    (byDate[day] || []).forEach(function (it) { if (solo && it.owner !== me) return; var sp = span(it); if (sp) timed.push({ it: it, s: sp[0], e: sp[1] }); else any.push(it); });
+    timed.sort(function (a, b) { return a.s - b.s || rank(a.it) - rank(b.it) || b.e - a.e || a.it.no - b.it.no; });
+    function shut() { group.forEach(function (b) { b.w = 1 / ends.length; b.x = b.c / ends.length; }); group = []; ends = []; }
+    timed.forEach(function (b) {
+      if (group.length && b.s >= gEnd) shut();
+      var c = 0; while (c < ends.length && ends[c] > b.s) c++;
+      b.c = c; ends[c] = b.e; gEnd = group.length ? Math.max(gEnd, b.e) : b.e; group.push(b);
+    });
+    shut(); return { any: any, timed: timed };
   }
   function take(d) {
     if (!d || d.same || !d.items) return false;
@@ -165,9 +208,9 @@
   }
   function wrote(r) { busy--; if (r === rev + 1) rev = r; else if (!busy) setTimeout(function () { load().catch(function () {}); }, 60); }   // someone else wrote in between: read it all again
   function add(o) {
-    var tmp = { id: "tmp" + (++seq), no: 1e9 + seq, title: o.title, note: "", date: o.date || "", time: o.time || "", due: !!(o.due && o.date), owner: o.owner || "", done: false, by: nameOf(me) };
+    var tmp = { id: "tmp" + (++seq), no: 1e9 + seq, title: o.title, note: "", date: o.date || "", time: o.time || "", end: (o.time && o.end) || "", due: !!(o.due && o.date), owner: o.owner || "", done: false, by: nameOf(me) };
     items.push(tmp); index(); paintAll(); busy++;
-    return api("", { title: tmp.title, date: tmp.date, time: tmp.time, due: tmp.due, owner: tmp.owner, by: tmp.by }).then(function (d) {
+    return api("", { title: tmp.title, date: tmp.date, time: tmp.time, end: tmp.end, due: tmp.due, owner: tmp.owner, by: tmp.by }).then(function (d) {
       var r = d.rev, k; delete d.rev; for (k in d) tmp[k] = d[k]; index(); paintAll(); wrote(r); return tmp;
     }, function (e) { busy--; var i = items.indexOf(tmp); if (i >= 0) items.splice(i, 1); index(); paintAll(); toast("没记上" + (e && e.status ? "（" + e.status + "）" : "") + "，再试一次"); });
   }
@@ -184,27 +227,40 @@
     items.splice(at, 1); index(); paintAll(); busy++;
     api("/" + id, { delete: true }).then(function (d) { wrote(d.rev); }, function () { busy--; items.splice(at, 0, it); index(); paintAll(); toast("没删掉，再试一次"); });
   }
-  function moved(p) {   // a word on where a thing has gone
-    var who = "owner" in p ? (p.owner ? "交给 " + nameOf(p.owner) + " 了" : "放回待认领了") : "", day = "date" in p ? (p.date ? dayWords(dayIdx(p.date)) : "没定日子") : "";
-    return who && day ? who + " · " + day : who || (p.date ? "挪到了 " + day : "不定日子了");
+  function moved(p, it) {   // a word on where a thing has gone (it: the thing, as it now is)
+    var who = "owner" in p ? (p.owner ? "交给 " + nameOf(p.owner) + " 了" : "放回待认领了") : "";
+    var when = "date" in p || "time" in p ? (it.date ? dayWords(dayIdx(it.date)) + (it.time ? " " + hrs(it) : "") : "没定日子") : "";
+    return who && when ? who + " · " + when : who || (it.date ? "挪到了 " + when : "不定日子了");
   }
 
   /* ── the days across the head, and the board under them. `cur` is the day at the hand — the first column of a wide
      screen, the middle moon of a phone — and may lie between two days while the days are in the hand; `to` is where it
      is going. Only the days in sight are kept on the page. ── */
-  var band = $("band"), heads = $("heads"), strip = $("strip"), cols = $("cols"), sky = $("sky"), skyX = sky.getContext("2d"), plumb = $("plumb");
-  var cur = T, to = T, geo = null, colEl = {}, headEl = {}, shownAt = null, raf = 0, hold = null, clickAt = 0, slip = null, whoBuilt = false;
+  var plx = $("plx"), band = $("band"), heads = $("heads"), strip = $("strip"), cols = $("cols"), sky = $("sky"), skyX = sky.getContext("2d"), plumb = $("plumb"), rail = $("rail");
+  var cur = T, to = T, geo = null, colEl = {}, headEl = {}, shownAt = null, raf = 0, hold = null, clickAt = 0, slip = null, writer = null;
   function measure() {
-    var W = wide(), r = heads.getBoundingClientRect(), g = { wide: W, W: r.width, H: r.height, dpr: Math.min(window.devicePixelRatio || 1, 2) };
-    if (W) { g.N = lim(Math.floor(g.W / 150), 4, 7); g.cw = g.W / g.N; g.hw = g.cw; g.r = 34; g.anchor = g.cw / 2; g.ax = g.W * .66; g.y0 = Math.round(g.H * .5); g.k = 40 / (g.ax * g.ax); }
+    var W = wide(), r = heads.getBoundingClientRect(), g = { wide: W, W: r.width, H: r.height, dpr: Math.min(window.devicePixelRatio || 1, 2), hh: geo ? geo.hh : 0, adh: geo ? geo.adh : 0 };
+    if (W) { g.N = lim(Math.floor(g.W / 128), 4, 7); g.cw = g.W / g.N; g.hw = g.cw; g.r = 34; g.anchor = g.cw / 2; g.ax = g.W * .66; g.y0 = Math.round(g.H * .5); g.k = 40 / (g.ax * g.ax); }
     else { g.N = 1; g.cw = strip.getBoundingClientRect().width; g.hw = g.W / (g.W > 560 ? 9 : 7); g.r = 20; g.anchor = g.W / 2; g.ax = g.W / 2; g.y0 = 70; g.k = 22 / (g.ax * g.ax); }
-    heads.style.setProperty("--hw", g.hw.toFixed(1) + "px"); cols.style.setProperty("--cw", g.cw.toFixed(2) + "px");
+    heads.style.setProperty("--hw", g.hw.toFixed(1) + "px"); plx.style.setProperty("--cw", g.cw.toFixed(2) + "px");
     sky.width = Math.round(g.W * g.dpr); sky.height = Math.round(g.H * g.dpr);
-    var redo = !geo || geo.wide !== W; geo = g; return redo;
+    var redo = !geo || geo.wide !== W; geo = g; rows(); return redo;
   }
+  /* how tall an hour is, and the row above the hours (what has a day and no hour lies there: as many lines as the
+     fullest day in sight asks for, three at most). A wide screen fits the whole day on the board, in whole pixels, so
+     that every hour's line falls on one; a phone's hours are as tall as the stylesheet says, and the page is scrolled. */
+  function rows() {
+    var was = geo.hh + "|" + geo.adh, i, n = 1, a = Math.round(to), H, need;
+    if (!geo.wide) { geo.hh = parseFloat(getComputedStyle(plx).getPropertyValue("--hh")) || 44; geo.adh = 0; return was !== geo.hh + "|0"; }
+    for (i = a; i < a + geo.N; i++) n = Math.max(n, dayParts(idxDay(i)).any.length);
+    H = strip.getBoundingClientRect().height; need = Math.min(n, H < 540 ? 2 : 3) * 27 + 9;
+    geo.hh = Math.max(16, Math.floor((H - need) / ROWS)); geo.adh = Math.max(need, Math.round(H - geo.hh * ROWS));
+    plx.style.setProperty("--adh", geo.adh + "px"); plx.classList.toggle("tight", geo.hh < 32); return was !== geo.hh + "|" + geo.adh;
+  }
+  function clock() { var d = new Date(); plx.style.setProperty("--now", lim(d.getHours() + d.getMinutes() / 60 - H0, 0, ROWS).toFixed(3)); }   // the hour it is now, in hours down the board
   function arcY(x) { var d = x - geo.ax; return geo.y0 + geo.k * d * d; }   // the track the moons ride: highest a little right of the middle on a wide screen, in the middle on a phone
 
-  /* a thing, as a line. o.day: say which day (the lists beside the board); o.who: say whose; o.pool: nobody's yet — no ring to tick, a word to take it on */
+  /* a thing, as a line (the lists beside the board). o.day: say which day; o.who: say whose; o.pool: nobody's yet — no ring to tick, a word to take it on */
   function enHtml(it, o) {
     o = o || {};
     var n = it.date ? dayIdx(it.date) : null, late = !it.done && n != null && n < T, d = n != null ? dOf(n) : null;
@@ -212,25 +268,40 @@
       (o.pool ? '<span class="open" title="还没有人认领"></span>' : '<button type="button" class="tk" aria-pressed="' + !!it.done + '" title="' + (it.done ? "还没做完" : "做完了") + '">' + tick(it.done) + "</button>") +
       '<div class="ex">' + (o.who && it.owner ? pd(it.owner, "s") : "") +
       (o.day && d ? '<span class="dy" data-i="' + n + '" title="去那一天">' + (d.getUTCMonth() + 1) + "/" + d.getUTCDate() + "<small>" + (rel(n) || WDZ[d.getUTCDay()]) + "</small></span>" : "") +
-      (it.time ? '<span class="tm">' + esc(it.time) + "</span>" : "") + (it.due ? "<u>截止</u>" : "") + '<span class="tt">' + esc(it.title) + "</span>" + (it.note ? '<p class="nt">' + esc(it.note) + "</p>" : "") + "</div>" +
+      (it.time ? '<span class="tm">' + esc(hrs(it)) + "</span>" : "") + (it.due ? "<u>截止</u>" : "") + '<span class="tt">' + esc(it.title) + "</span>" + (it.note ? '<p class="nt">' + esc(it.note) + "</p>" : "") + "</div>" +
       (o.pool ? '<button type="button" class="take">认领</button>' : "") + "</li>";
   }
+  /* a thing, on the board: a block at its hours (b: where it stands, from dayParts), or a line in the row above them.
+     Whose it is: a disc with their initial (nobody's yet: a dotted outline, and a word to take it on). */
+  function kind(it, n) { return (it.owner === me ? " me" : it.owner ? "" : " free") + (it.done ? " done" : "") + (!it.done && n < T ? " late" : ""); }
+  function mark(it) { return it.owner ? '<button type="button" class="tk" aria-pressed="' + !!it.done + '" title="' + (it.done ? "还没做完" : "做完了") + '"></button>' : '<span class="open"></span>'; }
+  function tail(it) { return it.owner ? pd(it.owner, "s") : '<button type="button" class="take">认领</button>'; }
+  function said(it) { return esc((it.time ? hrs(it) + " " : "") + it.title + " · " + (it.owner ? nameOf(it.owner) : "待认领") + (it.done ? "（做完了）" : "")); }
+  function body(it, short) { return (it.time ? '<span class="tm">' + esc(short ? it.time : hrs(it)) + "</span>" : "") + (it.due ? "<u>截止</u>" : "") + '<span class="tt">' + esc(it.title) + "</span>"; }
+  function bkHtml(b, n) {
+    var it = b.it, h = (b.e - b.s) / 60 * geo.hh, w = b.w * geo.cw;
+    return '<div class="en bk' + kind(it, n) + (h < 41 ? " sm" : "") + (w < 124 ? " nw" : "") + (w < 66 ? " xn" : "") + '" data-id="' + esc(it.id) + '" style="--s:' + (b.s / 60 - H0) + ";--d:" + (b.e - b.s) / 60 + ";--x:" + b.x.toFixed(4) + ";--w:" + b.w.toFixed(4) + '" title="' + said(it) + '">' +
+      mark(it) + '<div class="ex">' + body(it, w < 124 || h < 41) + "</div>" + tail(it) + '<i class="rz"></i></div>';   // (a short one, or one of several side by side, says only when it begins: how long it runs is what its height shows)
+  }
+  function ckHtml(it, n) { return '<li class="en ck' + kind(it, n) + '" data-id="' + esc(it.id) + '" title="' + said(it) + '">' + mark(it) + '<div class="ex">' + body(it) + "</div>" + tail(it) + "</li>"; }
+  /* the hours down the side: a numeral an hour, and the three parts of the day */
+  var HS = (function () {
+    var h = "", k; for (k = 0; k < ROWS; k++) h += '<span style="--s:' + k + '"' + ((H0 + k) % 6 ? "" : ' class="k"') + "><b>" + (H0 + k) + "</b></span>";
+    return h + [["上午", 0, 12 - H0], ["下午", 12 - H0, 6], ["晚上", 18 - H0, H1 - 18]].map(function (b) { return '<em style="--s:' + b[1] + ";--d:" + b[2] + '">' + b[0] + "</em>"; }).join("");
+  })();
   function makeCol(i) {
     var el = document.createElement("section"); el.dataset.i = i; el.dataset.d = idxDay(i);
-    el.innerHTML = "<h3></h3>" + IDS.map(function (id) { return '<div class="cell" data-m="' + id + '"><div class="ch"></div><ul class="ens"></ul><div class="add"></div></div>'; }).join("");
+    el.innerHTML = '<h3></h3><div class="ad"><ul class="ens"></ul></div><div class="bd"><div class="hs">' + HS + '</div><div class="grid"></div></div>';
+    el._ad = el.children[1]; el._bd = el.children[2]; el._grid = el._bd.lastChild;
     cols.appendChild(el); colEl[i] = el; paintCol(i); return el;
   }
   function paintCol(i) {
     var el = colEl[i]; if (!el) return;
-    var d = dOf(i), wd = d.getUTCDay(), day = idxDay(i), r = rel(i);
+    var d = dOf(i), wd = d.getUTCDay(), r = rel(i), p = dayParts(idxDay(i));
     el.className = "col" + (i === T ? " today" : i < T ? " past" : "") + (wd === 0 || wd === 6 ? " we" : "");
     el.children[0].innerHTML = esc(r || WDZ[wd]) + "<i>" + d.getUTCDate() + " " + MONTH[d.getUTCMonth()] + "</i>" + (r ? "<em>" + WDZ[wd] + "</em>" : "");
-    IDS.forEach(function (id, k) {
-      var c = el.children[k + 1];
-      c.className = "cell" + (id === me ? " me" : "");
-      c.children[0].innerHTML = pd(id, "s") + esc(nameOf(id)) + "<i>＋</i>";
-      c.children[1].innerHTML = (byCell[day + "|" + id] || []).map(function (it) { return enHtml(it); }).join("");
-    });
+    el._ad.firstChild.innerHTML = p.any.map(function (it) { return ckHtml(it, i); }).join("");
+    el._grid.innerHTML = p.timed.map(function (b) { return bkHtml(b, i); }).join("");
   }
   function makeHead(i) {
     var el = document.createElement("div"), k = skyOf(i), d = dOf(i), R = geo.r;
@@ -299,7 +370,8 @@
     }
   }
   function fit() { if (geo.wide) { strip.style.height = ""; return; } var el = colEl[Math.round(cur)]; if (el) strip.style.height = Math.max(240, el.offsetHeight) + "px"; }   // a phone's page is as tall as the day that is open
-  function rest() { paintSide(); fit(); }
+  function paintCols() { for (var i in colEl) paintCol(+i); }
+  function rest() { if (rows()) paintCols(); paintSide(); fit(); }
   function frame() {
     raf = 0;
     if (hold && hold.pan) { lay(); return; }
@@ -308,11 +380,11 @@
   }
   function kick() { if (!raf) raf = requestAnimationFrame(frame); }
   function go(i) { to = i; kick(); }
-  function paintAll() { var i; for (i in colEl) paintCol(+i); for (i in headEl) paintHead(+i); paintWho(); paintSide(); fit(); }
+  function paintAll() { var i; rows(); paintCols(); for (i in headEl) paintHead(+i); paintSide(); fit(); }
   function rebuild() {   // the screen is another shape, or the day has turned: lay everything again
     var i; for (i in colEl) colEl[i].remove(); for (i in headEl) headEl[i].remove(); colEl = {}; headEl = {}; shownAt = null;
     measure(); $("bDate").textContent = WD[dOf(T).getUTCDay()] + " · " + dOf(T).getUTCDate() + " " + MON[dOf(T).getUTCMonth()] + " " + dOf(T).getUTCFullYear();
-    lay(); paintWho(); rest();
+    lay(); rest();
   }
 
   /* ── the four ── */
@@ -320,17 +392,8 @@
     $("iam").innerHTML = "<span>我是</span>" + members.map(function (m) { return '<button type="button" class="pd' + (m.id === me ? " me" : "") + '" data-me="' + m.id + '" title="' + esc(m.name) + (m.id === me ? "（现在是你）" : "：换成这一位") + '">' + esc(initial(m.name)) + "</button>"; }).join("") +
       '<button type="button" class="nm" id="rename">改名字</button>';
   }
-  function paintWho() {   // where each lane begins: who it is, how much they have on, and what of it has no day yet
-    var host = $("who");
-    if (!whoBuilt) { host.innerHTML = IDS.map(function (id) { return '<section class="lane" data-m="' + id + '"><header class="lh"></header><ul class="ens"></ul><div class="add"></div></section>'; }).join(""); whoBuilt = true; }
-    members.forEach(function (m, k) {
-      var el = host.children[k], n = items.filter(function (it) { return it.owner === m.id && !it.done; }).length, latin = /^[\x20-\x7e]+$/.test(m.name);
-      el.className = "lane" + (m.id === me ? " me" : "");
-      el.children[0].innerHTML = '<button type="button" class="pd' + (m.id === me ? " me" : "") + '" data-me="' + m.id + '" title="' + (m.id === me ? "现在是你" : "换成这一位") + '">' + esc(initial(m.name)) + "</button><b" + (latin ? ' lang="en"' : "") + ' title="' + esc(m.name) + '">' + esc(m.name) + "</b><i>" + (n || "") + "</i>";
-      el.children[1].innerHTML = (byCell["|" + m.id] || []).map(function (it) { return enHtml(it); }).join("");
-    });
-  }
-  function setMe(id) { if (id === me || IDS.indexOf(id) < 0) return; me = id; ls("plan_me", id); paintIam(); paintAll(); toast("现在是 " + nameOf(id)); }
+  function paintSolo() { var b = $("solo"); b.setAttribute("aria-pressed", solo ? "true" : "false"); b.title = solo ? "现在只看 " + nameOf(me) + " 的；再点一下，四个人的都看" : "只看 " + nameOf(me) + " 的"; }
+  function setMe(id) { if (id === me || IDS.indexOf(id) < 0) return; me = id; ls("plan_me", id); paintIam(); paintSolo(); paintAll(); toast("现在是 " + nameOf(id)); }
 
   /* ── beside the board ── */
   function sec(zh, en, more) { return '<h2 class="sec">' + zh + "<i>" + en + "</i>" + (more || "") + "</h2>"; }
@@ -340,42 +403,68 @@
     var today = idxDay(T), open = items.filter(undone), byDate = function (a, b) { var x = a.date || "9999", y = b.date || "9999"; return x < y ? -1 : x > y ? 1 : order(a, b); };
     var pool = open.filter(function (it) { return !it.owner; }).sort(byDate);
     var late = open.filter(function (it) { return it.owner && it.date && it.date < today; }).sort(byDate);
-    var loose = geo.wide ? [] : open.filter(function (it) { return it.owner && !it.date; });   // (on a wide screen these stand at the head of each lane)
+    var loose = open.filter(function (it) { return it.owner && !it.date; }).sort(function (a, b) { return rank(a) - rank(b) || a.no - b.no; });
     var after = idxDay(Math.max(Math.round(to) + (geo.wide ? geo.N - 1 : 0), T - 1)), later = open.filter(function (it) { return it.owner && it.date > after; }).sort(byDate);
     var done = items.filter(function (it) { return it.done; }).sort(function (a, b) { return (b.done_at || "") < (a.done_at || "") ? -1 : 1; }), h = "";
     h += sec("待认领", "To take on") + box("pool", pool.length ? list(pool, { pool: true, day: true }) :
-      '<p class="none">' + (loaded && !items.length ? "这里还空着。" : "") + "还没人认领的待办放在这里：谁来做，就点「认领」" + (geo.wide ? "，或者把它拖进谁的那一道里" : "") + "。</p>");
+      '<p class="none">' + (loaded && !items.length ? "这里还空着。" : "") + "还没人认领的待办放在这里：谁来做，就点「认领」" + (geo.wide ? "；拖到课表上，就定下了哪天几点" : "") + "。</p>");
     if (late.length) h += sec("过了的", "Overdue") + box("late", list(late, { day: true, who: true }));
     if (loose.length) h += sec("没定日子", "Someday") + box("loose", list(loose, { who: true }));
     if (later.length) h += sec("往后", "Later") + box("later", list(later.slice(0, 12), { day: true, who: true }) + (later.length > 12 ? '<p class="none">后面还有 ' + (later.length - 12) + " 件。</p>" : ""));
     if (done.length) h += sec("做完的", "Done", '<button type="button" data-act="done">' + (showDone ? "收起" : done.length + " 件") + "</button>") + (showDone ? box("done", list(done.slice(0, 24), { day: true, who: true })) : "");
     $("lists").innerHTML = h;
-    $("foot").textContent = "点某个人在某一天的空白处，可以直接替他写在那里。在聊天里说到要做的事，" + AI + " 会替你记进来。";
+    $("foot").textContent = (geo.wide ? "点课表上空着的钟点，直接写在那里；拖一块换时间，拉它的下沿改时长。" : "点某个钟点的空白处，直接写在那里。") + "在聊天里说到要做的事，" + AI + " 会替你记进来。";
   }
 
   /* ── writing ── */
-  var HINT = "先放在待认领里。可以这样写：周五 15:00 交报告";
-  function words(p) { return (p.date != null ? dayWords(p.date) : "没定日子") + (p.time ? " " + p.time : "") + (p.due ? " 前" : ""); }
+  var HINT = "先放在待认领里。可以这样写：周五 15:00-17:00 组会";
+  function words(p) { return (p.date != null ? dayWords(p.date) : "没定日子") + (p.time ? " " + p.time + (p.end ? "–" + p.end : "") : "") + (p.due ? " 前" : ""); }
   $("jotHint").textContent = HINT;
   $("jotIn").addEventListener("input", function () { var v = this.value.trim(); if (!v) { $("jotHint").textContent = HINT; return; } var p = parseLine(v); $("jotHint").innerHTML = "→ <b>" + words(p) + "</b> · " + esc(p.title); });
   $("jot").addEventListener("submit", function (e) {
     e.preventDefault(); var inp = $("jotIn"), v = inp.value.trim(); if (!v) { inp.focus(); return; }
-    var p = parseLine(v); add({ title: p.title, date: p.date != null ? idxDay(p.date) : "", time: p.time, due: p.due, owner: "" });
+    var p = parseLine(v); add({ title: p.title, date: p.date != null ? idxDay(p.date) : "", time: p.time, end: p.end, due: p.due, owner: "" });
     inp.value = ""; $("jotHint").textContent = HINT; toast("放进待认领了 · " + words(p));
   });
-  function write(host) {   // a line to write on, in someone's lane: on a day (a cell of the board), or with no day (where the lane begins)
-    var boxEl = host.querySelector(".add"); if (!boxEl) return; if (boxEl.firstChild) { boxEl.querySelector("input").focus(); return; }
-    var col = host.closest(".col"), day = col ? col.dataset.d : "", who = host.dataset.m;
-    boxEl.innerHTML = '<form class="wr" autocomplete="off"><input type="text" maxlength="200" placeholder="' + (day ? "15:00 做什么" : "做什么") + '" enterkeyhint="done" aria-label="' + esc(nameOf(who)) + (day ? " 这一天要做的" : " 要做的（没定日子）") + '"><button type="submit">记下</button></form>';
-    var f = boxEl.firstChild, inp = f.firstChild;
-    function shut() { if (f.isConnected) { boxEl.innerHTML = ""; fit(); } }
-    f.addEventListener("submit", function (e) { e.preventDefault(); var v = inp.value.trim(); if (!v) { shut(); return; } var p = day ? parseLine(v, true) : { title: v, time: "", due: false }; add({ title: p.title, date: day, time: p.time, due: p.due, owner: who }); inp.value = ""; inp.focus(); });
-    inp.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.stopPropagation(); shut(); } });
-    inp.addEventListener("blur", function () { setTimeout(function () { if (!inp.value.trim() && document.activeElement !== inp) shut(); }, 180); });
-    inp.focus({ preventScroll: true }); fit();
+  /* a line to write on, on a day of the board: at an hour (start, in minutes — the hour that was touched), or in the row
+     above the hours (start null). An hour written at the head of the line ("15:00-17:00 组会") is taken instead. Under
+     the line the four: whose it is to be (whoever is looking, unless another is chosen), or nobody's yet. */
+  function shutWriter() { if (writer) { writer.remove(); writer = null; } }
+  function written() { return !!(writer && writer.isConnected && writer.querySelector("input").value.trim()); }   // a line is open, and something stands on it
+  function slotAt(g, y, floor) {   // the half hour of a day's grid that lies at y
+    var r = g.getBoundingClientRect(), m = H0 * 60 + (y - r.top) / r.height * ROWS * 60;
+    return lim((floor ? Math.floor(m / SNAP) : Math.round(m / SNAP)) * SNAP, H0 * 60, H1 * 60 - SNAP);
+  }
+  function write(col, start) {
+    if (written()) { writer.querySelector("input").focus(); return; }   // what is being written is not thrown away by a touch elsewhere
+    shutWriter();
+    var day = col.dataset.d, who = me, f = document.createElement("form"), top;
+    f.className = "wr"; f.setAttribute("autocomplete", "off");
+    f.innerHTML = '<div class="w1"><b class="wt"></b><input type="text" maxlength="200" placeholder="做什么" enterkeyhint="done" aria-label="这一天要做的"><button type="submit">记下</button></div><div class="w2"></div>';
+    var inp = f.querySelector("input"), wt = f.querySelector(".wt"), w2 = f.lastChild;
+    function read() { var p = parseLine(inp.value, true); if (!p.time && start != null) p.time = hm(start); return p; }
+    function head() { var p = read(); wt.textContent = p.time ? p.time + (p.end ? "–" + p.end : "") : "这天"; }
+    function four() {
+      w2.innerHTML = "<span>给</span>" + members.map(function (m) { return '<button type="button" class="pd s' + (m.id === me ? " me" : "") + (m.id === who ? " on" : "") + '" data-w="' + m.id + '" title="' + esc(m.name) + '">' + esc(initial(m.name)) + "</button>"; }).join("") +
+        '<button type="button" class="wn' + (who ? "" : " on") + '" data-w="">待认领</button><i>' + esc(who ? nameOf(who) : "") + "</i>";
+    }
+    f.addEventListener("pointerdown", function (e) { if (e.target !== inp) e.preventDefault(); });   // the line keeps the caret
+    f.addEventListener("click", function (e) { var b = e.target.closest("[data-w]"); if (b) { who = b.dataset.w; four(); inp.focus(); } });
+    f.addEventListener("submit", function (e) {
+      e.preventDefault(); var v = inp.value.trim(), p; if (!v) { shutWriter(); return; }
+      p = read(); add({ title: p.title, date: day, time: p.time, end: p.end, due: p.due, owner: who }); shutWriter();
+    });
+    inp.addEventListener("input", head);
+    inp.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.stopPropagation(); shutWriter(); } });
+    inp.addEventListener("blur", function () { setTimeout(function () { if (writer === f && !inp.value.trim() && document.activeElement !== inp) shutWriter(); }, 180); });
+    col.appendChild(f); writer = f; head(); four();
+    top = start == null ? col._ad.offsetTop + 2 : col._bd.offsetTop + (start / 60 - H0) * geo.hh;   // where it was touched, kept within the day
+    f.style.top = Math.max(0, Math.min(top, col.offsetHeight - f.offsetHeight - 6)).toFixed(1) + "px";
+    if (geo.wide && col.getBoundingClientRect().left + f.offsetWidth + 6 > strip.getBoundingClientRect().right) f.classList.add("rt");
+    inp.focus({ preventScroll: true });
   }
 
-  /* ── a thing, opened: what it is, whose, which day (a few near ones, or any from the month), the hour, a note ── */
+  /* ── a thing, opened: what it is, whose, which day (a few near ones, or any from the month), from when to when, a note ── */
   var CH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg>', CHR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg>';
   function sheet(html) {
     var el = document.createElement("div"); el.className = "slipbg"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.innerHTML = html;
@@ -388,11 +477,12 @@
     var el = sheet('<form class="slip" autocomplete="off"><input class="s-t" type="text" maxlength="200" aria-label="做什么">' +
       '<div class="s-row"><label>谁来</label><div class="chips own"></div></div>' +
       '<div class="s-row"><label>哪天</label><div><div class="chips days"></div><div class="cal"></div></div></div>' +
-      '<div class="s-row"><label>几点</label><div class="s-hr"><input class="s-h" type="text" maxlength="8" placeholder="15:30" aria-label="几点" autocapitalize="off"><button type="button" class="s-due">这天是最后期限</button></div></div>' +
+      '<div class="s-row"><label>几点</label><div class="s-hr"><input class="s-h" type="text" maxlength="8" placeholder="15:00" aria-label="几点开始" autocapitalize="off"><span>到</span><input class="s-h s-e" type="text" maxlength="8" placeholder="17:00" aria-label="到几点" autocapitalize="off"><button type="button" class="s-due">这天是最后期限</button></div></div>' +
       '<div class="s-row"><label>备注</label><textarea class="s-n" rows="2" maxlength="2000" aria-label="备注"></textarea></div>' +
       '<p class="s-by"></p><div class="a"><button type="button" class="del">删掉</button><i></i><button type="button" class="no">算了</button><button type="submit" class="ok">存好</button></div></form>');
-    var f = el.firstChild, tIn = f.querySelector(".s-t"), hIn = f.querySelector(".s-h"), nIn = f.querySelector(".s-n"), at = Date.parse(it.ts || ""), close = slip.close;
-    tIn.value = it.title; hIn.value = it.time || ""; nIn.value = it.note || "";
+    var f = el.firstChild, tIn = f.querySelector(".s-t"), hIn = f.querySelector(".s-h"), eIn = f.querySelector(".s-e"), nIn = f.querySelector(".s-n"), at = Date.parse(it.ts || ""), close = slip.close;
+    tIn.value = it.title; hIn.value = it.time || ""; eIn.value = it.end || ""; nIn.value = it.note || "";
+    function no(inp, why) { inp.classList.remove("bad"); void inp.offsetWidth; inp.classList.add("bad"); inp.focus(); toast(why); }
     f.querySelector(".s-by").textContent = (it.by ? it.by + " " : "") + (isFinite(at) ? "记于 " + (new Date(at).getMonth() + 1) + "月" + new Date(at).getDate() + "日" : "") + (it.done ? " · 已经做完" : "");
     function own() {
       f.querySelector(".own").innerHTML = members.map(function (m) { return '<button type="button" data-o="' + m.id + '"' + (st.owner === m.id ? ' class="on"' : "") + ">" + pd(m.id, "s") + esc(m.name) + "</button>"; }).join("") +
@@ -409,13 +499,17 @@
       f.querySelector(".s-due").classList.toggle("on", st.due && !!st.date); f.querySelector(".s-due").hidden = !st.date;
     }
     function save() {
-      var title = tIn.value.trim(), time = readTime(hIn.value), note = nIn.value.trim(), p = {}, due = st.due && !!st.date;
+      var title = tIn.value.trim(), time = readTime(hIn.value), end = readTime(eIn.value, true), note = nIn.value.trim(), p = {}, due = st.due && !!st.date;
       if (!title) { tIn.focus(); return; }
-      if (time == null) { hIn.classList.remove("bad"); void hIn.offsetWidth; hIn.classList.add("bad"); hIn.focus(); toast("钟点写成 15:30 这样"); return; }
+      if (time == null) { no(hIn, "钟点写成 15:30 这样"); return; }
+      if (end == null) { no(eIn, "钟点写成 17:00 这样"); return; }
+      if (end && !time) { no(hIn, "先写几点开始"); return; }
+      if (end && end <= time) { no(eIn, "结束要比开始晚"); return; }
       if (title !== it.title) p.title = title; if (st.owner !== (it.owner || "")) p.owner = st.owner; if (st.date !== (it.date || "")) p.date = st.date;
-      if (time !== (it.time || "")) p.time = time; if (due !== !!it.due) p.due = due; if (note !== (it.note || "")) p.note = note;
+      if (time !== (it.time || "") || end !== (it.end || "")) { p.time = time; p.end = end; }   // the two go together
+      if (due !== !!it.due) p.due = due; if (note !== (it.note || "")) p.note = note;
       close(); if (!Object.keys(p).length) return;
-      change(it.id, p); if ("date" in p || "owner" in p) toast(moved(p));
+      change(it.id, p); if ("date" in p || "owner" in p || "time" in p) toast(moved(p, it));
     }
     el.addEventListener("click", function (e) {
       var t = e.target, b;
@@ -449,37 +543,55 @@
   }
 
   /* ── the hand. On the head or on the board: take hold and pull, and the days go by (a phone's page is turned one day at
-     a time; its head runs a day a moon). On a wide screen a thing taken hold of is carried instead: let go of it over a
-     lane on some day and it is that person's, that day; where a lane begins, theirs with no day; beside the board, it
-     waits to be taken on again. Held at either end of the week, the days come along. ── */
+     a time; its head runs a day a moon). On a wide screen a thing taken hold of is carried instead: let go of it over
+     an hour of some day and it is then (as long as it was); over the row above the hours, that day with no hour;
+     beside the board, it waits to be taken on again. Held at either end of the week, the days come along. The foot of
+     a block, pulled, says until when it runs. ── */
   function hands() {
-    var ghost = null, dropEl = null, edgeT = 0;
-    function target(e) { var el = document.elementFromPoint(e.clientX, e.clientY); if (!el || !el.closest) return null; return el.closest(".cell") || el.closest(".lane") || el.closest(".side"); }
+    var ghost = null, dropEl = null, edgeT = 0, slot = document.createElement("i"), hov = document.createElement("i");
+    slot.className = "slot"; hov.className = "hov";
+    function target(e) { var el = document.elementFromPoint(e.clientX, e.clientY); if (!el || !el.closest) return null; return el.closest(".grid") || el.closest(".ad") || el.closest(".side"); }
+    function startAt(h, g, e) { return slotAt(g, e.clientY - h.off); }
+    function long(it) { return it.time && it.end ? mins(it.end) - mins(it.time) : 0; }
     function down(zone, host) {
       host.addEventListener("pointerdown", function (e) {
         if (e.button || slip || hold) return;
-        var t = e.target, en = t.closest(".en"), pans = zone === "band" || zone === "strip";
+        var t = e.target, en = t.closest(".en"), pans = zone === "band" || zone === "strip", rz = t.closest(".rz"), it;
+        if (rz && geo.wide && e.pointerType === "mouse") {   // the foot of a block: until when
+          it = find(rz.parentNode.dataset.id); if (!it || /^tmp/.test(it.id) || !it.time) return;
+          hold = { id: e.pointerId, size: true, bk: rz.parentNode, it: it, g: rz.parentNode.parentNode, s: mins(it.time), end: null };
+          e.preventDefault(); try { host.setPointerCapture(e.pointerId); } catch (er) {}
+          return;
+        }
         if (t.closest("button, input, textarea, form")) return;
         if (!pans && !en) return;
-        hold = { id: e.pointerId, zone: zone, host: host, pans: pans, x0: e.clientX, y0: e.clientY, c0: cur, x: e.clientX, t: performance.now(), v: 0, pan: false, carry: false, dir: 0,
+        hold = { id: e.pointerId, zone: zone, host: host, pans: pans, x0: e.clientX, y0: e.clientY, c0: cur, x: e.clientX, t: performance.now(), v: 0, pan: false, carry: false, dir: 0, off: 0,
           en: en && geo.wide && e.pointerType === "mouse" ? en : null };
+        if (hold.en && en.classList.contains("bk")) hold.off = e.clientY - en.getBoundingClientRect().top;   // a block is carried by where it was taken hold of
         if (pans) to = cur;   // caught in mid-flight
       });
     }
-    down("band", band); down("strip", strip); down("side", $("side")); down("who", $("who"));
+    down("band", band); down("strip", strip); down("side", $("side"));
     window.addEventListener("pointermove", function (e) {
       var h = hold; if (!h || e.pointerId !== h.id) return;
+      if (h.size) {
+        var r0 = h.g.getBoundingClientRect(), m = Math.round((H0 * 60 + (e.clientY - r0.top) / r0.height * ROWS * 60) / SNAP) * SNAP;
+        m = lim(m, (Math.floor(h.s / SNAP) + 1) * SNAP, H1 * 60); if (m === h.end) return;
+        h.end = m; h.bk.classList.add("sizing"); h.bk.style.setProperty("--d", (m - h.s) / 60);
+        var tm = h.bk.querySelector(".tm"); if (tm) tm.textContent = h.it.time + "–" + hm(m);
+        return;
+      }
       var dx = e.clientX - h.x0, dy = e.clientY - h.y0, now = performance.now();
       if (!h.pan && !h.carry) {
         if (Math.hypot(dx, dy) < 7) return;
         if (h.en) {
           h.it = find(h.en.dataset.id); if (!h.it || /^tmp/.test(h.it.id)) { hold = null; return; }
-          h.carry = true; ghost = document.createElement("div"); ghost.className = "ghost";
-          ghost.innerHTML = (h.it.time ? '<span class="tm">' + esc(h.it.time) + "</span>" : "") + esc(h.it.title); document.body.appendChild(ghost);
+          h.carry = true; ghost = document.createElement("div"); ghost.className = "ghost"; if (!written()) shutWriter(); hov.remove();
+          ghost.innerHTML = (h.it.time ? '<span class="tm">' + esc(hrs(h.it)) + "</span>" : "") + esc(h.it.title); document.body.appendChild(ghost);
           document.querySelectorAll('.en[data-id="' + h.it.id + '"]').forEach(function (n) { n.classList.add("lift"); });
           try { window.getSelection().removeAllRanges(); } catch (er) {}
         } else if (!h.pans || (!geo.wide && h.zone === "strip" && Math.abs(dy) > Math.abs(dx))) { hold = null; return; }   // the page is being scrolled, not the days
-        else { h.pan = true; h.host.classList.add("held"); }
+        else { h.pan = true; h.host.classList.add("held"); if (!written()) shutWriter(); hov.remove(); }
         try { h.host.setPointerCapture(e.pointerId); } catch (er) {}
       }
       if (h.pan) {
@@ -487,23 +599,35 @@
         cur = to = h.c0 - dx / (h.zone === "band" ? geo.hw : geo.cw); kick(); return;
       }
       ghost.style.transform = "translate(" + (e.clientX + 14) + "px," + (e.clientY - 20) + "px) rotate(-1.5deg)";
-      var t = target(e); if (t !== dropEl) { if (dropEl) dropEl.classList.remove("drop"); dropEl = t; if (t) t.classList.add("drop"); }
-      var r = strip.getBoundingClientRect(), dir = e.clientX > r.right - 50 ? 1 : 0;   // at the far end of the week, the days come along
+      var t = target(e), g = t && t.classList.contains("grid") ? t : null, s0;
+      if (t !== dropEl) { if (dropEl) dropEl.classList.remove("drop"); dropEl = t; if (t && !g) t.classList.add("drop"); }
+      if (g) {   // over the hours of a day: where it would stand
+        s0 = startAt(h, g, e); if (slot.parentNode !== g) g.appendChild(slot);
+        slot.style.setProperty("--s", s0 / 60 - H0); slot.style.setProperty("--d", Math.min(long(h.it) || 60, H1 * 60 - s0) / 60); slot.dataset.t = hm(s0);
+      } else slot.remove();
+      var r = strip.getBoundingClientRect(), rr = rail.getBoundingClientRect(), dir = e.clientX > r.right - 44 ? 1 : e.clientX < r.left && e.clientX > rr.left ? -1 : 0;   // at either end of the week, the days come along
       if (dir !== h.dir) { h.dir = dir; clearInterval(edgeT); if (dir) edgeT = setInterval(function () { to = Math.round(to) + dir; kick(); }, 430); }
     });
     function up(e, lost) {
       var h = hold; if (!h || e.pointerId !== h.id) return; hold = null;
+      if (h.size) {
+        if (h.end == null) return;
+        clickAt = performance.now(); h.bk.classList.remove("sizing");
+        if (!lost && hm(h.end) !== (h.it.end || "")) change(h.it.id, { time: h.it.time, end: hm(h.end) }); else paintCols();
+        return;
+      }
       if (h.carry) {
-        clearInterval(edgeT); if (ghost) ghost.remove(); ghost = null; clickAt = performance.now();
+        clearInterval(edgeT); if (ghost) ghost.remove(); ghost = null; clickAt = performance.now(); slot.remove();
         document.querySelectorAll(".en.lift").forEach(function (n) { n.classList.remove("lift"); });
         if (dropEl) dropEl.classList.remove("drop"); dropEl = null;
-        var t = lost ? null : target(e), it = h.it, p = {}, want = null;
-        if (t && t.classList.contains("cell")) want = { owner: t.dataset.m, date: t.closest(".col").dataset.d };
-        else if (t && t.classList.contains("lane")) want = { owner: t.dataset.m, date: "" };
+        var t = lost ? null : target(e), it = h.it, p = {}, want = null, k, s0, early = it.time && mins(it.time) < H0 * 60;
+        if (t && t.classList.contains("grid")) { s0 = startAt(h, t, e); want = { date: t.closest(".col").dataset.d, time: hm(s0), end: long(it) ? hm(Math.min(s0 + long(it), H1 * 60)) : "" }; }
+        else if (t && t.classList.contains("ad")) want = early ? { date: t.closest(".col").dataset.d } : { date: t.closest(".col").dataset.d, time: "", end: "" };   // (an hour before the board begins lies in this row too, and keeps its hour)
         else if (t) want = { owner: "" };   // beside the board: it waits to be taken on again (its day stays)
         if (!want) return;
-        if (want.owner !== (it.owner || "")) p.owner = want.owner; if ("date" in want && want.date !== (it.date || "")) p.date = want.date;
-        if (Object.keys(p).length) { change(it.id, p); toast(moved(p)); }
+        for (k in want) if (want[k] !== (it[k] || "")) p[k] = want[k];
+        if ("time" in p || "end" in p) { p.time = want.time; p.end = want.end; }   // the two go together
+        if (Object.keys(p).length) { change(it.id, p); toast(moved(p, it)); }
         return;
       }
       if (!h.pan) return;
@@ -516,18 +640,25 @@
     window.addEventListener("pointerup", function (e) { up(e); });
     window.addEventListener("pointercancel", function (e) { up(e, true); });
     band.addEventListener("dragstart", function (e) { e.preventDefault(); }); strip.addEventListener("dragstart", function (e) { e.preventDefault(); });
-    document.addEventListener("selectstart", function (e) { if (hold && (hold.pan || hold.carry)) e.preventDefault(); });
+    document.addEventListener("selectstart", function (e) { if (hold && (hold.pan || hold.carry || hold.size)) e.preventDefault(); });
+    // over a blank hour: a faint mark of the half hour that a touch would write in
+    strip.addEventListener("pointermove", function (e) {
+      if (!geo.wide || hold || e.pointerType !== "mouse" || !e.target.classList || !e.target.classList.contains("grid")) { hov.remove(); return; }
+      var g = e.target, m = slotAt(g, e.clientY, true); if (hov.parentNode !== g) g.appendChild(hov);
+      hov.style.setProperty("--s", m / 60 - H0); hov.dataset.t = hm(m);
+    });
+    strip.addEventListener("pointerleave", function () { hov.remove(); });
 
     // a wheel: a day a notch; two fingers along a trackpad pull the days directly
     var wheel = { acc: 0, at: 0, t: 0 };
     $("plx").addEventListener("wheel", function (e) {
       if (!geo.wide || slip || e.ctrlKey || e.target.closest(".side")) return;
-      var cell = e.target.closest(".cell, .lane"), now = performance.now();
+      var cell = e.target.closest(".ad"), now = performance.now();
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         e.preventDefault(); cur = to = cur + e.deltaX / geo.cw; lay();
         clearTimeout(wheel.t); wheel.t = setTimeout(function () { to = Math.round(cur); kick(); }, 150); return;
       }
-      if (cell && !e.shiftKey && cell.scrollHeight > cell.clientHeight + 2) return;   // a lane with more on a day than fits: its own list is what scrolls
+      if (cell && !e.shiftKey && cell.scrollHeight > cell.clientHeight + 2) return;   // more on a day with no hour than the row holds: its own list is what scrolls
       e.preventDefault(); if (now - wheel.at > 400) wheel.acc = 0; wheel.acc += e.deltaY * (e.deltaMode === 1 ? 33 : 1);
       if (Math.abs(wheel.acc) >= 40 && now - wheel.at > 110) { to = Math.round(to) + (wheel.acc > 0 ? 1 : -1); wheel.acc = 0; wheel.at = now; kick(); }
     }, { passive: false });
@@ -539,12 +670,15 @@
     if ((b = t.closest(".take"))) { change(b.closest(".en").dataset.id, { owner: me }); toast("归 " + nameOf(me) + " 了"); return; }
     if ((b = t.closest(".tk"))) { it = find(b.closest(".en").dataset.id); if (it) change(it.id, { done: !it.done }); return; }
     if (t.closest("#rename")) { namesSlip(); return; }
+    if (t.closest("#solo")) { solo = !solo; ls("plan_solo", solo ? "1" : "0"); paintSolo(); paintAll(); return; }
     if ((b = t.closest("[data-me]"))) { setMe(b.dataset.me); return; }
     if ((b = t.closest('[data-act="done"]'))) { showDone = !showDone; paintSide(); return; }
     if ((b = t.closest(".dy"))) { go(+b.dataset.i); if (!geo.wide) band.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     if ((b = t.closest(".en"))) { openSlip(b.dataset.id); return; }
     if ((b = t.closest(".hd"))) { go(+b.dataset.i); return; }
-    if ((b = t.closest(".cell, .lane")) && !t.closest(".add")) write(b);   // the blank of a lane: write there
+    if (t.closest(".wr")) return;
+    if ((b = t.closest(".grid"))) { write(b.closest(".col"), slotAt(b, e.clientY, true)); return; }   // a blank hour: write there
+    if ((b = t.closest(".ad"))) write(b.closest(".col"), null);   // … or in the row above the hours: that day, no hour
   });
   $("back").onclick = function () { location.href = "./"; };
   $("goToday").onclick = function () { go(T); };
@@ -563,11 +697,13 @@
 
   /* ── begin ── */
   if (G) edge();
-  paintIam(); rebuild(); hands();
+  rail.innerHTML = '<div class="r0"><b>这天</b></div><div class="hs">' + HS + "</div>";
+  clock(); setInterval(clock, 30000);
+  paintIam(); paintSolo(); rebuild(); hands();
   var sized = 0;
   window.addEventListener("resize", function () { clearTimeout(sized); sized = setTimeout(function () { var w = geo.wide; if (measure() || w !== geo.wide) rebuild(); else { lay(); rest(); } }, 120); });
-  function first(d) { loaded = true; take(d); paintIam(); paintAll(); }
+  function first(d) { loaded = true; take(d); paintIam(); paintSolo(); paintAll(); }
   (window.NYX_PLAN_EARLY || Promise.reject()).then(first, function () { return api("").then(first); }).catch(function () { loaded = true; $("lists").innerHTML = '<p class="empty">日程那边没有应答，过一会儿再来。</p>'; });
-  function poll() { if (!document.hidden && loaded) load().then(paintIam, function () {}); }
+  function poll() { if (!document.hidden && loaded) load().then(function () { paintIam(); paintSolo(); }, function () {}); }
   setInterval(poll, 25000); document.addEventListener("visibilitychange", poll); window.addEventListener("focus", poll);
 })();

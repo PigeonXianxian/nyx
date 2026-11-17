@@ -1,19 +1,21 @@
 /* Nyx — Plan (日程). Paper, ink, one blue (eye/ink.css).
-   A team's plan: four people, and what is to be done day by day — each thing either one of the four's (they took it
-   on) or nobody's yet. Laid out as a constructivist chart on the page's paper, in the home's flat hand: ink as figures,
-   not as ground.
+   A team's plan: four people, and what is to be done, hour by hour — each thing either one of the four's (they took it
+   on) or nobody's yet. Laid out as a timetable on the page's paper, in the home's flat hand: ink as figures, not as
+   ground.
      · the corner block, as on the home (ink, going off into grain): the room's name, and who is looking;
      · across the head of the sheet the days — each day's moon as the home draws its moons (a flat disc, the dark of it
        crumbling into grains), riding one dotted track, today's in blue with a swallow over it;
-     · one heavy rule, and hanging from it four lanes, one a person (a disc with their initial; whoever is looking is
-       the blue one, and their lane is washed with it); a column a day; the plumb line hangs down today's.
-   Beside the board: a line to write on, and what is in nobody's lane (waiting to be taken on), what is overdue, what
-   lies further on, what is done. A thing is carried by hand — to another day, into another's lane, or back out.
-   A phone shows one day at a time under a week of moons, the four under one another.
+     · one heavy rule, and under it the board: the hours of the day down the side, a column a day, a hairline an hour;
+       every thing that has an hour is a block from when it begins to when it is over — a flat rectangle of ink, or of
+       the blue for whoever is looking; nobody's yet, a dotted outline; done, only its outline. What has a day and no
+       hour lies in the row above the hours. The plumb line hangs down today's column as far as the hour it is now.
+   Beside the board: a line to write on, and what has no place on it (waiting to be taken on, overdue, no day yet,
+   further on, done). A block is carried by hand to another hour or day; its foot is pulled to say how long it runs.
+   A phone shows one day at a time under a week of moons, its hours down the page.
    (app.css, the chat's stylesheet, is not loaded here.) */
 *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html, body{ margin:0; min-height:100%; background:var(--paper); color:var(--ink); overscroll-behavior-x:none; }
-body.plan{ --han:"Noto Serif SC", "Songti SC", "STSong", serif; --bt:var(--blue); --rule:color-mix(in srgb, var(--ink) 36%, transparent); --wash:color-mix(in srgb, var(--blue) 6%, transparent);
+body.plan{ --han:"Noto Serif SC", "Songti SC", "STSong", serif; --bt:var(--blue); --rule:color-mix(in srgb, var(--ink) 36%, transparent); --wash:color-mix(in srgb, var(--blue) 6%, transparent); --gone:repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink) 10%, transparent) 0, color-mix(in srgb, var(--ink) 10%, transparent) 1px, transparent 1px, transparent 7px);
   font-family:var(--han); -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 :root[data-side="moon"] body.plan{ --bt:#8C95FF; --wash:color-mix(in srgb, var(--blue) 15%, transparent); }   /* the blue of small writing: by night a paler one, or it does not read on the dark */
 button{ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; }
@@ -32,7 +34,7 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .pd.s{ width:19px; height:19px; margin-right:7px; font-size:10.5px; vertical-align:2px; }
 
 /* ════════ one column (a phone) ════════ */
-.plx{ position:relative; z-index:1; min-height:100vh; }
+.plx{ --u:6.25%; --hh:44px; --now:0; position:relative; z-index:1; min-height:100vh; }   /* --u: an hour, as a share of the board's sixteen (8 to 24; plan.js H0, H1); --hh: how tall one is on a phone; --now: the hour it is, in hours down the board */
 
 /* ── the corner block ── */
 .title{ --sb:#8C95FF; position:relative; z-index:4; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:env(safe-area-inset-top) 12px 0 0; -webkit-user-select:none; user-select:none; }
@@ -62,8 +64,9 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
   font:400 12.5px/1 var(--han); letter-spacing:.2em; text-indent:.2em; color:var(--ink); transition:opacity .25s, color .15s, box-shadow .15s; }
 .b-go button svg{ width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
 .b-go #goPrev, .b-go #goNext{ display:none; padding:0; }
+.b-go #solo{ letter-spacing:.14em; text-indent:.14em; color:var(--soft); }
+.b-go #solo[aria-pressed="true"]{ color:var(--bt); box-shadow:inset 0 0 0 1px var(--bt); }
 .b-go #goToday.here{ opacity:0; pointer-events:none; }   /* already there */
-.loose-h{ display:none; }
 /* the moons of the days. Each head is laid by plan.js: where it stands along the head (its own transform), and how high
    its moon rides and how large (the .mw's): the day in the middle of a phone is the largest; on a wide screen, today. */
 .heads{ --hw:56px; --mr:20px; position:absolute; z-index:1; inset:0; overflow:hidden; }
@@ -80,21 +83,32 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .hd.on, .hd.today{ color:var(--ink); }
 .hd.today .dt b, .hd.today .dt em{ color:var(--bt); }
 
-/* ── the board ── */
-.who, .plumb{ display:none; }
+/* ── the board: a timetable ── */
+.rail, .plumb{ display:none; }
 .strip{ position:relative; z-index:1; overflow:hidden; min-height:240px; touch-action:pan-y; transition:height .3s cubic-bezier(.3, .05, .2, 1); }
 .cols{ position:absolute; inset:0; }
-.cols, #lists, .who{ -webkit-user-select:none; user-select:none; }   /* things here are taken hold of, not selected */
+.cols, #lists{ -webkit-user-select:none; user-select:none; }   /* things here are taken hold of, not selected */
 .plan input, .plan textarea{ -webkit-user-select:text; user-select:text; }
-.col{ position:absolute; left:0; top:0; width:100%; padding:22px 18px 22px; will-change:transform; }
+.col{ position:absolute; left:0; top:0; width:100%; padding:22px 18px 26px; will-change:transform; }
 .col h3{ display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 11px; margin:0 0 12px; font:500 20px/1.2 var(--han); letter-spacing:.14em; }
 .col h3 i{ font:italic 400 15px/1 var(--latin); letter-spacing:.06em; color:var(--faint); }
 .col h3 em{ font:400 12.5px/1 var(--han); font-style:normal; letter-spacing:.24em; color:var(--bt); }
-.cell{ position:relative; margin:0 -18px; padding:9px 18px 8px; border-top:1px solid var(--hair); }
-.cell.me{ background:var(--wash); }
-.ch{ display:flex; align-items:center; min-height:26px; font:500 14px/1 var(--han); letter-spacing:.06em; }
-.ch .pd.s{ width:22px; height:22px; margin-right:9px; font-size:12px; vertical-align:0; }
-.ch i{ margin-left:auto; padding-left:12px; font:400 17px/1 var(--latin); font-style:normal; color:var(--faint); }   /* touch the lane: write there */
+/* the row above the hours: what has a day and no hour */
+.ad{ position:relative; min-height:40px; padding:8px 0 5px; border-top:1px solid var(--hair); cursor:pointer; }
+.ad .ens:empty::before{ content:"这天 · 不定钟点的写在这里"; display:block; padding:3px 0 0 2px; font:400 12.5px/1.5 var(--han); letter-spacing:.08em; color:var(--faint); }
+/* the hours: a numeral an hour down the side, a hairline under each (a heavier one where the morning ends, and where the evening begins) */
+.bd{ position:relative; display:flex; border-top:1px solid var(--rule); }
+.hs{ position:relative; flex:none; width:36px; }
+.hs span{ position:absolute; left:0; right:0; top:calc(var(--s) * var(--u)); height:var(--u); }
+.hs b{ position:absolute; right:10px; top:4px; font:italic 400 16px/1 var(--latin); letter-spacing:0; color:var(--soft); }
+.hs .k b{ font-weight:500; color:var(--ink); }
+.hs em{ display:none; }
+.grid{ position:relative; flex:1; min-width:0; height:calc(var(--hh) * 16); cursor:pointer;
+  background:linear-gradient(to bottom, transparent calc(var(--u) * 4 - 1px), var(--rule) calc(var(--u) * 4 - 1px), var(--rule) calc(var(--u) * 4), transparent calc(var(--u) * 4), transparent calc(var(--u) * 10 - 1px), var(--rule) calc(var(--u) * 10 - 1px), var(--rule) calc(var(--u) * 10), transparent calc(var(--u) * 10)),
+    repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--u) - 1px), var(--hair) calc(var(--u) - 1px), var(--hair) var(--u)); }
+.col.past .grid::before, .col.today .grid::before{ content:""; position:absolute; left:0; right:0; top:0; height:100%; background:var(--gone); pointer-events:none; }   /* the hours that have gone by are hatched: the days before today, and today as far as now */
+.col.today .grid::before{ height:calc(var(--now) * var(--u)); }
+.col.today .grid::after{ content:""; position:absolute; z-index:4; left:0; right:0; top:calc(var(--now) * var(--u) - 1px); border-top:2px solid var(--blue); pointer-events:none; }   /* the hour it is now */
 
 /* a thing to do: its ring (a full blue disc when done), the hour if it has one, what it is */
 .ens{ list-style:none; margin:0; padding:0; }
@@ -116,10 +130,76 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .en.lift{ opacity:.28; }
 .en:has(.take){ grid-template-columns:22px minmax(0, 1fr) auto; }
 .take{ grid-column:3; grid-row:1; align-self:start; height:28px; margin:-1px 0 0 6px; padding:0 12px 1px; box-shadow:inset 0 0 0 1px var(--bt); font:400 12.5px/1 var(--han); letter-spacing:.2em; text-indent:.2em; color:var(--bt); transition:background-color .15s, color .15s; }
-.wr{ display:flex; align-items:center; gap:4px; margin:6px 0 2px; padding:0 4px 0 11px; box-shadow:inset 0 0 0 1px var(--blue); background:color-mix(in srgb, var(--paper) 70%, transparent); }
-.wr input, .jot input{ flex:1; min-width:0; border:0; outline:0; border-radius:0; background:none; color:var(--ink); font:400 15px/1.2 var(--han); letter-spacing:.03em; padding:9px 0 10px; -webkit-appearance:none; appearance:none; }
-.wr input::placeholder, .jot input::placeholder{ color:var(--faint); opacity:.9; }
-.wr button, .jot button{ flex:none; padding:8px 8px 9px; font:400 13px/1 var(--han); letter-spacing:.18em; color:var(--bt); white-space:nowrap; }
+.jot input{ flex:1; min-width:0; border:0; outline:0; border-radius:0; background:none; color:var(--ink); font:400 15px/1.2 var(--han); letter-spacing:.03em; padding:9px 0 10px; -webkit-appearance:none; appearance:none; }
+.jot input::placeholder, .wr input::placeholder{ color:var(--faint); opacity:.9; }
+.jot button, .wr .w1 button{ flex:none; padding:8px 8px 9px; font:400 13px/1 var(--han); letter-spacing:.18em; color:var(--bt); white-space:nowrap; }
+
+/* a thing on the board. With an hour, a block from when it begins to when it is over; with none, a line in the row
+   above the hours. Ink — or the blue, for whoever is looking; nobody's yet: a dotted outline; done: only an outline. */
+.en.bk, .en.ck{ background:var(--ink); color:var(--paper); }
+.en.bk{ position:absolute; z-index:1; display:grid; grid-template-columns:auto minmax(0, 1fr) auto; gap:0 6px; align-items:start; align-content:start;
+  left:calc(var(--x) * (100% - 13px) + 3px); width:calc(var(--w) * (100% - 13px) - 2px); top:calc(var(--s) * var(--u) + 1px); height:calc(var(--d) * var(--u) - 3px);
+  padding:4px 5px 2px 7px; overflow:hidden; }   /* (a strip of the column's right is left bare, to be touched) */
+.en.ck{ display:flex; align-items:center; gap:6px; height:24px; margin:0 0 3px; padding:0 5px 0 7px; }
+.en.bk.me, .en.ck.me{ background:var(--blue); color:#fff; }
+.en.bk.free, .en.ck.free{ background:color-mix(in srgb, var(--paper) 80%, transparent); color:var(--ink); outline:1.5px dashed var(--soft); outline-offset:-1.5px; }
+.en.bk.done, .en.ck.done{ background:color-mix(in srgb, var(--paper) 80%, transparent); color:var(--faint); outline:1px solid var(--river); outline-offset:-1px; }
+.bk .ex, .ck .ex{ min-width:0; font:400 13.5px/1.36 var(--han); letter-spacing:.01em; color:inherit; }
+.ck .ex{ flex:1; line-height:24px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bk .tm, .ck .tm{ margin-right:6px; font:italic 500 14.5px/1 var(--latin); letter-spacing:.02em; color:inherit; opacity:.88; }
+.bk .tm{ display:block; margin:0 0 2px; white-space:nowrap; }   /* a block that is tall enough says its hours on a line of their own */
+.bk .ex u, .ck .ex u{ margin-right:5px; padding:1px 4px 2px; font-size:10px; color:inherit; box-shadow:inset 0 0 0 1px currentColor; vertical-align:1px; opacity:.9; }
+.bk .tk, .ck .tk{ flex:none; width:13px; height:13px; margin:3px 0 0; border:1.5px solid currentColor; border-radius:50%; opacity:.9; transition:transform .15s; }
+.bk .tk::after, .ck .tk::after{ inset:-6px; }
+.bk .tk[aria-pressed="true"], .ck .tk[aria-pressed="true"]{ background:var(--bt); border-color:var(--bt); opacity:1; }
+.bk .open, .ck .open{ flex:none; width:13px; height:13px; margin:3px 0 0; }
+.ck .tk, .ck .open{ margin:0; }
+.bk .pd.s, .ck .pd.s{ width:17px; height:17px; margin:1px 0 0; font-size:10px; vertical-align:0; background:var(--paper); color:var(--ink); }
+.ck .pd.s{ margin:0; }
+.bk.me .pd.s, .ck.me .pd.s{ background:#fff; color:var(--blue); }
+.bk.free .pd.s, .ck.free .pd.s, .bk.done .pd.s, .ck.done .pd.s{ background:var(--faint); color:var(--paper); }
+.bk .take, .ck .take{ grid-column:auto; grid-row:auto; height:19px; margin:0; padding:0 6px 1px; font-size:11.5px; letter-spacing:.1em; text-indent:.1em; }
+/* a short one: one line; a narrow one (several at the same hour): only what it is, and whose */
+.en.bk.sm{ min-height:18px; padding-top:1px; padding-bottom:0; }   /* (half an hour on a low screen is lower than a line of writing: it is given the line) */
+.bk.sm .ex{ font-size:12.5px; line-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bk.sm .tm{ display:inline; margin:0 6px 0 0; font-size:13px; }
+.bk.sm .tk, .bk.sm .open{ width:11px; height:11px; margin-top:3px; }
+.bk.sm .pd.s{ width:14px; height:14px; margin-top:1px; font-size:8.5px; }
+.bk.sm .take{ height:15px; font-size:10.5px; }
+.en.bk.nw{ display:block; padding:3px 4px 2px 6px; }
+.bk.nw .tk, .bk.nw .open, .bk.nw .take, .bk.xn .tm, .bk.nw.sm .tm{ display:none; }
+.bk.nw .tm{ font-size:13.5px; }
+.en.bk.nw.sm{ padding-right:21px; }
+.bk.nw .ex{ font-size:12.5px; line-height:1.3; overflow-wrap:anywhere; }
+.bk.nw .pd.s{ position:absolute; right:3px; top:3px; width:15px; height:15px; margin:0; font-size:9px; box-shadow:0 0 0 1.5px var(--ink); }   /* beside the hour it begins at … */
+.bk.xn .pd.s{ top:auto; bottom:3px; }   /* … or, where there is no room to say the hour, at its foot */
+.bk.nw.me .pd.s{ box-shadow:0 0 0 1.5px var(--blue); }
+.bk.nw.sm .pd.s{ bottom:auto; top:50%; margin-top:-7.5px; }
+.rz{ display:none; }
+/* a line to write on, opened where a blank hour was touched: the hour, the line, and the four to give it to */
+.wr{ position:absolute; z-index:8; left:18px; right:18px; margin:0; padding:6px 8px 9px 11px; background:var(--paper) var(--grain); background-size:180px; box-shadow:0 0 0 1.5px var(--blue), 0 12px 30px rgba(16,16,22,.2); cursor:default; }
+:root[data-side="moon"] .wr{ box-shadow:0 0 0 1.5px var(--bt), 0 12px 30px rgba(0,0,0,.5); }
+.col:has(.wr){ z-index:9; }   /* (the line may reach over the next day's column: its own day is laid above the others) */
+.wr .w1{ display:flex; align-items:baseline; gap:9px; }
+.wr .wt{ flex:none; font:italic 500 16.5px/1 var(--latin); letter-spacing:.02em; color:var(--bt); white-space:nowrap; }
+.wr input{ flex:1; min-width:0; border:0; border-bottom:1px solid var(--river); outline:0; border-radius:0; background:none; color:var(--ink); caret-color:var(--blue); font:400 14.5px/1.2 var(--han); letter-spacing:.03em; padding:6px 0 6px; -webkit-appearance:none; appearance:none; }
+.wr .w1 button{ padding:6px 2px 7px 4px; }
+.wr .w2{ display:flex; align-items:center; gap:6px; margin-top:9px; font:400 12px/1 var(--han); letter-spacing:.12em; color:var(--faint); white-space:nowrap; }
+.wr .w2 .pd.s{ width:23px; height:23px; margin:0; font-size:12px; vertical-align:0; }
+.wr .w2 .pd:not(.on){ background:none; color:var(--soft); box-shadow:inset 0 0 0 1.5px var(--rule); }
+.wr .w2 .pd.on{ background:var(--ink); color:var(--paper); }
+.wr .w2 .pd.me.on{ background:var(--blue); color:#fff; }
+.wr .wn{ height:23px; padding:0 8px 1px; box-shadow:inset 0 0 0 1px var(--rule); font:400 11.5px/1 var(--han); letter-spacing:.1em; color:var(--soft); }
+.wr .wn.on{ background:var(--ink); color:var(--paper); box-shadow:none; }
+.wr .w2 i{ flex:1; min-width:0; margin-left:4px; overflow:hidden; text-overflow:ellipsis; text-align:right; font-style:normal; letter-spacing:.04em; color:var(--soft); }
+/* over a blank hour: the half hour a touch would write in; and, while a thing is carried, where it would stand */
+.hov, .slot{ position:absolute; left:3px; right:10px; top:calc(var(--s) * var(--u) + 1px); pointer-events:none; }
+.hov{ height:calc(var(--u) / 2 - 2px); background:color-mix(in srgb, var(--blue) 10%, transparent); }
+.hov::before, .slot::before{ content:attr(data-t); position:absolute; left:7px; top:50%; transform:translateY(-50%); font:italic 500 13.5px/1 var(--latin); letter-spacing:.02em; color:var(--bt); }
+.hov::after{ content:""; position:absolute; right:7px; top:50%; width:9px; height:9px; margin-top:-4.5px; opacity:.8;
+  background:linear-gradient(var(--bt), var(--bt)) center / 100% 1.5px no-repeat, linear-gradient(var(--bt), var(--bt)) center / 1.5px 100% no-repeat; }
+.slot{ z-index:5; height:calc(var(--d) * var(--u) - 3px); background:color-mix(in srgb, var(--blue) 14%, transparent); box-shadow:inset 0 0 0 1.5px var(--blue); }
+.slot::before{ top:5px; transform:none; }
 
 /* ── beside the board ── */
 .side{ position:relative; z-index:1; padding:26px 18px calc(env(safe-area-inset-bottom) + 72px); border-top:1px solid var(--hair); }
@@ -138,7 +218,7 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .bx{ margin:0 -8px; padding:0 8px; transition:background-color .15s; }
 .bx .en{ border-bottom:1px solid var(--hair); padding:9px 0; }
 .bx .none{ margin:10px 0 0; font:400 12.5px/1.7 var(--han); letter-spacing:.05em; color:var(--faint); }
-.side.drop [data-box="pool"]{ background:color-mix(in srgb, var(--blue) 9%, transparent); }
+.side.drop [data-box="pool"], .ad.drop{ background:color-mix(in srgb, var(--blue) 11%, transparent); }
 .side .ex{ font-size:14.5px; }
 .empty{ margin:26px 0 0; font:400 14px/1.9 var(--han); letter-spacing:.04em; color:var(--soft); }
 .foot{ margin:34px 0 0; font:400 12px/1.7 var(--han); letter-spacing:.06em; color:var(--faint); }
@@ -182,8 +262,9 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .cal-g button.now{ box-shadow:inset 0 0 0 1px var(--river); }
 .cal-g button.on{ background:var(--blue); color:#fff; box-shadow:none; }
 .cal-g button.on::after{ background:#fff; }
-.s-hr{ display:flex; align-items:center; gap:12px; }
-.slip .s-h{ width:92px; padding:5px 0 6px; font:italic 500 19px/1.2 var(--latin); letter-spacing:.04em; }
+.s-hr{ display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; }
+.s-hr > span{ font:400 12.5px/1 var(--han); color:var(--faint); }
+.slip .s-h{ width:68px; padding:5px 0 6px; font:italic 500 19px/1.2 var(--latin); letter-spacing:.04em; }
 .slip .s-h.bad{ border-bottom-color:var(--blue); animation:plNo .3s; }
 @keyframes plNo{ 25%{ transform:translateX(-4px); } 75%{ transform:translateX(4px); } }
 .slip .s-n{ padding:5px 0 7px; font:400 14.5px/1.7 var(--han); letter-spacing:.02em; }
@@ -198,7 +279,7 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .slip .s-name input{ padding:5px 0 7px; font:500 17px/1.3 var(--han); letter-spacing:.04em; }
 .s-say{ margin:8px 0 0; font:400 12.5px/1.7 var(--han); letter-spacing:.04em; color:var(--soft); }
 
-/* a thing in the hand, on its way to another day or another's lane */
+/* a thing in the hand, on its way to another hour or another day */
 .ghost{ position:fixed; left:0; top:0; z-index:310; width:220px; padding:9px 13px 10px; pointer-events:none; border-radius:2px; background:var(--paper) var(--grain); background-size:180px; color:var(--ink);
   box-shadow:0 0 0 1px var(--river), 0 14px 34px rgba(16,16,22,.24); font:400 14.5px/1.5 var(--han); letter-spacing:.02em; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
 .ghost .tm{ font-size:15.5px; }
@@ -213,7 +294,10 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 @media (hover:hover){
   .en{ transition:background-color .15s; }
   .en:hover .tt{ color:var(--bt); } .en.done:hover .tt{ color:var(--soft); }
+  .en.bk:hover .tt, .en.ck:hover .tt{ color:inherit; }
   .tk:hover img{ transform:scale(1.18); }
+  .bk .tk:hover, .ck .tk:hover{ transform:scale(1.3); }
+  .wr .w2 .pd:not(.on):hover, .wr .wn:not(.on):hover{ color:var(--bt); box-shadow:inset 0 0 0 1.5px var(--bt); transform:none; }
   .chips button:not(.on):hover, .s-due:not(.on):hover, .cal-h button:hover, .cal-g button:not(.on):hover{ color:var(--bt); box-shadow:inset 0 0 0 1px var(--bt); }
   .take:hover{ background:var(--bt); color:var(--paper); }
   .b-go button:hover{ color:var(--bt); box-shadow:inset 0 0 0 1px var(--bt); }
@@ -226,7 +310,7 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 /* ════════ the chart (a wide screen) ════════ */
 @media (min-width:1100px){
   html, body{ height:100%; overflow:hidden; }
-  .plx{ --a:clamp(284px, 19vw, 332px); --b:clamp(170px, 11.6vw, 204px); --headh:clamp(222px, 26vh, 246px);
+  .plx{ --a:clamp(284px, 19vw, 332px); --b:68px; --headh:232px;
     display:grid; grid-template-columns:var(--a) var(--b) minmax(0, 1fr); grid-template-rows:var(--headh) minmax(0, 1fr); height:100vh; min-height:0; }
 
   /* the corner block */
@@ -253,14 +337,12 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
   .head.held, .strip.held{ cursor:grabbing; }
   .sky{ left:var(--b); width:calc(100% - var(--b)); }
   .heads{ --mr:34px; inset:0 0 0 var(--b); }
-  .b-month{ left:auto; right:164px; top:25px; gap:12px; font-size:18px; letter-spacing:.1em; }
+  .b-month{ left:auto; right:268px; top:25px; gap:12px; font-size:18px; letter-spacing:.1em; }
   .b-month i{ font-size:12.5px; }
   .b-go{ right:26px; top:17px; }
   .b-go button{ height:32px; min-width:32px; font-size:13px; }
   .b-go #goPrev, .b-go #goNext{ display:grid; }
   .b-go #goToday.here{ opacity:.4; pointer-events:none; }
-  .loose-h{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; position:absolute; left:52px; bottom:22px; margin:0; font:400 13px/1 var(--han); letter-spacing:.24em; color:var(--soft); pointer-events:none; }
-  .loose-h i{ font:italic 400 14px/1 var(--latin); letter-spacing:.05em; color:var(--faint); }
   .hd .mw .sw{ right:-22px; top:-4px; width:24px; height:20px; }
   .hd .dt{ left:-60px; bottom:17px; width:120px; flex-direction:row; justify-content:center; align-items:baseline; gap:10px; }
   .hd .dt b{ font-size:35px; }
@@ -270,45 +352,49 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
   .side{ grid-column:1; grid-row:2; overflow-y:auto; scrollbar-width:none; padding:48px 24px 44px 34px; border-top:0; box-shadow:inset -1px 0 0 var(--hair); }
   .side::-webkit-scrollbar{ display:none; }
 
-  /* the four lanes: where each begins … */
-  .who{ grid-column:2; grid-row:2; display:grid; grid-template-rows:repeat(4, minmax(0, 1fr)); box-shadow:inset -1px 0 0 var(--rule); }
-  .lane{ position:relative; min-height:0; padding:13px 10px 6px 18px; border-top:1px solid var(--rule); overflow-y:auto; scrollbar-width:none; cursor:default; transition:background-color .2s; }
-  .lane::-webkit-scrollbar{ display:none; }
-  .lane:first-child{ border-top:0; }
-  .lane.me{ background:var(--wash); box-shadow:inset 3px 0 0 var(--blue); }
-  .lane.drop, .cell.drop{ background:color-mix(in srgb, var(--blue) 13%, transparent); }
-  .lh{ display:flex; align-items:center; gap:11px; margin-bottom:5px; }
-  .lh .pd{ width:40px; height:40px; font-size:19px; }
-  .lh b{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:500 15.5px/1.2 var(--han); letter-spacing:.04em; }
-  .lh b[lang="en"]{ font:italic 500 19px/1.1 var(--latin); letter-spacing:.01em; }
-  .lh i{ margin-left:auto; font:italic 400 15px/1 var(--latin); color:var(--faint); white-space:nowrap; }
-  /* … and run on under the days */
+  /* the hours, down the side of the board: the row for what has no hour, then a numeral an hour, and the three parts of the day */
+  .rail{ grid-column:2; grid-row:2; display:flex; flex-direction:column; min-height:0; box-shadow:inset -1px 0 0 var(--rule); -webkit-user-select:none; user-select:none; }
+  .r0{ flex:none; display:flex; align-items:center; justify-content:flex-end; height:var(--adh); padding:0 9px 0 0; border-bottom:1px solid var(--rule); font:400 12px/1 var(--han); letter-spacing:.2em; color:var(--soft); }
+  .r0 b{ font-weight:400; }
+  .rail .hs{ flex:1; width:auto; min-height:0; }
+  .rail .hs b{ right:12px; top:5px; font-size:20px; }
+  .tight .rail .hs b{ top:2px; font-size:16.5px; }   /* a low screen: the hours stand closer */
+  .rail .hs span::after{ content:""; position:absolute; right:0; bottom:0; width:7px; height:1px; background:var(--rule); }
+  .rail .hs span.k::before{ content:""; position:absolute; left:0; right:0; top:-1px; height:1px; background:var(--rule); }
+  .rail .hs em{ display:flex; align-items:center; justify-content:center; position:absolute; left:10px; top:calc(var(--s) * var(--u)); height:calc(var(--d) * var(--u)); writing-mode:vertical-rl;
+    font:400 11.5px/1 var(--han); font-style:normal; letter-spacing:.7em; color:var(--faint); }
+
+  /* the board: the whole day fits it (plan.js sets --adh, the row above the hours; the hours share what is left) */
   .strip{ grid-column:3; grid-row:2; height:auto !important; min-height:0; touch-action:none; cursor:grab; }
-  .col{ bottom:0; width:var(--cw, 165px); padding:0; display:grid; grid-template-rows:repeat(4, minmax(0, 1fr)); box-shadow:inset 1px 0 0 var(--hair); cursor:default; }
-  .col h3, .ch{ display:none; }
-  .cell{ min-height:0; margin:0; padding:8px 8px 4px 11px; border-top:1px solid var(--rule); overflow-y:auto; scrollbar-width:none; transition:background-color .15s; }
-  .cell::-webkit-scrollbar{ display:none; }
-  .cell:nth-child(2){ border-top:0; }   /* (the first child is the phone's heading) */
-  .col.past .en:not(.late) .ex{ color:var(--soft); }
-  /* today: the plumb line hangs down the near edge of its column, the bob at its foot (it lies over the board, so that the lanes' own edge does not cut it) */
-  .plumb{ display:block; grid-column:3; grid-row:2; justify-self:start; position:relative; z-index:3; width:0; pointer-events:none; will-change:transform; }
-  .plumb::before{ content:""; position:absolute; left:-1px; top:0; bottom:40px; width:2px; background:var(--blue); }
-  .plumb::after{ content:""; position:absolute; left:-5.5px; bottom:16px; width:11px; height:26px; background:var(--blue); clip-path:polygon(50% 0, 100% 34%, 50% 100%, 0 34%); }
-  .cell .en, .lane .en{ grid-template-columns:19px minmax(0, 1fr); gap:0 7px; padding:4px 0; }
-  .cell .tk, .lane .tk{ width:19px; height:19px; margin-top:2px; }
-  .cell .tk img, .lane .tk img{ width:19px; height:19px; }
-  .cell .ex, .lane .ex{ font-size:14px; line-height:1.48; }
-  .cell .tm, .lane .tm{ font-size:15.5px; margin-right:6px; }
-  .cell .nt, .lane .nt{ display:none; }
-  .wr{ margin:4px 0 2px; padding-right:9px; } .cell .wr button, .lane .wr button{ display:none; }   /* Enter writes it down */
-  .wr input{ padding:6px 0 7px; font-size:14px; }
+  .col{ bottom:0; width:var(--cw, 165px); padding:0; display:flex; flex-direction:column; box-shadow:inset 1px 0 0 var(--hair); cursor:default; }
+  .col h3, .col .hs{ display:none; }
+  .ad{ flex:none; height:var(--adh); min-height:0; padding:4px 19px 0 3px; border-top:0; border-bottom:1px solid var(--rule); overflow-y:auto; scrollbar-width:none; }
+  .ad::-webkit-scrollbar{ display:none; }
+  .ad .ens:empty::before{ display:none; }
+  .bd{ flex:1; min-height:0; border-top:0; }
+  .grid{ height:auto; }
+  .col.past .en.done{ opacity:.7; }
+  /* today: the plumb line hangs down the near edge of its column as far as the hour it is now, the bob at its foot (it lies over the board, so that the board's own edge does not cut it) */
+  .plumb{ --ny:calc(var(--adh) + (100% - var(--adh)) * var(--now) / 16); display:block; grid-column:3; grid-row:2; justify-self:start; position:relative; z-index:3; width:0; pointer-events:none; will-change:transform; }
+  .plumb::before{ content:""; position:absolute; left:-1px; top:0; width:2px; height:var(--ny); background:var(--blue); }
+  .plumb::after{ content:""; position:absolute; left:-5.5px; top:calc(var(--ny) - 2px); width:11px; height:24px; background:var(--blue); clip-path:polygon(50% 0, 100% 34%, 50% 100%, 0 34%); }
+  .wr{ left:2px; right:auto; width:292px; }
+  .wr.rt{ left:auto; right:2px; }
   .slip{ padding:28px 32px 18px; }
 }
 @media (min-width:1100px) and (hover:hover){
-  /* over a lane on some day: a small cross where the next thing would be written (touch the blank to write) */
-  .cell::after, .lane::after{ content:""; position:absolute; right:9px; bottom:8px; width:11px; height:11px; opacity:0; transition:opacity .15s; pointer-events:none;
+  /* over the row above the hours: a small cross where the next thing would be written (touch the blank to write) */
+  .ad::after{ content:""; position:absolute; right:5px; top:10px; width:10px; height:10px; opacity:0; transition:opacity .15s; pointer-events:none;
     background:linear-gradient(var(--bt), var(--bt)) center / 100% 1.5px no-repeat, linear-gradient(var(--bt), var(--bt)) center / 1.5px 100% no-repeat; }
-  .cell:hover::after, .lane:hover::after{ opacity:.7; }
-  .cell:has(.wr)::after, .lane:has(.wr)::after{ display:none; }
-  .cell .en:hover, .lane .en:hover{ background:color-mix(in srgb, var(--blue) 6%, transparent); box-shadow:-6px 0 0 color-mix(in srgb, var(--blue) 6%, transparent), 6px 0 0 color-mix(in srgb, var(--blue) 6%, transparent); }
+  .ad:hover::after{ opacity:.7; }
+  /* a block under the hand: all of it is shown, though it be longer than its hours (or wider than its share of the day: that day is laid above the next); its foot can be pulled */
+  .col:hover{ z-index:2; }
+  .en.bk:hover{ z-index:6; height:auto; min-height:calc(var(--d) * var(--u) - 3px); box-shadow:0 8px 20px rgba(16,16,22,.22); }
+  .en.bk.sm:hover .ex{ white-space:normal; }
+  .en.bk.nw:hover{ width:max(calc(var(--w) * (100% - 13px) - 2px), 150px); padding-bottom:20px; }
+  .en.bk.nw:hover .tm{ display:block; }
+  .en.bk.nw.sm:hover{ padding-right:4px; } .en.bk.nw:hover .pd.s{ top:auto; bottom:3px; margin:0; }
+  .en.bk.sizing{ z-index:7; height:calc(var(--d) * var(--u) - 3px) !important; min-height:0 !important; }
+  .bk .rz{ display:block; position:absolute; left:0; right:0; bottom:0; height:7px; cursor:ns-resize; }
+  .bk:hover .rz::after{ content:""; position:absolute; left:50%; bottom:2px; width:18px; height:2px; margin-left:-9px; background:currentColor; opacity:.55; }
 }

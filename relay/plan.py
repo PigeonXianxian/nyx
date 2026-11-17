@@ -4,8 +4,8 @@
   python3 ~/nyx/relay/plan.py                         today's date on their clock, then what is overdue, today's,
                                                       the next two weeks, what has no day yet, and what waits to be taken
   python3 ~/nyx/relay/plan.py ls [--days N] [--done]  the same, further ahead / with what is done
-  python3 ~/nyx/relay/plan.py add "what" [-d DAY] [-t HH:MM] [--due] [-n "a note"] [-w WHO]
-  python3 ~/nyx/relay/plan.py set P012 [-d DAY|none] [-t HH:MM|none] [--title "…"] [-n "…"] [--due 1|0] [-w WHO]
+  python3 ~/nyx/relay/plan.py add "what" [-d DAY] [-t HH:MM[-HH:MM]] [--due] [-n "a note"] [-w WHO]
+  python3 ~/nyx/relay/plan.py set P012 [-d DAY|none] [-t HH:MM[-HH:MM]|none] [-e HH:MM|none] [--title "…"] [-n "…"] [--due 1|0] [-w WHO]
   python3 ~/nyx/relay/plan.py done P012 [P013 …]      (undo P012 takes it back)
   python3 ~/nyx/relay/plan.py rm P012                 only what was written down by mistake, or what they call off
   python3 ~/nyx/relay/plan.py who                     the four of the team (name m2 "小王" changes what one is called)
@@ -16,6 +16,8 @@ member's name or m1…m4 gives it to them; "none" leaves it waiting for someone 
 DAY is worked out on their clock, not this machine's:  today · tomorrow · +3 · fri (the coming Friday, today counts)
 · next-fri (Friday of next week) · 2026-11-20 · 11-20 · 11/20 — 今天 明天 后天 周五 下周五 11月20日 work as well.
 Leave -d out when no day was named. --due: the day is the last day for it ("by Friday"), not the day it happens.
+The page is a timetable (hours down the side, a block from when a thing begins to when it is over), so give the hours
+when they were said: -t 15:00 for the hour it begins, -t 15:00-17:00 (or -e 17:00) when it is known how long it runs.
 
 Talks to the relay on 127.0.0.1 with the key from relay.env next to this file. The page is plan.html.
 This file is part of the Nyx relay (GNU AGPL v3, see LICENSE and NOTICE in this folder).
@@ -123,14 +125,30 @@ def a_who(s, members):
     sys.exit(f"nobody on the team is called {s!r} — the four are: " + ", ".join(f"{m['id']} {m['name']}" for m in members) + "; or none")
 
 
-def a_time(s):
+def a_time(s, last=False):
+    """An hour as typed → 'HH:MM' ('' for none). last: it is when a thing is over, and may be 24:00."""
     s = (s or "").strip()
     if s.lower() in ("", "none", "no", "-", "无"):
         return ""
     m = re.fullmatch(r"(\d{1,2})[:：.](\d{2})", s) or re.fullmatch(r"(\d{1,2})()", s)
-    if m and int(m.group(1)) < 24 and int(m.group(2) or 0) < 60:
+    if m and int(m.group(2) or 0) < 60 and (int(m.group(1)) < 24 or last and (int(m.group(1)), int(m.group(2) or 0)) == (24, 0)):
         return f"{int(m.group(1)):02d}:{int(m.group(2) or 0):02d}"
-    sys.exit(f"can't read the time {s!r} — write it as 15:30")
+    sys.exit(f"can't read the time {s!r} — write it as 15:30, or 15:00-17:00 for from … to")
+
+
+def hours(t, e=None):
+    """-t and -e as typed → what to send: {} | {time} | {time, end} | {end}. "15:00-17:00" in -t says both."""
+    out = {}
+    if t is not None:
+        m = re.fullmatch(r"\s*(\d{1,2}(?:[:：.]\d{2})?)\s*(?:-|–|—|~|～|到|至)\s*(\d{1,2}(?:[:：.]\d{2})?)\s*", t)
+        out["time"] = a_time(m.group(1) if m else t)
+        if m:
+            out["end"] = a_time(m.group(2), True)
+    if e is not None:
+        out["end"] = a_time(e, True)
+    if out.get("end") and "time" in out and out["end"] <= out["time"]:
+        sys.exit(f"it would be over ({out['end']}) before it begins ({out['time']})")
+    return out
 
 
 def label(d, today):
@@ -146,7 +164,7 @@ def line(it, today=None, show_day=False):
     day = ""
     if show_day and it.get("date"):
         d = date.fromisoformat(it["date"]); day = f"{DAYS[d.weekday()].capitalize()} {d.month:>2}/{d.day:<2} "
-    out = f"  {it['id']}  {day}{it.get('time') or '  ·  '}  {it['title']}"
+    out = f"  {it['id']}  {day}{(it['time'] + ('–' + it['end'] if it.get('end') else '')) if it.get('time') else '  ·  '}  {it['title']}"
     if it.get("due"):
         out += "  (last day)"
     out += "  [" + (NAMES.get(it.get("owner")) or "waiting to be taken") + "]"
@@ -208,9 +226,9 @@ def main():
     ap = argparse.ArgumentParser(description="Nyx plan (日程)")
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("ls"); p.add_argument("--days", type=int, default=14); p.add_argument("--done", action="store_true")
-    p = sub.add_parser("add"); p.add_argument("title"); p.add_argument("-d", "--day", default=""); p.add_argument("-t", "--time", default="")
+    p = sub.add_parser("add"); p.add_argument("title"); p.add_argument("-d", "--day", default=""); p.add_argument("-t", "--time", default=""); p.add_argument("-e", "--end")
     p.add_argument("-n", "--note", default=""); p.add_argument("--due", action="store_true"); p.add_argument("-w", "--who", default="me"); p.add_argument("--by", default=WHO)
-    p = sub.add_parser("set"); p.add_argument("id"); p.add_argument("-d", "--day"); p.add_argument("-t", "--time"); p.add_argument("--title")
+    p = sub.add_parser("set"); p.add_argument("id"); p.add_argument("-d", "--day"); p.add_argument("-t", "--time"); p.add_argument("-e", "--end"); p.add_argument("--title")
     p.add_argument("-n", "--note"); p.add_argument("--due", choices=("0", "1")); p.add_argument("-w", "--who")
     sub.add_parser("who"); p = sub.add_parser("name"); p.add_argument("id"); p.add_argument("name")
     p = sub.add_parser("done"); p.add_argument("id", nargs="+")
@@ -232,18 +250,18 @@ def main():
         for m in call("/app/plan/members", {"names": {mid: a.name.strip()}})["members"]:
             print(f"  {m['id']}  {m['name']}")
     elif a.cmd == "add":
-        it = call("/app/plan", {"title": a.title, "note": a.note, "date": a_day(a.day, today), "time": a_time(a.time), "due": a.due, "owner": a_who(a.who, members), "by": a.by})
+        it = call("/app/plan", {"title": a.title, "note": a.note, "date": a_day(a.day, today), **hours(a.time, a.end), "due": a.due, "owner": a_who(a.who, members), "by": a.by})
         print("written down" + (": " + label(date.fromisoformat(it["date"]), today) if it["date"] else " (no day yet)")); print(line(it))
     elif a.cmd == "set":
         b = {}
         if a.day is not None: b["date"] = a_day(a.day, today)
-        if a.time is not None: b["time"] = a_time(a.time)
+        b.update(hours(a.time, a.end))
         if a.title is not None: b["title"] = a.title
         if a.note is not None: b["note"] = a.note
         if a.due is not None: b["due"] = a.due == "1"
         if a.who is not None: b["owner"] = a_who(a.who, members)
         if not b:
-            sys.exit("nothing to change: give -d, -t, --title, -n, --due or -w")
+            sys.exit("nothing to change: give -d, -t, -e, --title, -n, --due or -w")
         it = call(f"/app/plan/{a.id.upper()}", b)
         print("changed" + (": " + label(date.fromisoformat(it["date"]), today) if it["date"] else " (no day yet)")); print(line(it))
     elif a.cmd in ("done", "undo"):
