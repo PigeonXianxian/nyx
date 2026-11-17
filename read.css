@@ -200,6 +200,8 @@ html.is-reading .spine{ display:none; }
 .lead b{ display:block; margin-bottom:9px; font:500 12px/1 var(--han); letter-spacing:.4em; color:var(--blue); }
 .lead p{ margin:0; font:400 14.5px/1.9 var(--han); letter-spacing:.025em; color:var(--ink); }
 .lead .how{ margin-top:9px; font-size:13px; color:var(--soft); }
+.lead .lnk{ margin-left:.5em; font:inherit; letter-spacing:.08em; color:var(--blue); text-decoration:underline 1px; text-underline-offset:4px; }
+:root[data-side="moon"] .lead .lnk{ color:#8C95FF; }
 /* a programme's chapters: beads on a line, each with its time */
 .beads{ list-style:none; margin:26px 0 0; padding:2px 0; position:relative; }
 .beads::before{ content:""; position:absolute; left:3px; top:10px; bottom:10px; width:1px; background:var(--river); }
@@ -221,6 +223,11 @@ html.is-reading .spine{ display:none; }
 .body .hd::before{ content:""; position:absolute; left:0; top:0; width:28px; height:3px; background:var(--blue); }
 .body blockquote{ padding-left:14px; border-left:1px solid var(--river); color:var(--soft); }
 .body .li{ white-space:pre-wrap; padding-left:1em; }
+/* a conversation: who is speaking stands before the turn, in the blue; what the host asks is set a little heavier, so the questions can be found */
+.body .spk{ margin-right:.2em; font-weight:500; letter-spacing:.08em; color:var(--blue); white-space:nowrap; }
+:root[data-side="moon"] .body .spk{ color:#8C95FF; }
+.body p.q{ font-weight:500; }
+.body .blk:has(> .cont){ margin-top:-.35em; }   /* the same speaker going on: nearer to what came before */
 .body pre{ padding:12px 14px; overflow-x:auto; white-space:pre; font:400 .8em/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing:0; background:color-mix(in srgb, var(--ink) 5%, transparent); box-shadow:inset 1px 0 0 var(--river); }
 .body pre.tb{ white-space:pre-wrap; }
 .body pre span{ display:block; margin-bottom:6px; font:italic 400 13px/1 var(--latin); letter-spacing:.08em; color:var(--faint); }

@@ -244,6 +244,30 @@ def register(app, check_auth):
             raise HTTPException(status_code=404, detail="no cover")
         return FileResponse(out, media_type="image/webp", headers={"Cache-Control": "private, max-age=604800"})
 
+    # One article, as the page needs it. A programme comes from the library with everything it was made from: every
+    # subtitle cue with its times, and the edited transcript three times over (the parts as the editor returned them,
+    # the blocks made of them, and the body itself) — megabytes for a long conversation, none of it shown. The page
+    # reads the body, and of the edition only who speaks and the subtitles as they came (to switch back to).
+    ONE = re.compile(r"^articles/[A-Za-z0-9_-]{1,128}$")
+
+    def slim(raw):
+        try:
+            a = json.loads(raw)
+            c = a.get("content") if isinstance(a, dict) else None
+            if not isinstance(c, dict):
+                return raw
+            for basis in ("subtitle", "transcript"):
+                if isinstance(c.get(basis), dict) and isinstance(c[basis].get("segments"), list):
+                    c[basis] = {**{k: v for k, v in c[basis].items() if k != "segments"}, "segmentCount": len(c[basis]["segments"])}
+            c.pop("editingDraft", None)
+            if isinstance(c.get("edited"), dict):
+                e = c["edited"]
+                c["edited"] = {**{k: v for k, v in e.items() if k not in ("parts", "blocks", "corrections", "retry", "approvedCorrections")},
+                               "correctionCount": len(e.get("corrections") or [])}
+            return json.dumps(a, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        except (ValueError, TypeError, AttributeError):
+            return raw
+
     @app.api_route("/app/read/{path:path}", methods=["GET", "POST", "PATCH"])
     async def read_any(path: str, request: Request):
         check_auth(request)
@@ -266,7 +290,10 @@ def register(app, check_auth):
             raise HTTPException(status_code=502, detail="the reading library did not answer")
         if request.method == "GET" and r.status_code == 200 and path in ("articles", "recommendations"):
             warm(r.content)   # the cards just handed out: have their covers made before they are asked for
-        return Response(content=r.content, status_code=r.status_code,
+        content = r.content
+        if request.method == "GET" and r.status_code == 200 and ONE.match(path):
+            content = slim(content)
+        return Response(content=content, status_code=r.status_code,
                         media_type=r.headers.get("content-type", "application/json; charset=utf-8"),
                         headers={"Cache-Control": "no-store"})
 

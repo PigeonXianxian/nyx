@@ -39,19 +39,18 @@
     <div class="iam" id="iam"></div>
   </header>
 
-  <!-- the days, across the head of the sheet: each day's moon riding one dotted track (plan.js lays it; it is pulled along by hand); under it the heavy rule the four lanes hang from -->
+  <!-- the days, across the head of the sheet: each day's moon riding one dotted track (plan.js lays it; it is pulled along by hand); under it the heavy rule the timetable hangs from -->
   <div class="head" id="band">
     <canvas class="sky" id="sky" aria-hidden="true"></canvas>
     <p class="b-month" id="bMonth"></p>
-    <div class="b-go"><button type="button" id="goPrev" aria-label="往前一周" title="往前一周"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button><button type="button" id="goToday">今天</button><button type="button" id="goNext" aria-label="往后一周" title="往后一周"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button></div>
-    <p class="loose-h">没定日子<i>Someday</i></p>
+    <div class="b-go"><button type="button" id="solo" aria-pressed="false" title="只看现在这一位的，或者四个人的都看">只看我的</button><button type="button" id="goPrev" aria-label="往前一周" title="往前一周"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button><button type="button" id="goToday">今天</button><button type="button" id="goNext" aria-label="往后一周" title="往后一周"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button></div>
     <div class="heads" id="heads"></div>
   </div>
 
-  <!-- the board: a column a day, a lane a person (a wide screen shows a week; a phone one day at a time, the four under one another) -->
+  <!-- the board, a timetable: a column a day, the hours down it, each thing a block from when it begins to when it is over (a wide screen shows a week; a phone one day at a time) -->
   <main class="strip" id="strip"><div class="cols" id="cols"></div></main>
 
-  <!-- beside the board: a line to write on, and what is in nobody's lane — what waits to be taken on, what is overdue, what lies further on, what is done -->
+  <!-- beside the board: a line to write on, and what has no place on it — what waits to be taken on, what is overdue, what has no day yet, what lies further on, what is done -->
   <aside class="side" id="side">
     <form class="jot" id="jot" autocomplete="off"><input id="jotIn" type="text" maxlength="200" placeholder="记一件待办…" aria-label="记一件待办" enterkeyhint="done"><button type="submit">记下</button></form>
     <p class="hint" id="jotHint"></p>
@@ -59,10 +58,10 @@
     <p class="foot" id="foot"></p>
   </aside>
 
-  <!-- the four: each one's lane begins here, with what they have taken on that has no day yet -->
-  <div class="who" id="who"></div>
+  <!-- the hours, down the side of the board (a wide screen; a phone has them in each day's own column) -->
+  <div class="rail" id="rail" aria-hidden="true"></div>
 
-  <i class="plumb" id="plumb" aria-hidden="true"></i>   <!-- today: the plumb line hangs down its column (plan.js moves it with the days) -->
+  <i class="plumb" id="plumb" aria-hidden="true"></i>   <!-- today: the plumb line hangs down its column as far as the hour it is now (plan.js moves it with the days) -->
 </div>
 
 <div class="toast" id="toast" role="status"></div>

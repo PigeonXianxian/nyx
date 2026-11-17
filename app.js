@@ -418,7 +418,10 @@
     el.querySelectorAll(".att [data-i]").forEach(function (n) {
       var a = atts[+n.dataset.i]; if (!a || !a.url) return;
       if (n.tagName === "IMG") { blobOf(a.url).then(function (u) { n.src = u; n.onload = function () { if (nearBottom(300)) toBottom(); }; }).catch(function () { n.alt = "image unavailable"; });
-        n.onclick = function () { var z = document.createElement("div"); z.id = "zoom"; z.innerHTML = '<img src="' + n.src + '"><button type="button" class="save">save</button>'; z.onclick = function (ev) { if (ev.target.closest(".save")) { download(a.url, a.name || "picture"); return; } z.remove(); }; document.body.appendChild(z); }; }
+        n.onclick = function () { var z = document.createElement("div"); z.id = "zoom"; z.innerHTML = '<img src="' + n.src + '"><button type="button" class="save">save</button>'; z.onclick = function (ev) { if (ev.target.closest(".save")) { download(a.url, a.name || "picture"); return; } z.remove(); }; document.body.appendChild(z);
+          // a long screenshot, fitted to the screen's height, would be a thin strip: it is shown as wide as it can be and scrolls instead
+          var zi = z.querySelector("img"), tall = function () { var w = zi.naturalWidth, h = zi.naturalHeight; if (w && h && innerHeight * .92 / h < Math.min(1, innerWidth * .96 / w) * .55) z.classList.add("tall"); };
+          if (zi.complete) tall(); else zi.onload = tall; }; }
       else {
         n.onclick = function (ev) { if (proof && n.classList.contains("pv") && !ev.target.closest('[data-a="get"]')) proof.open(a); else download(a.url, a.name); };
         n.onkeydown = function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); n.onclick(ev); } };
@@ -635,22 +638,8 @@
   sendBtn.onclick = send;
   /* attachments: pick → upload right away → they ride along with the next send */
   var tray = [], trayEl = $("tray");
-  // big photos are shrunk before upload (longest side 2048, JPEG 0.9); GIFs and small files go as they are
-  function prep(f) {
-    return new Promise(function (ok) {
-      if (!/^image\//.test(f.type || "") || /gif$/i.test(f.type) || f.size < 350 * 1024) { ok(f); return; }
-      var u = URL.createObjectURL(f), im = new Image();
-      im.onload = function () {
-        try {
-          var w = im.naturalWidth, h = im.naturalHeight, k = Math.min(1, 2048 / Math.max(w, h)), c = document.createElement("canvas");
-          c.width = Math.round(w * k); c.height = Math.round(h * k); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
-          c.toBlob(function (b) { ok(b && b.size < f.size ? new File([b], (f.name || "image").replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : f); }, "image/jpeg", .9);
-        } catch (e) { URL.revokeObjectURL(u); ok(f); }
-      };
-      im.onerror = function () { URL.revokeObjectURL(u); ok(f); };
-      im.src = u;
-    });
-  }
+  // pictures and files go up as they are: never shrunk or re-encoded (a long screenshot shrunk to 2048 tall was 405 wide and
+  // unreadable). Space is kept by letting go of old uploads when the disk runs short (relay/nyx_keep.py).
   // one upload; on a flaky line it tries twice more before giving up
   function upload(it, tries) {
     tries = tries || 0; it.done = null;
@@ -674,7 +663,7 @@
       if (!(f.type || "").indexOf("image/")) { it.local = URL.createObjectURL(f); it.el.style.backgroundImage = "url(" + it.local + ")"; }
       it.el.querySelector("button").onclick = function () { tray = tray.filter(function (x) { return x !== it; }); it.el.remove(); trayEl.hidden = !tray.length; };
       trayEl.appendChild(it.el); trayEl.hidden = false; tray.push(it);
-      it.file = f; it.job = prep(f).then(function (ff) { it.file = ff; return upload(it); });
+      it.file = f; it.job = upload(it);
     });
   }
   $("file").onchange = function () { addFiles(this.files); this.value = ""; };

@@ -170,7 +170,7 @@ $HOST {
 	encode gzip
 	handle_path /relay/* {
 		request_body {
-			max_size 12MB
+			max_size 210MB
 		}
 		reverse_proxy 127.0.0.1:3011 {
 			flush_interval -1
@@ -189,7 +189,7 @@ else
   sudo env PREFIX="$PREFIX" PORT="$PORT" python3 - <<'PY'
 import os
 p = "/etc/caddy/Caddyfile"; s = open(p).read(); pre, port = os.environ["PREFIX"], os.environ["PORT"]
-block = "\thandle_path %s/* {\n\t\trequest_body {\n\t\t\tmax_size 12MB\n\t\t}\n\t\treverse_proxy 127.0.0.1:%s {\n\t\t\tflush_interval -1\n\t\t}\n\t}\n" % (pre, port)
+block = "\thandle_path %s/* {\n\t\trequest_body {\n\t\t\tmax_size 210MB\n\t\t}\n\t\treverse_proxy 127.0.0.1:%s {\n\t\t\tflush_interval -1\n\t\t}\n\t}\n" % (pre, port)
 import re
 if "handle_path %s/*" % pre not in s:
     m = re.search(r"^[ \t]*handle_path /relay/\*", s, re.M)   # right next to the first companion's path
@@ -207,7 +207,7 @@ PERSONA_NOTE="You are $AI_NAME, talking with $ME_NAME through a private chat app
 
 Things worth remembering go in $CDIR/memory/ as small .md files; $ME_NAME can read them (and this file) in the app's Heart.
 Keep $CDIR/memory/now.md up to date: a 'Time zone: Area/City' line, a 'Place:' line, and a few '- ' lines on where $ME_NAME is and what is going on around them. The relay puts it on top of $ME_NAME's messages, so you always know their clock; change it the moment something changes, delete lines once they're past.
-What $ME_NAME has to do goes in the plan (the app's Plan 日程), not in memory files. When they mention something they have to do, an appointment or a deadline (in passing counts), write it down at once: RELAY_URL=http://127.0.0.1:$PORT python3 $DIR/relay/plan.py add \"what\" -d DAY [-t HH:MM] [--due] (DAY: today, tomorrow, +3, fri, next-fri, 2026-11-20; leave -d out if no day was named; --due when the day is a last day; it is a team's plan, and what you write is $ME_NAME's unless you add -w NAME for one of the others, or -w none for something that waits to be taken on), then say in a few words that it is written down. plan.py on its own shows today's date on their clock and what is coming up: look there before you answer anything about their days. When they say a thing is done, moved or called off: plan.py done / set / rm.
+What $ME_NAME has to do goes in the plan (the app's Plan 日程), not in memory files. When they mention something they have to do, an appointment or a deadline (in passing counts), write it down at once: RELAY_URL=http://127.0.0.1:$PORT python3 $DIR/relay/plan.py add \"what\" -d DAY [-t HH:MM[-HH:MM]] [--due] (DAY: today, tomorrow, +3, fri, next-fri, 2026-11-20; leave -d out if no day was named; --due when the day is a last day; the page is a timetable, so give the hours when they were said, -t 15:00 or -t 15:00-17:00, and don't make one up; it is a team's plan, and what you write is $ME_NAME's unless you add -w NAME for one of the others, or -w none for something that waits to be taken on), then say in a few words that it is written down. plan.py on its own shows today's date on their clock and what is coming up: look there before you answer anything about their days. When they say a thing is done, moved or called off: plan.py done / set / rm.
 Before you edit the app's pages or relay, run: RELAY_URL=http://127.0.0.1:$PORT python3 $DIR/relay/board.py next (or ls). Pick one ticket, claim it with the files you'll touch, back up (git commit, or ~/nyx-bak for files outside the repo), edit, check, ship, note progress, mark it done, then tell $ME_NAME in a line or two. The full routine is in $DIR/docs/AI-WORKFLOW.md. $(bash "$DIR/consent.sh" --line "$CONSENT" "$ME_NAME")"
 
 if [ "$AI" = claude ]; then
