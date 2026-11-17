@@ -1,14 +1,17 @@
 """Plan (日程): what is to be done, day by day — by your human, and by the three they work with.
 
   GET  /app/plan[?rev=N]   {rev, items, members, today, tz}   — {rev, same: true, today} when nothing changed since rev N
-  POST /app/plan           {title, note?, date?, time?, due?, owner?, by?}               → the new entry
-  POST /app/plan/<id>      {title?, note?, date?, time?, due?, owner?, done?} | {delete: true}   → the entry | {ok}
+  POST /app/plan           {title, note?, date?, time?, end?, due?, owner?, by?}         → the new entry
+  POST /app/plan/<id>      {title?, note?, date?, time?, end?, due?, owner?, done?} | {delete: true}   → the entry | {ok}
   POST /app/plan/members   {names: {m2: "…", …}}   what each of the four is called          → {members, rev}
 
 It is a team's plan: four members (m1 is your human; names are theirs to change), and every entry is either one
 member's (`owner`: they took it on) or nobody's yet ("": it waits to be taken on).
-An entry: {id "P012", title, note, date "YYYY-MM-DD" ("" = no day yet), time "HH:MM" ("" = no hour), due (the date
-is the last day for it, not the day itself), owner ("m1"…"m4" or ""), done, done_at, by (who wrote it down), ts, updated}.
+An entry: {id "P012", title, note, date "YYYY-MM-DD" ("" = no day yet), time "HH:MM" ("" = no hour), end "HH:MM" (""
+= no saying how long; only with a time, later than it, "24:00" at most), due (the date is the last day for it, not the
+day itself), owner ("m1"…"m4" or ""), done, done_at, by (who wrote it down), ts, updated}.
+The page lays the days out as a timetable — hours down the side, a block from `time` to `end` — so say the hours when
+they are known. Moving the time of an entry that has an end keeps it as long as it was, unless an end is given too.
 Kept in plan.json next to the relay's database (RELAY_PLAN_FILE to put it elsewhere).
 
 The page is plan.html; who is looking is chosen there, on each device. The companion writes here from the terminal
@@ -80,6 +83,25 @@ def a_time(s) -> str:
     raise HTTPException(status_code=400, detail="time must be HH:MM")
 
 
+def mins(s) -> int:
+    h, m = (int(v) for v in s.split(":"))
+    return h * 60 + m
+
+
+def an_end(s, start) -> str:
+    """When it is over: "" for no saying, HH:MM later than `start` ("24:00" is the day's end), or a 400."""
+    s = clip(s, 5)
+    if not s:
+        return ""
+    if not start:
+        raise HTTPException(status_code=400, detail="an end needs a time to begin at")
+    if TIME_RE.match(s):
+        h, m = (int(v) for v in s.split(":"))
+        if (h < 24 and m < 60 or (h, m) == (24, 0)) and h * 60 + m > mins(start):
+            return f"{h:02d}:{m:02d}"
+    raise HTTPException(status_code=400, detail="end must be HH:MM, later than the time")
+
+
 def an_owner(v) -> str:
     v = clip(v, 4)
     if v and v not in IDS:
@@ -100,6 +122,7 @@ def load() -> dict:
     for it in d["items"]:
         if it.get("owner") not in IDS:
             it["owner"] = "" if "owner" in it else "m1"   # written down before there was a team: it was the human's
+        it.setdefault("end", "")
     return d
 
 
@@ -138,7 +161,7 @@ def card_line(z=None, days=7, cap=8) -> str:
             continue
         on, n = on[:cap - n], n + len(on[:cap - n])
         name = "today" if k == 0 else "tomorrow" if k == 1 else f"{DAYS[d.weekday()]} {d.month}/{d.day}"
-        parts.append(name + " — " + ", ".join(((it["time"] + " ") if it.get("time") else "") + clip(it["title"], 40)
+        parts.append(name + " — " + ", ".join(((it["time"] + ("–" + it["end"] if it.get("end") else "") + " ") if it.get("time") else "") + clip(it["title"], 40)
                                                + (" (last day)" if it.get("due") else "") for it in on))
     open_ = sum(1 for it in every if not it.get("owner"))
     if open_:
@@ -173,10 +196,11 @@ def register(app, g):
         if not title:
             raise HTTPException(status_code=400, detail="title required")
         when, hour, owner = a_date(b.get("date")), a_time(b.get("time")), an_owner(b.get("owner"))
+        until = an_end(b.get("end"), hour)
         async with lock:
             d = load()
             no = max([it.get("no", 0) for it in d["items"]] + [0]) + 1
-            it = {"id": f"P{no:03d}", "no": no, "title": title, "note": clip(b.get("note"), 2000), "date": when, "time": hour,
+            it = {"id": f"P{no:03d}", "no": no, "title": title, "note": clip(b.get("note"), 2000), "date": when, "time": hour, "end": until,
                   "due": bool(b.get("due")) and bool(when), "owner": owner, "done": False, "done_at": "",
                   "by": clip(b.get("by") or human, 20), "ts": now_iso(), "updated": now_iso()}
             d["items"].append(it)
@@ -218,8 +242,16 @@ def register(app, g):
                 it["note"] = clip(b["note"], 2000)
             if "date" in b:
                 it["date"] = a_date(b["date"])
-            if "time" in b:
-                it["time"] = a_time(b["time"])
+            if "time" in b or "end" in b:
+                was, hour = it.get("time") or "", a_time(b["time"]) if "time" in b else it.get("time") or ""
+                if "end" in b:
+                    until = an_end(b["end"], hour)
+                elif it.get("end") and was and hour:   # moved: as long as it was, the day's end at most
+                    until = mins(hour) + mins(it["end"]) - mins(was)
+                    until = "" if until <= mins(hour) else f"{min(until, 1440) // 60:02d}:{min(until, 1440) % 60:02d}"
+                else:
+                    until = ""
+                it["time"], it["end"] = hour, until
             if "due" in b:
                 it["due"] = bool(b["due"])
             if "owner" in b:
