@@ -118,6 +118,8 @@ button{ font:inherit; color:inherit; background:none; border:0; padding:0; curso
 .tray .it button{ position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%; background:var(--ink); color:var(--paper); font-size:12px; line-height:18px; z-index:1; }
 #zoom{ position:fixed; inset:0; z-index:9; background:rgba(10,8,7,.86); display:grid; place-items:center; }
 #zoom img{ max-width:96vw; max-height:92vh; }
+#zoom.tall{ display:block; overflow-y:auto; overscroll-behavior:contain; padding:3vh 0 12vh; }
+#zoom.tall img{ display:block; max-height:none; max-width:96vw; margin:0 auto; }
 
 /* ── home poster ── */
 :root{ --hi:rgba(255,255,255,.9); }

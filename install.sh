@@ -170,7 +170,7 @@ $HOST {
 	encode gzip
 	handle_path /relay/* {
 		request_body {
-			max_size 12MB
+			max_size 210MB
 		}
 		reverse_proxy 127.0.0.1:3011 {
 			flush_interval -1
@@ -189,7 +189,7 @@ else
   sudo env PREFIX="$PREFIX" PORT="$PORT" python3 - <<'PY'
 import os
 p = "/etc/caddy/Caddyfile"; s = open(p).read(); pre, port = os.environ["PREFIX"], os.environ["PORT"]
-block = "\thandle_path %s/* {\n\t\trequest_body {\n\t\t\tmax_size 12MB\n\t\t}\n\t\treverse_proxy 127.0.0.1:%s {\n\t\t\tflush_interval -1\n\t\t}\n\t}\n" % (pre, port)
+block = "\thandle_path %s/* {\n\t\trequest_body {\n\t\t\tmax_size 210MB\n\t\t}\n\t\treverse_proxy 127.0.0.1:%s {\n\t\t\tflush_interval -1\n\t\t}\n\t}\n" % (pre, port)
 import re
 if "handle_path %s/*" % pre not in s:
     m = re.search(r"^[ \t]*handle_path /relay/\*", s, re.M)   # right next to the first companion's path

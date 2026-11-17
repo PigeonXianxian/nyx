@@ -60,7 +60,7 @@ APP_PATH = os.environ.get("RELAY_APP_PATH", "/")  # where a push-notification ta
 ALLOW_ORIGINS = [o.strip() for o in os.environ.get(
     "RELAY_ALLOW_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080"
 ).split(",") if o.strip()]
-MAX_UPLOAD_BYTES = int(os.environ.get("RELAY_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
+MAX_UPLOAD_BYTES = int(os.environ.get("RELAY_MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))   # files are kept as they came (Nyx); old ones go when the disk runs short (nyx_keep.py)
 VOICE_MAX_BYTES = int(os.environ.get("RELAY_VOICE_MAX_BYTES", str(8 * 1024 * 1024)))
 VOICE_TRANSCRIBE_CMD = os.environ.get("RELAY_VOICE_TRANSCRIBE_CMD", "")
 
@@ -822,12 +822,28 @@ async def app_send(request: Request):
 
 @app.post("/app/upload")
 async def app_upload(request: Request, name: str = "file"):
+    """The file as it came, written to disk as it arrives (not held in memory: a big one would crowd a small server)."""
     check_auth(request)
-    data = await request.body()
-    if not data:
-        raise HTTPException(status_code=400, detail="empty file")
     mime = request.headers.get("content-type", "application/octet-stream")
-    return save_upload_bytes(data, name, mime, "att")
+    safe = clean_filename(name)
+    stored = f"att-{secrets.token_urlsafe(10)}{ext_for(safe, mime)}"
+    path, tmp, size = UPLOAD_DIR / stored, UPLOAD_DIR / f".{stored}.part", 0
+    try:
+        with tmp.open("wb") as fh:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="file too large")
+                fh.write(chunk)
+        if not size:
+            raise HTTPException(status_code=400, detail="empty file")
+        tmp.replace(path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    kind = "image" if (mime or "").startswith("image/") else ("audio" if (mime or "").startswith("audio/") else "file")
+    return {"url": f"{PUBLIC_PREFIX}/uploads/{stored}" if PUBLIC_PREFIX else f"/uploads/{stored}",
+            "name": safe, "size": size, "mime": mime or "application/octet-stream", "kind": kind}
 
 
 @app.get("/uploads/{name}")

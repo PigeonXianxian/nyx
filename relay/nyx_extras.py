@@ -215,6 +215,8 @@ def register(app, g):
     nyx_group.register(app, g)
     import nyx_keys   # keys for the companion's environment: /app/keys, /channel/keys
     nyx_keys.register(app, g)
+    import nyx_keep   # uploads are kept as they came; old ones go only when the disk runs short
+    nyx_keep.register(app, g)
     global KEYS_FILE
     KEYS_FILE = nyx_keys.keys_file(g)
     check_auth, broadcast, now_iso = g["check_auth"], g["broadcast"], g["now_iso"]
