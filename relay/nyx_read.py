@@ -95,7 +95,15 @@ def register(app, check_auth):
             return False
         return bool(infos) and all(ipaddress.ip_address(i[4][0]).is_global for i in infos)
 
-    async def fetch_image(url, page):
+    def first_ip(url):
+        """The first IPv4 address the host resolves to here (the Mac's connection is pinned to it), or ""."""
+        try:
+            u = urlsplit(url)
+            return next((i[4][0] for i in socket.getaddrinfo(u.hostname, u.port or 443, family=socket.AF_INET, type=socket.SOCK_STREAM)), "")
+        except OSError:
+            return ""
+
+    async def fetch_direct(url, page):
         agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
         headers = {"User-Agent": agent, "Accept": "image/webp,image/png,image/jpeg,image/*;q=0.8"}
         if isinstance(page, str) and page.startswith("https://"):
@@ -118,6 +126,43 @@ def register(app, check_auth):
                     return bytes(data)
         return None
 
+    # The Mac's line. This server is abroad, and from time to time cannot open a connection to hosts on the mainland
+    # at all (晚点 and 量子位 stopped answering on 2026-11-18 while a Mac on a mainland line reached them in under a
+    # second). A picture whose host does not answer here is fetched by that Mac instead (relay/mac/nyx-fetch-image,
+    # installed there as ~/.local/bin/nyx-fetch-image; it also makes the picture small before it travels back), and
+    # the host is then asked through the Mac first for half an hour. RELAY_READ_MAC names the ssh host; "" = never.
+    mac = os.environ.get("RELAY_READ_MAC", "PigeonXian_0")
+    silent, mac_gate = {}, asyncio.Semaphore(2)   # host → when it last did not answer from here
+
+    async def via_mac(url, page, px):
+        loop = asyncio.get_running_loop()
+        if not mac or "\n" in url or "\r" in url or not await loop.run_in_executor(None, public_https, url):
+            return None
+        page = page if isinstance(page, str) and page.startswith("https://") and "\n" not in page and "\r" not in page else ""
+        ip = await loop.run_in_executor(None, first_ip, url)
+        proc = None
+        async with mac_gate:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "-o", "ControlMaster=auto",
+                    "-o", "ControlPath=/run/nyx-mac-%C", "-o", "ControlPersist=180", mac, ".local/bin/nyx-fetch-image",
+                    stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+                out, _ = await asyncio.wait_for(proc.communicate(f"{url}\n{page}\n{ip}\n{int(px)}\n".encode()), timeout=90)
+            except (OSError, asyncio.TimeoutError):
+                if proc and proc.returncode is None:
+                    proc.kill()
+                return None
+        return out if proc.returncode == 0 and out and len(out) <= 12 * 1024 * 1024 else None
+
+    async def fetch_image(url, page, px=1600):
+        host = urlsplit(url).hostname or ""
+        if not (mac and time.time() - silent.get(host, 0) < 1800):
+            try:
+                return await fetch_direct(url, page)   # (None when the host answered but had no picture: the Mac would fare no better)
+            except httpx.TransportError:
+                silent[host] = time.time()
+        return await via_mac(url, page, px)
+
     async def make_cover(aid, out, none):
         base, token, client = library()
         raws = []
@@ -129,7 +174,7 @@ def register(app, check_auth):
                     and isinstance(b.get("url"), str) and b["url"].startswith("https://")][:4] if article.get("cover") else []
             async with gate:
                 for i, url in enumerate(urls):
-                    data = await fetch_image(url, article.get("url"))
+                    data = await fetch_image(url, article.get("url"), 900)
                     if data:
                         raw = out.with_suffix(f".raw{i}")
                         raw.write_bytes(data)
