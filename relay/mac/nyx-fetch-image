@@ -1,0 +1,34 @@
+#!/bin/bash
+# Nyx · fetch one picture over this Mac's line and hand it back, made small.
+# The relay's server abroad cannot always open a connection to hosts on the mainland (晚点, 量子位 …); this Mac can.
+# Installed at ~/.local/bin/nyx-fetch-image and run by the relay over ssh (relay/nyx_read.py, via_mac).
+#   stdin : four lines — the picture's https address · the page it stands on (Referer; may be empty) · the IP the
+#           relay resolved the host to (the connection is pinned to it; may be empty) · the most pixels wanted on the
+#           longer side (320–2400; 1600 if not given)
+#   stdout: the picture — a JPEG at most that many px on its longer side, or the bytes as fetched when it is already small
+#           or sips cannot read it. Nothing, and a non-zero exit, when it could not be had.
+# One request, no redirects followed, https only, at most 15 MB, never through this Mac's proxy.
+set -euo pipefail
+IFS= read -r url || exit 2
+IFS= read -r ref || ref=""
+IFS= read -r ip || ip=""
+IFS= read -r px || px=""
+[[ "$px" =~ ^[0-9]{3,4}$ ]] && [ "$px" -ge 320 ] && [ "$px" -le 2400 ] || px=1600
+case "$url" in https://*) ;; *) exit 2 ;; esac
+host=$(printf '%s' "$url" | sed -E 's#^https://([^/:?\#]+).*#\1#')
+[[ "$host" =~ ^[A-Za-z0-9.-]+$ ]] || exit 2
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+args=(--silent --fail --proto '=https' --max-redirs 0 --connect-timeout 8 --max-time 45 --max-filesize 15000000 --noproxy '*'
+      -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36'
+      -H 'Accept: image/webp,image/png,image/jpeg,image/*;q=0.8' -o "$tmp/in")
+case "$ref" in https://*) args+=(-e "$ref") ;; esac
+[[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] && args+=(--resolve "$host:443:$ip")
+curl "${args[@]}" "$url"
+[ -s "$tmp/in" ] || exit 3
+w=$(sips -g pixelWidth "$tmp/in" 2>/dev/null | awk '/pixelWidth/{print $2}'); h=$(sips -g pixelHeight "$tmp/in" 2>/dev/null | awk '/pixelHeight/{print $2}')
+size=$(stat -f %z "$tmp/in")
+if [[ "${w:-}" =~ ^[0-9]+$ && "${h:-}" =~ ^[0-9]+$ ]] && { [ "$w" -gt "$px" ] || [ "$h" -gt "$px" ] || [ "$size" -gt 700000 ]; }; then
+  big=$(( w > h ? w : h )); to=$(( big > px ? px : big ))
+  if sips -Z "$to" -s format jpeg -s formatOptions 84 "$tmp/in" --out "$tmp/out.jpg" >/dev/null 2>&1 && [ -s "$tmp/out.jpg" ]; then cat "$tmp/out.jpg"; exit 0; fi
+fi
+cat "$tmp/in"
