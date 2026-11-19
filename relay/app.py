@@ -1170,6 +1170,9 @@ nyx_plan.register(app, globals())
 # [Nyx] the "right now" card on top of what the human sends — see nyx_now.py
 import nyx_now  # noqa: E402
 nyx_now.register(app, globals())
+# [Nyx] which of your computers you mean: the chip by the input box, a mark on what you send — see nyx_device.py
+import nyx_device  # noqa: E402
+nyx_device.register(app, globals())
 
 # Optional extra plugins: RELAY_PLUGINS=mod1,mod2 -> each module's register(app, globals()), after nyx_extras.
 import importlib  # noqa: E402

@@ -36,6 +36,8 @@ from pathlib import Path
 
 from fastapi import HTTPException, Request
 
+from nyx_device import split_mark   # the 【设备 · …】 line the chat page's device chip puts on what you send
+
 SETTINGS = Path.home() / ".claude" / "settings.json"
 LEVELS = ("low", "medium", "high", "xhigh", "max")
 # the permission modes shift+tab goes through, in its order, and what the footer says for each
@@ -1028,7 +1030,8 @@ def register(app, g, x):
                         who = re.search(r'user="([^"]*)"', m.group(1))
                         who = who.group(1) if who else "human"
                         if who in ("human", ""):
-                            add("user", "human", NIGHT.sub("", m.group(2)).strip(), j + k, via="channel")
+                            body, dev = split_mark(m.group(2))
+                            add("user", "human", NIGHT.sub("", body).strip(), j + k, via="channel", **({"device": dev} if dev else {}))
                         else:
                             add("note", "ai", f"{who} · " + m.group(2).strip()[:400], j + k)
                 elif s.startswith("<task-notification>"):
@@ -1037,7 +1040,8 @@ def register(app, g, x):
                 elif s.startswith("[Request interrupted"):
                     add("note", "ai", "interrupted", j)
                 elif s.strip() and not re.match(r"^<[a-z][a-z-]*[ >]", s.strip()):
-                    add("user", "human", s.strip(), j)
+                    body, dev = split_mark(s.strip())   # the device chip's mark: off the words, onto the bubble's label
+                    add("user", "human", body.strip(), j, **({"device": dev} if dev else {}))
 
             if t == "system":
                 st = d.get("subtype")
@@ -1233,6 +1237,8 @@ def register(app, g, x):
                 text += ("\n" if text else "") + ("[image] " if a.get("kind") == "image" else f"[file: {a.get('name') or name}] ") + str(g["UPLOAD_DIR"] / name)
         if not text.strip():
             raise HTTPException(status_code=400, detail="empty")
+        if g.get("DEVICE"):   # which computer this is about: the chip by the input box (nyx_device.py)
+            text = g["DEVICE"]["with_mark"](text)
         if len(text) > 60000:
             raise HTTPException(status_code=413, detail="too long")
         sid = str(b.get("sid") or "")
@@ -1349,7 +1355,7 @@ def register(app, g, x):
 
     def in_transcript(sid, text, since):
         L = read_log(sid)
-        head = squash(text)[:40]
+        head = squash(split_mark(text)[0])[:40]   # the transcript's copy is read without the device mark
         for m in reversed((L or {}).get("msgs", [])[-60:]):
             if m.get("kind") == "user" and head and squash(m.get("text"))[:40] == head:
                 try:

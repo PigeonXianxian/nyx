@@ -106,6 +106,8 @@
 
   /* ---------- relay ---------- */
   function api(path, opt) { return call(RELAY, key, path, opt); }        // the one you're chatting with
+  var dev = { list: [], cur: "", def: "" };   // which computer your words are about: the chip by the input box (relay/nyx_device.py)
+  function devName(id) { var d = dev.list.filter(function (x) { return x.id === id; })[0]; return d ? d.name : ""; }
   function hapi(path, opt) { return call(HOME, hkey, path, opt); }       // the house: hold sheets
   /* small door for add-on scripts (thinkcrab.js) to reach the relay you are chatting with */
   window.NyxChat = Object.assign(window.NyxChat || {}, { api: function (p, o) { return api(p, o); } });
@@ -190,6 +192,7 @@
     try { onEvent(JSON.parse(data)); } catch (e) {}
   }
   function onEvent(ev) {
+    if (ev.type === "device") { if (ev.current) dev.cur = ev.current; paintDev(); return; }   // picked on another page
     if (CCMODE) {
       if (ev.type === "cc") {
         if (ev.sid === view) (ev.messages || []).forEach(function (m) { put(m); fresh(m); });
@@ -525,6 +528,7 @@
     else if (kind === "term") inner += note ? '<span class="nt">' + esc(m.text) + "</span>"   // …and what the window printed back
       : '<span class="th">' + (m.meta && m.meta.local ? "" : m.meta && m.meta.dialog ? "window · " : "terminal · ") + "/" + esc((m.meta && m.meta.cmd) || "") + "</span><pre>" + esc(m.text) + "</pre>";
     else {
+      if (me && m.meta && m.meta.device && m.meta.device !== devName(dev.def)) inner = '<span class="dv">' + esc(m.meta.device) + "</span>" + inner;   // meant for another computer than usual
       var atts = (m.meta && m.meta.attachments) || [];
       if (atts.length) inner += attHTML(atts);
       inner += me && /^\/[A-Za-z0-9][\w:-]*/.test(m.text || "") ? rich(m.text).replace(/^\/[A-Za-z0-9][\w:-]*/, function (c) { return '<b class="cmdn">' + c + "</b>"; }) : rich(m.text);   // a /skill sent to the companion
@@ -778,7 +782,7 @@
       else if (b.dataset.k != null) insert(loadList(MY_KAO)[+b.dataset.k] || "");
       else if (b.dataset.my) { var x = loadList(MY_STK).filter(function (y) { return y.id === b.dataset.my; })[0]; if (x) { pop.hidden = true; sendMine(x); } }
       else if (b.dataset.s) { var keep = text.value; text.value = "[sticker:" + b.dataset.s + "]"; send(); text.value = keep; grow(); pop.hidden = true; } };
-    $("emo").onclick = function () { pop.hidden = !pop.hidden; };
+    $("emo").onclick = function () { pop.hidden = !pop.hidden; if (!pop.hidden) $("devPop").hidden = true; };
     log.addEventListener("click", function (e) {
       pop.hidden = true;
       var im = e.target.closest && e.target.closest(".msg.ai img.stk"); if (!im || root.classList.contains("selecting")) return;
@@ -802,7 +806,7 @@
     tray = []; trayEl.innerHTML = ""; trayEl.hidden = true;
     text.value = ""; grow(); setQuote(null);
     var local = items.map(function (x) { return x.local ? { kind: "image", name: x.name } : { kind: "file", name: x.name }; });
-    var pending = build({ id: "", from: "human", text: t, ts: new Date().toISOString(), meta: Object.assign(q ? { quote: q } : {}, { attachments: local }) });
+    var pending = build({ id: "", from: "human", text: t, ts: new Date().toISOString(), meta: Object.assign(q ? { quote: q } : {}, { attachments: local }, dev.list.length ? { device: devName(dev.cur) } : {}) });
     pending.querySelectorAll(".att img[data-i]").forEach(function (im) { var x = items[+im.dataset.i]; if (x && x.local) im.src = x.local; });
     pending.classList.add("pending"); pending.dataset.text = t; log.appendChild(pending); keepTyping(); toBottom();
     function mark(state, label, onTap) { pending.classList.remove("pending", "failed"); pending.classList.add(state); if (label) pending.querySelector(".t").textContent = label; pending.onclick = onTap || null; }
@@ -834,6 +838,33 @@
       return go();
     }).catch(fail);
   }
+
+  /* ---------- which computer: GET/POST /app/device. The relay puts the pick on every message as a first line
+     【设备 · name · host】 and the transcript gives it back as meta.device; your bubble shows it only when it isn't the default ---------- */
+  function paintDev() {
+    var b = $("dev"), pop = $("devPop");
+    b.hidden = !dev.list.length; if (!dev.list.length) { pop.hidden = true; return; }
+    b.querySelector("span").textContent = devName(dev.cur);
+    b.classList.toggle("away", dev.cur !== dev.def);
+    pop.innerHTML = "<p>这条消息说的是哪台电脑</p>" + dev.list.map(function (x) {
+      return '<button type="button" data-id="' + esc(x.id) + '"' + (x.id === dev.cur ? ' class="on"' : "") + "><b>" + esc(x.name) + "</b><span>" + esc(x.host || "") + (x.id === dev.def ? " · 默认" : "") + "</span></button>";
+    }).join("");
+  }
+  function loadDev() {
+    return api("/app/device").then(function (d) { dev.list = d.devices || []; dev.cur = d.current || ""; dev.def = d["default"] || ""; paintDev(); })
+      .catch(function () { dev.list = []; paintDev(); });   // an older relay without the switch: no chip
+  }
+  $("dev").onclick = function () { var pop = $("devPop"); pop.hidden = !pop.hidden; if (!pop.hidden) $("emoPop").hidden = true; };
+  $("devPop").onclick = function (e) {
+    var b = e.target.closest && e.target.closest("button[data-id]"); if (!b) return;
+    var id = b.dataset.id, was = dev.cur; $("devPop").hidden = true;
+    if (id === was) return;
+    dev.cur = id; paintDev();
+    api("/app/device", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id }) })
+      .then(function () { toast("接下来说的是 " + devName(id)); })
+      .catch(function () { dev.cur = was; paintDev(); toast("没切换成功，再试一次"); });
+  };
+  document.addEventListener("pointerdown", function (e) { var pop = $("devPop"); if (!pop.hidden && !pop.contains(e.target) && !$("dev").contains(e.target)) pop.hidden = true; });
 
   /* ---------- the floating ball: GET /app/meter, POST /app/model ---------- */
   var meterData = null, meterT = 0, modelPin = null;
@@ -1086,7 +1117,7 @@
       } catch (e) {}
       $("gate").hidden = true; $("aiName").textContent = AI;
       log.innerHTML = ""; byId.clear(); msgs.clear(); tools.clear(); lastId = 0; loadDeleted();
-      (d.messages || []).forEach(put); if (CCMODE) { earlier(d.more); paintRo(); } openStream(); loadMeter();
+      (d.messages || []).forEach(put); if (CCMODE) { earlier(d.more); paintRo(); } openStream(); loadMeter(); loadDev();
       if (!hold && window.NyxHold) hold = NyxHold(hapi, { me: ME, chat: api });
       if (!cc && window.NyxCC && !GROUP) cc = NyxCC({ api: api, text: text, grow: grow, send: send, put: put, toast: toast, openMeter: openMeter, reload: function () { loadMeter(); loadWin(); },
         name: function () { return AI; }, used: function () { return win && win.used; }, ghost: ghost, fail: failGhost, local: localCard, verify: verifyWin,
