@@ -1031,7 +1031,7 @@ def register(app, g, x):
                         who = who.group(1) if who else "human"
                         if who in ("human", ""):
                             body, dev = split_mark(m.group(2))
-                            add("user", "human", NIGHT.sub("", body).strip(), j + k, via="channel", **({"device": dev} if dev else {}))
+                            add("user", "human", NIGHT.sub("", body).strip(), j + k, via="channel", **dev)
                         else:
                             add("note", "ai", f"{who} · " + m.group(2).strip()[:400], j + k)
                 elif s.startswith("<task-notification>"):
@@ -1041,7 +1041,7 @@ def register(app, g, x):
                     add("note", "ai", "interrupted", j)
                 elif s.strip() and not re.match(r"^<[a-z][a-z-]*[ >]", s.strip()):
                     body, dev = split_mark(s.strip())   # the device chip's mark: off the words, onto the bubble's label
-                    add("user", "human", body.strip(), j, **({"device": dev} if dev else {}))
+                    add("user", "human", body.strip(), j, **dev)
 
             if t == "system":
                 st = d.get("subtype")

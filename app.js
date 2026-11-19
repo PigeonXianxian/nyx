@@ -108,6 +108,8 @@
   function api(path, opt) { return call(RELAY, key, path, opt); }        // the one you're chatting with
   var dev = { list: [], cur: "", def: "" };   // which computer your words are about: the chip by the input box (relay/nyx_device.py)
   function devName(id) { var d = dev.list.filter(function (x) { return x.id === id; })[0]; return d ? d.name : ""; }
+  function devOf(id) { return dev.list.filter(function (x) { return x.id === id; })[0] || {}; }
+  function isDefDev(meta) { var d = devOf(dev.def); return meta.device_host ? meta.device_host === d.host : meta.device === d.name; }   // by the ssh alias, so renaming a machine doesn't mark old bubbles
   function hapi(path, opt) { return call(HOME, hkey, path, opt); }       // the house: hold sheets
   /* small door for add-on scripts (thinkcrab.js) to reach the relay you are chatting with */
   window.NyxChat = Object.assign(window.NyxChat || {}, { api: function (p, o) { return api(p, o); } });
@@ -528,7 +530,7 @@
     else if (kind === "term") inner += note ? '<span class="nt">' + esc(m.text) + "</span>"   // …and what the window printed back
       : '<span class="th">' + (m.meta && m.meta.local ? "" : m.meta && m.meta.dialog ? "window · " : "terminal · ") + "/" + esc((m.meta && m.meta.cmd) || "") + "</span><pre>" + esc(m.text) + "</pre>";
     else {
-      if (me && m.meta && m.meta.device && m.meta.device !== devName(dev.def)) inner = '<span class="dv">' + esc(m.meta.device) + "</span>" + inner;   // meant for another computer than usual
+      if (me && m.meta && m.meta.device && !isDefDev(m.meta)) inner = '<span class="dv">' + esc(m.meta.device) + "</span>" + inner;   // meant for another computer than usual
       var atts = (m.meta && m.meta.attachments) || [];
       if (atts.length) inner += attHTML(atts);
       inner += me && /^\/[A-Za-z0-9][\w:-]*/.test(m.text || "") ? rich(m.text).replace(/^\/[A-Za-z0-9][\w:-]*/, function (c) { return '<b class="cmdn">' + c + "</b>"; }) : rich(m.text);   // a /skill sent to the companion
@@ -806,7 +808,7 @@
     tray = []; trayEl.innerHTML = ""; trayEl.hidden = true;
     text.value = ""; grow(); setQuote(null);
     var local = items.map(function (x) { return x.local ? { kind: "image", name: x.name } : { kind: "file", name: x.name }; });
-    var pending = build({ id: "", from: "human", text: t, ts: new Date().toISOString(), meta: Object.assign(q ? { quote: q } : {}, { attachments: local }, dev.list.length ? { device: devName(dev.cur) } : {}) });
+    var pending = build({ id: "", from: "human", text: t, ts: new Date().toISOString(), meta: Object.assign(q ? { quote: q } : {}, { attachments: local }, dev.list.length ? { device: devName(dev.cur), device_host: devOf(dev.cur).host || "" } : {}) });
     pending.querySelectorAll(".att img[data-i]").forEach(function (im) { var x = items[+im.dataset.i]; if (x && x.local) im.src = x.local; });
     pending.classList.add("pending"); pending.dataset.text = t; log.appendChild(pending); keepTyping(); toBottom();
     function mark(state, label, onTap) { pending.classList.remove("pending", "failed"); pending.classList.add(state); if (label) pending.querySelector(".t").textContent = label; pending.onclick = onTap || null; }

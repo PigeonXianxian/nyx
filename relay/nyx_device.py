@@ -1,10 +1,10 @@
 """Which computer you mean: a switch on the chat page, and a mark on what you send so your companion knows.
 
-Your companion may reach several of your machines (an old Mac, a new one, a Windows PC). Which one "open it" or "install
+Your companion may reach several of your machines (two Macs and a Windows PC, say). Which one "open it" or "install
 this" is about is rarely in the words, so the chat page has a small chip next to the input box; what it shows goes along
 with every message, as one first line:
 
-    【设备 · 新 Mac · PigeonXian_1】
+    【设备 · 咸咸 M5 Pro · PigeonXian_1】
 
 The chip's pick lives here on the relay (one file), so the phone and the computer agree. The chat page hides the mark
 again in your own bubble and shows a small label instead (only when it isn't the default machine).
@@ -12,9 +12,9 @@ again in your own bubble and shows a small label instead (only when it isn't the
 The machines are listed in `devices.json` next to the relay's database:
 
     {"default": "mac0",
-     "devices": [{"id": "mac0", "name": "旧 Mac", "host": "PigeonXian_0"},
-                 {"id": "mac1", "name": "新 Mac", "host": "PigeonXian_1"},
-                 {"id": "win",  "name": "Windows", "host": "PigeonXian_win"}]}
+     "devices": [{"id": "mac0", "name": "咸咸 i7", "host": "PigeonXian_0"},
+                 {"id": "mac1", "name": "咸咸 M5 Pro", "host": "PigeonXian_1"},
+                 {"id": "win",  "name": "咸咸 天选5 Pro", "host": "PigeonXian_win"}]}
 
 `host` is what your companion uses to reach it (an ssh alias). No file, no chip and no mark.
 
@@ -29,13 +29,18 @@ from pathlib import Path
 
 from fastapi import HTTPException, Request
 
-MARK_RE = re.compile(r"^【设备 · ([^】·]+?)(?: · [^】]*)?】[ \t]*\n?")
+MARK_RE = re.compile(r"^【设备 · ([^】·]+?)(?: · ([^】]*))?】[ \t]*\n?")
 
 
 def split_mark(text):
-    """(text without a leading device mark, the device's name or "")."""
+    """(text without a leading device mark, {"device": name, "device_host": host} for the message's meta, or {})."""
     m = MARK_RE.match(text or "")
-    return ((text or "")[m.end():], m.group(1).strip()) if m else (text or "", "")
+    if not m:
+        return text or "", {}
+    meta = {"device": m.group(1).strip()}
+    if (m.group(2) or "").strip():
+        meta["device_host"] = m.group(2).strip()   # the page tells the default machine by this, so a rename doesn't matter
+    return (text or "")[m.end():], meta
 
 
 def register(app, g):
@@ -102,6 +107,8 @@ def register(app, g):
         d = next((x for x in devs if x["id"] == cur), None)
         if d:
             meta["device"] = d["name"]
+            if d.get("host"):
+                meta["device_host"] = d["host"]
 
     async def payload_hook(pl, body):
         return {**pl, "content": with_mark(pl.get("content") or "")} if mark() else pl
