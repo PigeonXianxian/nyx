@@ -1161,6 +1161,7 @@ def register(app, g):
         # A confirm box replaces the input box at the bottom ("\u2500\u2500 \u276f \u2500\u2500"). Old command output scrolling by can contain the same words,
         # so if the input box is still there nobody is being asked anything.
         input_box = input_box_showing(pane.stdout)
+        out["asking"] = not input_box   # a box is where the input box was: the page looks at once for a question (it need not wait for the stream to say so)
         if not input_box and any(s in "\n".join(lines[-12:]) for s in PROMPT_MARKS):
             wait_since.setdefault(name, time.time())
             if time.time() - wait_since[name] >= WAIT_DEBOUNCE:

@@ -30,6 +30,7 @@ import os
 import re
 import secrets
 import shutil
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -101,6 +102,34 @@ def claude_exe():
         if os.access(c, os.X_OK):
             return str(c)
     return w
+
+
+PIECE = 4 << 20
+
+
+def new_lines(f, off, size, piece=PIECE):
+    """What has been added to a transcript since byte `off`, a piece at a time: yields (whole lines, bytes they took).
+    Read whole, a long session was held several times over (its bytes, its text, its lines) — 170 MB of transcript took
+    2 GB and the relay with it (2026-11-19). A line longer than a piece (a picture) is read on until its end."""
+    if size <= off:
+        return
+    with f.open("rb") as fh:
+        fh.seek(off)
+        left, rest = size - off, b""
+        while left > 0:
+            got = fh.read(min(piece, left))
+            if not got:
+                break
+            left -= len(got)
+            buf = rest + got
+            cut = buf.rfind(b"\n") + 1   # only whole lines
+            if not cut:
+                rest = buf
+                continue
+            rest = buf[cut:]
+            lines = buf[:cut].decode("utf-8", "ignore").split("\n")[:-1]
+            del buf, got
+            yield lines, cut
 
 
 def register(app, g, x):
@@ -1130,29 +1159,25 @@ def register(app, g, x):
 
     logs = {}   # sid -> {"f", "off", "lines", "msgs"}, read on as the file grows
     open_sids = set()   # the windows' sessions: kept in logs while open, so a tab is never read again from the top
+    log_lock = threading.Lock()   # one reader at a time: two requests reading the same long session each took it whole into memory
 
     def read_log(sid):
         f = session_file(sid)
         if not f:
             return None
-        L = logs.get(sid)
-        if not L or L["f"] != f:
-            if len(logs) > 6 + len(open_sids):
-                old = next((k for k in logs if k not in open_sids), None)
-                if old:
-                    logs.pop(old)
-            L = logs[sid] = {"f": f, "off": 0, "lines": 0, "msgs": [], "memo": {}}
-        try:
-            size = f.stat().st_size
-            if size < L["off"]:   # rewritten: start again
-                L.update(off=0, lines=0, msgs=[], memo={})
-            if size > L["off"]:
-                with f.open("rb") as fh:
-                    fh.seek(L["off"])
-                    chunk = fh.read(size - L["off"])
-                cut = chunk.rfind(b"\n") + 1   # only whole lines
-                if cut:
-                    lines = chunk[:cut].decode("utf-8", "ignore").split("\n")[:-1]
+        with log_lock:
+            L = logs.get(sid)
+            if not L or L["f"] != f:
+                if len(logs) > 6 + len(open_sids):
+                    old = next((k for k in logs if k not in open_sids), None)
+                    if old:
+                        logs.pop(old)
+                L = logs[sid] = {"f": f, "off": 0, "lines": 0, "msgs": [], "memo": {}}
+            try:
+                size = f.stat().st_size
+                if size < L["off"]:   # rewritten: start again
+                    L.update(off=0, lines=0, msgs=[], memo={})
+                for lines, took in new_lines(f, L["off"], size):   # a piece at a time: a session of 170 MB is never held whole
                     for ln in lines:   # the session's name as Claude Code keeps it: /rename's, else the one it made up
                         if '"custom-title"' in ln or '"ai-title"' in ln:
                             try:
@@ -1163,10 +1188,10 @@ def register(app, g, x):
                                 pass
                     L["msgs"].extend(parse_lines(lines, L["lines"], L["memo"]))
                     L["lines"] += len(lines)
-                    L["off"] += cut
-        except OSError:
-            pass
-        return L
+                    L["off"] += took
+            except OSError:
+                pass
+            return L
 
     def title_of(sid, items=None):
         """A tab's name: the one given here, then Claude Code's (/rename, then its own), then the first thing said."""
@@ -1179,8 +1204,10 @@ def register(app, g, x):
     def windows_now():
         """The open windows for the page's tabs: [{sid, main, title}], the main one first. One still starting has no sid yet."""
         ws, items = live_windows(), meta_load()["items"]
-        open_sids.clear()
-        open_sids.update(w["sid"] for w in ws if w["sid"])
+        now = {w["sid"] for w in ws if w["sid"]}
+        with log_lock:   # (never empty for a moment: a reader would take an open window's session for one to forget)
+            open_sids.difference_update(open_sids - now)
+            open_sids.update(now)
         for w in ws:
             if w["sid"]:
                 read_log(w["sid"])   # (cheap once read: only what's new)
@@ -1374,15 +1401,17 @@ def register(app, g, x):
 
     @app.post("/app/cc/question/answer")
     async def cc_question_answer(request: Request):
-        """{sid, sig, pick?: n, text?: words for a "Type something." choice, key?: Up|Down|Left|Right|Enter|Escape|Tab|Space}.
-        sig is the box the page was showing: if the window has moved on to another question meanwhile, nothing is pressed."""
+        """{sid, sig, pick?: n, text?: words for a "Type something." choice, row?: k, key?: Up|Down|Left|Right|Enter|Escape|Tab|Space}.
+        sig is the box the page was showing: if the window has moved on to another question meanwhile, nothing is pressed.
+        row: a box of rows (no numbers) — the cursor is walked to row k and, once it is seen there, the row is worked as
+        the box's foot then says: Space where it toggles, Enter where Enter goes on, nothing where ← → adjust it."""
         check_auth(request)
         b = await request.json()
         sid = str(b.get("sid") or "")
         name = await win(sid)
         tab = sid or str(session_meta(name).get("sessionId") or "")
-        key, pick, words = str(b.get("key") or ""), b.get("pick"), str(b.get("text") or "")
-        async with type_lock(name):
+        key, pick, row, words = str(b.get("key") or ""), b.get("pick"), b.get("row"), str(b.get("text") or "")
+        async with type_lock(name):   # held until the box has shown what was pressed: a second tap never lands on a box that is on its way out
             q = await asyncio.to_thread(question_of, name)
             if not q:
                 raise HTTPException(status_code=409, detail="there's no question up any more")
@@ -1390,33 +1419,107 @@ def register(app, g, x):
                 await tell_question(name, tab, q)
                 raise HTTPException(status_code=409, detail="the question has changed; look again")
             send = lambda *a: asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), *a)
+
+            async def settle(before, secs):
+                """The box once it shows what was pressed (None: it has gone), or as it is after secs."""
+                now = before
+                for _ in range(max(1, int(secs / 0.1))):
+                    await asyncio.sleep(0.1)
+                    now = await asyncio.to_thread(question_of, name)
+                    if now != before:
+                        break
+                return now
+
+            async def walk(x, kind, to):
+                """The cursor to choice `to`, a step at a time, each step seen before the next is pressed (an arrow sent
+                after the box has gone would land in the input box and call up the last thing typed). → the box, on it or not."""
+                label = x[kind][to]["label"]
+                for _ in range(len(x[kind]) + 1):
+                    at = next((i for i, r in enumerate(x[kind]) if r["on"]), None)
+                    if at is None or at == to:
+                        break
+                    was = x
+                    await send("Down" if to > at else "Up")
+                    x = await settle(was, 0.8)
+                    if not x or x == was or x["sig"] != was["sig"] or len(x.get(kind) or []) != len(was[kind]):
+                        return x, False
+                return x, any(r["on"] and r["label"] == label for r in x[kind])
+
+            wait = 0.8
             if key:
                 if key not in KEYS:
                     raise HTTPException(status_code=400, detail="not a key the page can press")
                 await send(key)
+                wait = 3.0 if key in ("Enter", "Escape") else 0.8
+            elif row is not None:
+                rows = q.get("rows") or []
+                if not isinstance(row, int) or not 0 <= row < len(rows) or not any(r["on"] for r in rows):
+                    raise HTTPException(status_code=400, detail="no such row")
+                q, there = await walk(q, "rows", row)
+                wait = 0
+                if there and q["does"] == "toggle":
+                    await send("Space")
+                    wait = 0.8
+                elif there and q["does"] == "enter":
+                    await send("Enter")
+                    wait = 3.0
             elif pick is not None:
                 o = next((o for o in q["options"] if o["n"] == int(pick)), None)
                 if not o:
                     raise HTTPException(status_code=400, detail="no such choice")
+                wait = 3.0
                 if o["n"] <= 9:
                     await send("-l", str(o["n"]))   # Claude Code takes the digit as the pick
                 else:
-                    at = next((i for i, x in enumerate(q["options"]) if x["on"]), 0)
-                    to = q["options"].index(o)
-                    for _ in range(abs(to - at)):
-                        await send("Down" if to > at else "Up")
-                    await send("Enter")
-                if o["own"] and words.strip():   # an answer of your own: the choice becomes a line to write in
+                    q, there = await walk(q, "options", q["options"].index(o))
+                    if there:
+                        await send("Enter")
+                    else:
+                        wait = 0
+                if o["own"] and words.strip() and wait:   # an answer of your own: the choice becomes a line to write in
                     await asyncio.sleep(0.3)
                     await send("-l", words.strip().replace("\n", " ")[:2000])
                     await asyncio.sleep(0.2)
                     await send("Enter")
             else:
                 raise HTTPException(status_code=400, detail="pick a choice or press a key")
-        await asyncio.sleep(0.7)
-        q2 = await asyncio.to_thread(question_of, name)
+            # as soon as the box shows it (a fixed wait made every tap slow); a press that goes on or out is given longer
+            q2 = await settle(q, wait) if wait and q else await asyncio.to_thread(question_of, name)
         await tell_question(name, tab, q2)
         return {"ok": True, "q": q2}
+
+    @app.post("/app/cc/stop")
+    async def cc_stop(request: Request):
+        """{sid}: stop the turn that is running in this window — Esc, once, as at the terminal. What it was doing is left
+        as far as it got; a message queued behind the turn goes in next. Nothing is pressed unless a turn is running
+        (Esc at an idle window clears what is written there, and twice opens the rewind list) or while a question is up
+        (there Esc is an answer: the question's own card has it)."""
+        check_auth(request)
+        b = await request.json()
+        sid = str(b.get("sid") or "")
+        name = await win(sid)
+        tab = sid or str(session_meta(name).get("sessionId") or "")
+        async with type_lock(name):
+            pane = await asyncio.to_thread(capture, 0, name)
+            if pane is None:
+                raise HTTPException(status_code=503, detail="the window isn't open")
+            if not input_box_showing(pane):
+                raise HTTPException(status_code=409, detail="it is waiting on a question; answer that first")
+            if (await asyncio.to_thread(claude_busy, name)).get("state") != "busy":
+                return {"ok": True, "stopped": False, "state": "idle"}
+            said = lambda: (capture(300, name) or "").count("Interrupted \u00b7")   # "⎿ Interrupted · What should Claude do instead?"
+            before = await asyncio.to_thread(said)
+            await asyncio.to_thread(tmux, "send-keys", "-t", tgt(name), "Escape")
+        state, stopped = "busy", False
+        for _ in range(16):   # it takes a moment to let go of what it was doing
+            await asyncio.sleep(0.5)
+            state = (await asyncio.to_thread(claude_busy, name)).get("state")
+            # (with a message queued behind the turn the window is at once busy again, with that)
+            stopped = state != "busy" or await asyncio.to_thread(said) > before
+            if stopped:
+                break
+        await broadcast(g["app_subs"], {"type": "typing", "active": state == "busy", "sid": tab})
+        return {"ok": True, "stopped": stopped, "state": state}
 
     async def held_watch():
         """Types in what was held once its window's input box is back; tells the page when a question comes, changes or goes."""

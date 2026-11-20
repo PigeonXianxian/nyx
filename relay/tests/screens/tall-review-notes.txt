@@ -1,0 +1,19 @@
+  Proposed auto-mode environment
+
+    · **Organization**: None configured
+    · **Trusted internal domains**: None configured
+
+  Notes
+    · Repo visibility & branch protection via gh: not queryable here (no git remotes, org/repo not derivable) — defaulted to private/local assumption
+    · Sibling repo docs: NOT GATHERED (user chose 'just this project' scope) — no sibling repos included
+    · Shell history: NOT GATHERED (not opted in) — allow/soft_deny proposals based only on the small per-project transcript sample
+    · Other git repos under home directory: NOT GATHERED (not opted in)
+    · Cross-project usage mining: NOT GATHERED (scope limited to this project)
+    · Config scans found nothing, so Trusted cloud buckets, Key internal services, and Internal package registry were left at shipped defaults
+    · No non-standard CLI usage (uname, whoami) or denial-reason evidence supported any allow/soft_deny/hard_deny carve-outs, so all three were left empty
+    · Existing auto-mode settings showed no classifier-bypassing or destructive permissions.allow entries, so remove_from_permissions_allow is empty
+
+    Looks good — save it
+  ❯ Discard and exit
+ ↑ 10 more lines
+  Enter to confirm · Esc to cancel

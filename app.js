@@ -135,6 +135,7 @@
   function secsText(n) { n = n || 0; return n >= 3600 ? Math.floor(n / 3600) + "h " + Math.floor(n % 3600 / 60) + "m" : n >= 60 ? Math.floor(n / 60) + "m " + (n % 60) + "s" : n + "s"; }
   function paintState() {
     var em = $("state").querySelector("em"), working = typingOn || (busy && busy.state === "busy");
+    if (typeof paintSend === "function") paintSend();
     $("state").title = busy && busy.state === "busy" ? [busy.tool, busy.detail, busy.secs ? "this turn " + secsText(busy.secs) : ""].filter(Boolean).join(" \u00b7 ") : "";
     if (working && !spinT) {
       var pick = function (p) { var v; do { v = VERBS[Math.floor(Math.random() * VERBS.length)]; } while (v === p && VERBS.length > 1); return v; };
@@ -156,7 +157,7 @@
     if (GROUP) return;
     if (!key || document.hidden || $("room").hidden) { busyT = setTimeout(pollBusy, 5000); return; }
     api("/app/busy" + tabQ()).then(function (d) { var was = busy && busy.state; d.at = Date.now(); busy = d; paintState();
-      if (CCMODE) { room(d); tabStates(d.windows); if (isLive(view)) typing(d.state === "busy"); if (qcard && (qcard.shown() || d.state === "waiting")) qcard.load(); }
+      if (CCMODE) { room(d); tabStates(d.windows); if (isLive(view)) typing(d.state === "busy"); if (qcard && (qcard.shown() || d.asking || d.state === "waiting")) qcard.load(); }
       if (CCMODE && (was === "offline") !== (d.state === "offline")) refreshLive(); }).catch(function () { busy = null; })
       .then(function () { var any = busy && (busy.state === "busy" || (busy.windows || []).some(function (w) { return w.state === "busy"; })); busyT = setTimeout(pollBusy, any ? 2500 : 5000); });
   }
@@ -641,7 +642,26 @@
     // never while an input method is still composing (Chinese, Japanese…)
     if (e.key === "Enter" && !e.shiftKey && !touchInput && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); }
   });
-  sendBtn.onclick = send;
+  /* stop: while the window on the page is working and nothing is written, the swallow gives way to a stop mark. A tap is
+     Esc at the terminal, once (POST /app/cc/stop): the turn stops where it is, and what was queued behind it goes in next.
+     Whatever is written is still sent — writing brings the swallow back. */
+  var stopping = false, sentAt = 0;
+  function canStop() { return !!(CCMODE && isLive(view) && busy && busy.state === "busy" && !text.value.trim() && !(tray && tray.length)); }
+  function paintSend() {
+    var s = canStop();
+    sendBtn.classList.toggle("stop", s); sendBtn.classList.toggle("going", s && stopping);
+    sendBtn.setAttribute("aria-label", s ? "Stop" : "Send"); sendBtn.title = s ? "stop this turn" : "";
+  }
+  function stop() {
+    if (stopping || Date.now() - sentAt < 1200) return;   // (a second tap on the swallow, just after sending, is not a stop)
+    stopping = true; paintSend();
+    api("/app/cc/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: view }) })
+      .then(function (r) { if (r && r.stopped === false && r.state === "busy") toast("It hasn\u2019t let go yet \u2014 try again in a moment"); },
+        function (e) { toast(/409/.test(e.message) ? "It\u2019s waiting on a question \u2014 answer that first" : "Didn\u2019t reach the window: " + e.message); })
+      .then(function () { stopping = false; paintSend(); pollBusy(); });
+  }
+  sendBtn.onclick = function () { if (sendBtn.classList.contains("stop")) stop(); else send(); };
+  text.addEventListener("input", paintSend);
   /* attachments: pick → upload right away → they ride along with the next send */
   var tray = [], trayEl = $("tray");
   // pictures and files go up as they are: never shrunk or re-encoded (a long screenshot shrunk to 2048 tall was 405 wide and
@@ -667,8 +687,8 @@
       var it = { name: f.name, done: null, el: document.createElement("div") };
       it.el.className = "it up"; it.el.innerHTML = '<button type="button" aria-label="Remove">×</button>' + ((f.type || "").indexOf("image/") ? esc(f.name.slice(0, 14)) : "");
       if (!(f.type || "").indexOf("image/")) { it.local = URL.createObjectURL(f); it.el.style.backgroundImage = "url(" + it.local + ")"; }
-      it.el.querySelector("button").onclick = function () { tray = tray.filter(function (x) { return x !== it; }); it.el.remove(); trayEl.hidden = !tray.length; };
-      trayEl.appendChild(it.el); trayEl.hidden = false; tray.push(it);
+      it.el.querySelector("button").onclick = function () { tray = tray.filter(function (x) { return x !== it; }); it.el.remove(); trayEl.hidden = !tray.length; paintSend(); };
+      trayEl.appendChild(it.el); trayEl.hidden = false; tray.push(it); paintSend();
       it.file = f; it.job = upload(it);
     });
   }
@@ -806,7 +826,7 @@
     if (cc && !tray.length && t.charAt(0) === "/" && cc.slash(t)) { text.value = ""; grow(); return; }   // a / command the page or the window takes (cc.js)
     var items = tray.slice(), q = quote, tab = view;   // the tab it was written in, whichever is on the page when it is retried
     tray = []; trayEl.innerHTML = ""; trayEl.hidden = true;
-    text.value = ""; grow(); setQuote(null);
+    text.value = ""; grow(); setQuote(null); sentAt = Date.now();
     var local = items.map(function (x) { return x.local ? { kind: "image", name: x.name } : { kind: "file", name: x.name }; });
     var pending = build({ id: "", from: "human", text: t, ts: new Date().toISOString(), meta: Object.assign(q ? { quote: q } : {}, { attachments: local }, dev.list.length ? { device: devName(dev.cur), device_host: devOf(dev.cur).host || "" } : {}) });
     pending.querySelectorAll(".att img[data-i]").forEach(function (im) { var x = items[+im.dataset.i]; if (x && x.local) im.src = x.local; });
