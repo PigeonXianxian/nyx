@@ -1370,9 +1370,24 @@ def register(app, g, x):
     def held_texts(sid):
         return [h["text"] for h in held.get(sid, [])]
 
+    unread = {}   # window -> since when its screen has had no input box and no box the reader knows
+    RAW_AFTER = 4.0
+
     def question_of(name):
+        """The box the window waits on. A screen with no input box that the reader cannot make out is given as it stands
+        ({raw: True}: its lines, every key) — a box nobody can see is a window nobody can use — but only once it has
+        stood so for a few seconds (a window being drawn or just starting is not a box), and only where Claude Code is
+        what runs in the window (keys pressed at a shell would be typed into it)."""
         pane = capture(0, name)
-        return None if pane is None else nyx_question.read_dialog(pane)
+        q = None if pane is None else nyx_question.read_dialog(pane, raw=True)
+        if not q or not q.get("raw"):
+            unread.pop(name, None)
+            return q
+        since = unread.setdefault(name, time.monotonic())
+        if time.monotonic() - since < RAW_AFTER:
+            return None
+        run = tmux("display-message", "-p", "-t", tgt(name), "#{pane_current_command}")
+        return q if run.returncode == 0 and run.stdout.strip() in ("claude", "node", "bun") else None
 
     async def tell_question(name, sid, q=False):
         if q is False:
@@ -1468,14 +1483,29 @@ def register(app, g, x):
                 if not o:
                     raise HTTPException(status_code=400, detail="no such choice")
                 wait = 3.0
+                at, there = q["options"].index(o), None
                 if o["n"] <= 9:
                     await send("-l", str(o["n"]))   # Claude Code takes the digit as the pick
+                    if not o["own"] and not q["hint"]:
+                        # …in every box met so far. A box that names no keys is one of the newer ones, where a digit not
+                        # taken would leave the tap doing nothing: if it still stands exactly as it was (but for where
+                        # its cursor is), the cursor is walked to the choice and Enter pressed — once it is seen there.
+                        # (Not where keys are named: there the digit is known to be taken, and a second prompt with the
+                        # same words coming up at once must not be answered by the tap that answered the first.)
+                        bare = lambda x: x and ([{**c, "on": 0} for c in x["options"]], [t["t"] for t in x["text"]], x["hint"])
+                        q1 = await settle(q, 2.0)
+                        if q1 == q:
+                            q1 = await asyncio.to_thread(question_of, name)
+                        if q1 and bare(q1) == bare(q) and any(c["on"] for c in q1["options"]):
+                            q, there = await walk(q1, "options", at)
+                        elif q1 != q:
+                            q, wait = q1, 0   # it took the digit: the box has moved on (or gone)
                 else:
-                    q, there = await walk(q, "options", q["options"].index(o))
-                    if there:
-                        await send("Enter")
-                    else:
-                        wait = 0
+                    q, there = await walk(q, "options", at)
+                if there:
+                    await send("Enter")
+                elif there is False:
+                    wait = 0
                 if o["own"] and words.strip() and wait:   # an answer of your own: the choice becomes a line to write in
                     await asyncio.sleep(0.3)
                     await send("-l", words.strip().replace("\n", " ")[:2000])

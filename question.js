@@ -7,6 +7,8 @@
    walks with the arrow keys. Here each row is tapped: the relay walks the cursor to it and works it as the box's foot
    says — a switch is flipped, "Continue" is gone on with, a value that ← → adjust gets ‹ › beside it. Enter and Esc
    carry the foot's own words ("continue", "confirm", "cancel"), so there is always a plain way on and a plain way out.
+   A box the relay's reader has not met (each new kind has been one) still comes: its lines as they stand on the window's
+   screen, and every key — so a window is never left waiting on something the page cannot show.
    Answering here answers the window. What you write meanwhile waits, and goes in once it is answered.
    The relay reads the box off the window's screen (relay/nyx_question.py) and says when one comes, changes or goes.
    NyxQuestion(o) → { set(q, held), load(), clear(), shown() }
@@ -45,6 +47,8 @@
       var h = '<div class="qh"><i></i><small>at the terminal</small><span>终端在问</span></div>';
       var lines = q.text || [], rows = q.rows || [], opts = q.options || [];
       var long = lines.length > 7 && (opts.length > 0 || rows.length > 0);   // a long file over the choices folds; a box worked with keys alone shows every line
+      // a box the reader does not know: the window's screen as it stands, and every key
+      if (q.raw) h += '<div class="qa">the page can’t make this box out — this is the window’s screen as it stands, to work with the keys</div>';
       if (q.above) h += '<div class="qa">' + q.above + (q.above === 1 ? " line" : " lines") + " above this are off the window’s screen</div>";
       h += '<div class="qt' + (long && !open ? " fold" : "") + '">' + lines.map(function (t) {
         return t.t ? '<div class="' + (t.on ? "on" : /[?？]\s*$/.test(t.t) ? "ask" : "") + '">' + words(t.t) + "</div>" : '<div class="gap"></div>';
@@ -62,7 +66,8 @@
       }).join("") + "</div>";
       // the keys: a box of rows keeps only its way on and its way out (the rows are tapped); any other box, all its foot names
       var keys = KEYS.filter(function (k) { return (q.keys || []).indexOf(k[0]) >= 0; });
-      if (rows.length) keys = keys.filter(function (k) { return k[0] === "Escape" || (k[0] === "Enter" && q.enter); });
+      // (Enter stays even where the foot does not say what it does: without it a tapped row could not be gone on with)
+      if (rows.length && !q.raw) keys = keys.filter(function (k) { return k[0] === "Escape" || k[0] === "Enter"; });
       h += '<div class="qk">' + keys.map(function (k) {
         var c = cap(k, q);
         return '<button type="button" class="key' + (c.length > 3 ? " word" : "") + (k[0] === "Enter" && q.enter ? " go" : "") + '" data-k="' + k[0] + '" aria-label="' + k[0] + '">' + esc(c) + "</button>";

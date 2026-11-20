@@ -91,6 +91,47 @@ class ReadDialog(unittest.TestCase):
         self.assertEqual(q["enter"], "select")
         self.assertFalse(any("Waiting for API response" in t["t"] for t in q["text"]))
 
+    def test_a_box_that_names_no_keys(self):
+        # "Session paused" (2.1.329): numbered choices, no line under them that names a key, and Claude Code's status
+        # line at the foot of the screen — which is not the end of the talk
+        s = screen("session-paused.txt")
+        self.assertFalse(input_box(s.splitlines()))
+        q = read_dialog(s)
+        self.assertEqual([(o["n"], o["label"], o["on"]) for o in q["options"]],
+                         [(1, "Switch to Opus 4.8", True), (2, "Edit prompt and retry with Opus 5.5", False)])
+        self.assertEqual(q["text"][0]["t"], "Session paused")
+        self.assertTrue(any(t["t"].startswith("Opus 5.5's safeguards flagged this session.") and t["t"].endswith("or learn more") for t in q["text"]))
+        self.assertFalse(any("Waiting for API response" in t["t"] for t in q["text"]))
+        self.assertTrue({"Up", "Down", "Enter", "Escape"} <= set(q["keys"]))   # with no keys named, the plain ones
+        self.assertNotIn("raw", q)
+        # the status line counts its seconds: the box is the same box
+        self.assertEqual(q["sig"], read_dialog(s.replace("will retry in 0s", "will retry in 7s"))["sig"])
+        self.assertEqual(q["sig"], read_dialog(s.replace("\u273b Waiting for API response \u00b7 will retry in 0s \u00b7 check your network", ""))["sig"])
+
+    def test_a_box_the_page_has_not_met(self):
+        # no input box, and nothing the reader knows the shape of: nothing — unless asked for the screen as it stands
+        s = screen("unknown-box.txt")
+        self.assertFalse(input_box(s.splitlines()))
+        self.assertIsNone(read_dialog(s))
+        q = read_dialog(s, raw=True)
+        self.assertTrue(q["raw"])
+        self.assertEqual([t["t"] for t in q["text"] if t["t"]],
+                         ["Something new", "A box the page has not met: no rule over it, no numbers, nothing under it that names a key.", "[ Go on ]   Leave it"])
+        self.assertEqual(set(q["keys"]), {"Up", "Down", "Left", "Right", "Enter", "Escape", "Tab", "Space"})
+        wide = read_dialog(s.replace("[ Go on ]   Leave it", "[ Go on ]" + " " * 90 + "verbose"), raw=True)   # words at the far side of the window
+        self.assertIn("[ Go on ]   verbose", [t["t"] for t in wide["text"]])
+        # a spinner under it turns without making it another box
+        self.assertEqual(q["sig"], read_dialog(s + "\n\u273b Waiting for API response \u00b7 will retry in 3s\n", raw=True)["sig"])
+        # with nothing under the talk at all, the foot of the screen
+        bare = "\n".join(screen("idle.txt").rstrip().splitlines()[:-6])
+        if not input_box(bare.splitlines()):
+            self.assertTrue(read_dialog(bare, raw=True)["text"])
+        # a window at its input box is never one, and a box that is read is the same box either way
+        for n in ("idle.txt", "busy.txt", "long-input.txt"):
+            self.assertIsNone(read_dialog(screen(n), raw=True), n)
+        for n in ("permission.txt", "question.txt", "review.txt", "model-switch.txt", "rows-toggle.txt", "tall-review.txt", "session-paused.txt"):
+            self.assertEqual(read_dialog(screen(n), raw=True), read_dialog(screen(n)), n)
+
     def test_a_line_the_window_broke_is_one_paragraph(self):
         q = read_dialog(screen("model-switch.txt"))
         para = next(t["t"] for t in q["text"] if t["t"].startswith("Fable 5.2's safeguards flagged"))

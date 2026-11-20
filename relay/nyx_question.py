@@ -15,6 +15,12 @@ and any box can be worked with the keys its foot names.
 What it was learnt from (Claude Code 2.1.325–2.1.329): the box begins at the first full-width rule (─ or ▔) after the
 last line of the conversation (● Claude's words, ⎿ a tool's result, ✻ a turn's end) and ends at the line that names its
 keys — a status line may follow that ("✻ Waiting for API response…"); ╌ rules inside it frame a file's contents.
+Not every box names its keys: "Session paused" (a model's safeguards stopped the session: 1. Switch to Opus 4.8 /
+2. Edit prompt and retry) is a rule, its words and its numbered choices, with only that status line under them.
+
+Each new kind of box has been one the reader did not know, and a box nobody can see is a window nobody can use. So
+read_dialog(pane, raw=True) never comes back empty-handed from a screen with no input box: what it cannot make out it
+gives as it stands on the screen ({raw: True}), to be worked with the keys.
 """
 import hashlib
 import json
@@ -31,6 +37,9 @@ OWN = re.compile(r"^(Type something\.?|Other|Something else)$", re.I)
 MORE = re.compile(r"^\s*[↑↓]\s*(\d+) more lines?\s*$")
 BULLET = re.compile(r"^([·•▪*+-]|\d{1,2}[.)])\s")
 SIDE = re.compile(r"^\s*[│┃▏▎]\s?")   # the bar down the side of a box's words
+# Claude Code's own status line, at the foot of the screen: "✻ Waiting for API response · will retry in 3s" (not a turn's end: "✻ Baked for 4s")
+SPIN = re.compile(r"^[·✢✳✶✻✽*]\s+(?!\S+ for \d)\S")
+ALL_KEYS = ["Up", "Down", "Left", "Right", "Enter", "Escape", "Space", "Tab"]
 
 
 def cells(s):
@@ -56,11 +65,12 @@ def input_box(lines):
     return False
 
 
-def read_dialog(pane):
+def read_dialog(pane, raw=False):
     """The box the window is waiting on, or None when its input box is there.
     {text: [{t, on}], options: [{n, label, desc, on, own}], rows: [{label, value, on}], hint, keys: [...],
      enter: what Enter does, in the foot's own word ("select", "continue", "confirm"), does: what a tap on the ❯ row does
-     ("toggle" with Space, "adjust" with ← →, "enter"), above: lines of a tall box scrolled off its top, sig}"""
+     ("toggle" with Space, "adjust" with ← →, "enter"), above: lines of a tall box scrolled off its top, sig}
+    raw: a screen with no input box and no box the reader knows is given too, as it stands ({…, raw: True}: every key)."""
     lines = [l.rstrip() for l in (pane or "").splitlines()]
     while lines and not lines[-1].strip():
         lines.pop()
@@ -69,13 +79,21 @@ def read_dialog(pane):
     # its foot is the line that names its keys; a line under that ("✻ Waiting for API response…") is Claude Code's own
     foot = next((i for i in range(len(lines) - 1, max(-1, len(lines) - 7), -1) if HINT.search(lines[i])), None)
     end = len(lines) if foot is None else foot
+    if foot is None:   # a box that names no keys: the status line may still be under it, and it too begins "✻ "
+        while end and (not lines[end - 1].strip() or SPIN.match(lines[end - 1])):
+            end -= 1
     last = max((i for i in range(end) if TALK.match(lines[i])), default=-1)
     top = next((i for i in range(last + 1, end) if RULE.match(lines[i])), None)
+    sure = True
     if top is None:
-        if foot is None:
-            return None
+        if foot is None:   # neither a rule over it nor keys named under it: no box the reader knows
+            if not raw:
+                return None
+            sure = False
         top = last   # a box as tall as the window has no rule over it: what is on the screen is the box
     body = lines[top + 1:end]
+    if not sure and not any(l.strip() for l in body):
+        body = lines[max(0, end - 12):end]   # nothing under the talk: the foot of the screen
     hint = lines[foot].strip() if foot is not None else ""
     above = 0
     for i in range(len(body) - 1, -1, -1):   # "↑ 13 more lines": the top of a tall box is off the screen
@@ -128,9 +146,14 @@ def read_dialog(pane):
     while text and not text[-1]["t"]:
         text.pop()
     if not options and not rows and not hint:
-        return None   # no choices and no keys named: not a box anyone has to answer
+        if not raw or not text:
+            return None   # no choices and no keys named: not a box the reader knows
+        sure = False
+    if not sure:
+        for t in text:   # words set at the far side of the window ("… ? for shortcuts            verbose") come next to the rest
+            t["t"] = re.sub(r"\s{4,}", "   ", t["t"])
     keys = ["Enter", "Escape"]
-    if re.search(r"Arrow|↑|↓|navigate", hint) or not options:
+    if re.search(r"Arrow|↑|↓|navigate", hint) or not options or not hint:
         keys = ["Up", "Down"] + keys
     if re.search(r"Arrow|←|→|to change", hint) or any(re.search(r"^←.*→$", x["t"]) for x in text):
         keys = ["Left", "Right"] + keys
@@ -144,8 +167,11 @@ def read_dialog(pane):
     # a box of rows is one box wherever its cursor is (its foot changes with the row, its values as they are set)
     sig = hashlib.sha1(json.dumps([[x["t"] for x in text], [(o["n"], o["label"]) for o in options if not o["own"]],
                                    [r["label"] for r in rows] if rows else hint], ensure_ascii=False).encode()).hexdigest()[:12]
-    return {"text": text[-40:], "options": options, "rows": rows, "hint": hint, "keys": keys, "enter": enter,
-            "does": does if rows else "", "above": above, "sig": sig}
+    out = {"text": text[-40:], "options": options, "rows": rows, "hint": hint, "keys": keys, "enter": enter,
+           "does": does if rows else "", "above": above, "sig": sig}
+    if not sure:
+        out.update(raw=True, keys=list(ALL_KEYS))
+    return out
 
 
 def find_rows(body, width=200):
