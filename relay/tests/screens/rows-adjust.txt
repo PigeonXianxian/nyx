@@ -1,0 +1,50 @@
+
+ ▐▛███▛█   Claude Code v2.1.329
+▝▜██████▀  Haiku 5.5 · Claude
+ ▝▝   ▝▝   /home/me/project
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+  Teach auto mode about your environment?
+
+  Claude Code reads this project, your recent Claude sessions, and optionally your shell history and other repositories. Claude analyzes this data and
+  customizes auto mode to make better decisions.
+
+  ❯ How you use Claude here     ‹ Mixed ›
+    Also scan shell history     on
+    Also scan your other repos  off
+
+    Continue
+
+  ↑/↓ to navigate · ←/→ to adjust · Esc to cancel

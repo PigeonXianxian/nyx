@@ -286,7 +286,9 @@
   function watch() { clearTimeout(polling); polling = setTimeout(function () { api("status").then(function (s) { if (s.collecting) watch(); else { spineFoot(); if ($("reading").hidden) { shown = null; route(); } } }, watch); }, 6000); }
 
   /* ── Today: the day's sheet ── */
-  var SECT = [["ai", "AI", "Artificial intelligence"], ["world", "世界局势", "The world"], ["business", "商业", "Business"], ["interview", "访谈", "Conversations"]];
+  var SECT = [["world", "世界局势", "The world"], ["business", "商业", "Business"], ["ai", "AI", "Artificial intelligence"], ["interview", "访谈", "Conversations"]];   // the library's order: the world first
+  // when the day's sheet was written, if it was rewritten in the evening (the library writes one at 07:00 and, when news came in, again after 19:00)
+  function written(brief) { var t = Date.parse((brief && brief.generatedAt) || ""); if (!isFinite(t)) return ""; var s = new Date(t + 8 * 3600000), h = s.getUTCHours(); return h >= 12 ? (h < 10 ? "0" : "") + h + ":" + (s.getUTCMinutes() < 10 ? "0" : "") + s.getUTCMinutes() + " 更新" : ""; }
   function early(k) { var e = RELAY === "/relay" && window.NYX_READ_EARLY, v = e && e[k]; if (e) e[k] = null; return v || null; }
   function viewToday(date) {
     view.className = "view today"; view.innerHTML = WAIT; shown0();
@@ -295,8 +297,8 @@
     var pr = (early("r") || api("recommendations")).catch(function () { return api("recommendations"); }).catch(function () { return null; });
     pb.then(function (b) {
       if (shown !== token) return;
-      var items = (b.brief && b.brief.items) || [], seen = {}, n = 0, isToday = b.date === b.today;
-      var h = '<header class="hd"><h2>' + (isToday ? "今日新鲜事" : zhDate(b.date + "T04:00:00Z") + "的新鲜事") + "</h2><p>" + latinDay(b.date) + (items.length ? " · " + items.length + " 条" : "") + (isToday ? "" : ' · <a href="#today">回到今天</a>') + "</p></header>" +
+      var items = (b.brief && b.brief.items) || [], seen = {}, n = 0, isToday = b.date === b.today, at = written(b.brief);
+      var h = '<header class="hd"><h2>' + (isToday ? "今日新鲜事" : zhDate(b.date + "T04:00:00Z") + "的新鲜事") + "</h2><p>" + latinDay(b.date) + (items.length ? " · " + items.length + " 条" : "") + (at ? " · " + at : "") + (isToday ? "" : ' · <a href="#today">回到今天</a>') + "</p></header>" +
         '<div class="col brief">' + dayLabel(b.date, isToday ? "今日新鲜事" : "那天的新鲜事");
       if (items.length) {
         SECT.concat([["", "其他", "Other"]]).forEach(function (s) {
@@ -326,7 +328,9 @@
       return pr;
     }).then(function (rec) {
       if (shown !== token || !$("picks")) return;
-      var daily = (rec && rec.daily) || [], weekly = ((rec && rec.weekly) || []).filter(function (w) { return !daily.some(function (d) { return d.id === w.id; }); }), h = "";   // a piece is shown once
+      var inBrief = {}; mine.forEach(function (m) { inBrief[m.id] = 1; });
+      var daily = ((rec && rec.daily) || []).filter(function (d) { return !inBrief[d.id]; }),
+        weekly = ((rec && rec.weekly) || []).filter(function (w) { return !inBrief[w.id] && !daily.some(function (d) { return d.id === w.id; }); }), h = "";   // a piece is shown once on the sheet
       if (daily.length) h += '<h3 class="sec"><span>值得一读</span><i>Worth reading today</i></h3><div class="fts">' + daily.map(function (a) { return card(a, "ft"); }).join("") + "</div>";
       if (weekly.length) h += '<h3 class="sec"><span>这一周的</span><i>This week</i></h3><div class="list">' + weekly.map(function (a) { return card(a); }).join("") + "</div>";
       $("picks").innerHTML = h || '<p class="none">今天没有另外挑出来的。</p>'; covers($("picks"));

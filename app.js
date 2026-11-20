@@ -106,6 +106,10 @@
 
   /* ---------- relay ---------- */
   function api(path, opt) { return call(RELAY, key, path, opt); }        // the one you're chatting with
+  var dev = { list: [], cur: "", def: "" };   // which computer your words are about: the chip by the input box (relay/nyx_device.py)
+  function devName(id) { var d = dev.list.filter(function (x) { return x.id === id; })[0]; return d ? d.name : ""; }
+  function devOf(id) { return dev.list.filter(function (x) { return x.id === id; })[0] || {}; }
+  function isDefDev(meta) { var d = devOf(dev.def); return meta.device_host ? meta.device_host === d.host : meta.device === d.name; }   // by the ssh alias, so renaming a machine doesn't mark old bubbles
   function hapi(path, opt) { return call(HOME, hkey, path, opt); }       // the house: hold sheets
   /* small door for add-on scripts (thinkcrab.js) to reach the relay you are chatting with */
   window.NyxChat = Object.assign(window.NyxChat || {}, { api: function (p, o) { return api(p, o); } });
@@ -131,6 +135,7 @@
   function secsText(n) { n = n || 0; return n >= 3600 ? Math.floor(n / 3600) + "h " + Math.floor(n % 3600 / 60) + "m" : n >= 60 ? Math.floor(n / 60) + "m " + (n % 60) + "s" : n + "s"; }
   function paintState() {
     var em = $("state").querySelector("em"), working = typingOn || (busy && busy.state === "busy");
+    if (typeof paintSend === "function") paintSend();
     $("state").title = busy && busy.state === "busy" ? [busy.tool, busy.detail, busy.secs ? "this turn " + secsText(busy.secs) : ""].filter(Boolean).join(" \u00b7 ") : "";
     if (working && !spinT) {
       var pick = function (p) { var v; do { v = VERBS[Math.floor(Math.random() * VERBS.length)]; } while (v === p && VERBS.length > 1); return v; };
@@ -152,7 +157,7 @@
     if (GROUP) return;
     if (!key || document.hidden || $("room").hidden) { busyT = setTimeout(pollBusy, 5000); return; }
     api("/app/busy" + tabQ()).then(function (d) { var was = busy && busy.state; d.at = Date.now(); busy = d; paintState();
-      if (CCMODE) { room(d); tabStates(d.windows); if (isLive(view)) typing(d.state === "busy"); if (qcard && (qcard.shown() || d.state === "waiting")) qcard.load(); }
+      if (CCMODE) { room(d); tabStates(d.windows); if (isLive(view)) typing(d.state === "busy"); if (qcard && (qcard.shown() || d.asking || d.state === "waiting")) qcard.load(); }
       if (CCMODE && (was === "offline") !== (d.state === "offline")) refreshLive(); }).catch(function () { busy = null; })
       .then(function () { var any = busy && (busy.state === "busy" || (busy.windows || []).some(function (w) { return w.state === "busy"; })); busyT = setTimeout(pollBusy, any ? 2500 : 5000); });
   }
@@ -190,6 +195,7 @@
     try { onEvent(JSON.parse(data)); } catch (e) {}
   }
   function onEvent(ev) {
+    if (ev.type === "device") { if (ev.current) dev.cur = ev.current; paintDev(); return; }   // picked on another page
     if (CCMODE) {
       if (ev.type === "cc") {
         if (ev.sid === view) (ev.messages || []).forEach(function (m) { put(m); fresh(m); });
@@ -525,6 +531,7 @@
     else if (kind === "term") inner += note ? '<span class="nt">' + esc(m.text) + "</span>"   // …and what the window printed back
       : '<span class="th">' + (m.meta && m.meta.local ? "" : m.meta && m.meta.dialog ? "window · " : "terminal · ") + "/" + esc((m.meta && m.meta.cmd) || "") + "</span><pre>" + esc(m.text) + "</pre>";
     else {
+      if (me && m.meta && m.meta.device && !isDefDev(m.meta)) inner = '<span class="dv">' + esc(m.meta.device) + "</span>" + inner;   // meant for another computer than usual
       var atts = (m.meta && m.meta.attachments) || [];
       if (atts.length) inner += attHTML(atts);
       inner += me && /^\/[A-Za-z0-9][\w:-]*/.test(m.text || "") ? rich(m.text).replace(/^\/[A-Za-z0-9][\w:-]*/, function (c) { return '<b class="cmdn">' + c + "</b>"; }) : rich(m.text);   // a /skill sent to the companion
@@ -635,7 +642,26 @@
     // never while an input method is still composing (Chinese, Japanese…)
     if (e.key === "Enter" && !e.shiftKey && !touchInput && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(); }
   });
-  sendBtn.onclick = send;
+  /* stop: while the window on the page is working and nothing is written, the swallow gives way to a stop mark. A tap is
+     Esc at the terminal, once (POST /app/cc/stop): the turn stops where it is, and what was queued behind it goes in next.
+     Whatever is written is still sent — writing brings the swallow back. */
+  var stopping = false, sentAt = 0;
+  function canStop() { return !!(CCMODE && isLive(view) && busy && busy.state === "busy" && !text.value.trim() && !(tray && tray.length)); }
+  function paintSend() {
+    var s = canStop();
+    sendBtn.classList.toggle("stop", s); sendBtn.classList.toggle("going", s && stopping);
+    sendBtn.setAttribute("aria-label", s ? "Stop" : "Send"); sendBtn.title = s ? "stop this turn" : "";
+  }
+  function stop() {
+    if (stopping || Date.now() - sentAt < 1200) return;   // (a second tap on the swallow, just after sending, is not a stop)
+    stopping = true; paintSend();
+    api("/app/cc/stop", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sid: view }) })
+      .then(function (r) { if (r && r.stopped === false && r.state === "busy") toast("It hasn\u2019t let go yet \u2014 try again in a moment"); },
+        function (e) { toast(/409/.test(e.message) ? "It\u2019s waiting on a question \u2014 answer that first" : "Didn\u2019t reach the window: " + e.message); })
+      .then(function () { stopping = false; paintSend(); pollBusy(); });
+  }
+  sendBtn.onclick = function () { if (sendBtn.classList.contains("stop")) stop(); else send(); };
+  text.addEventListener("input", paintSend);
   /* attachments: pick → upload right away → they ride along with the next send */
   var tray = [], trayEl = $("tray");
   // pictures and files go up as they are: never shrunk or re-encoded (a long screenshot shrunk to 2048 tall was 405 wide and
@@ -661,8 +687,8 @@
       var it = { name: f.name, done: null, el: document.createElement("div") };
       it.el.className = "it up"; it.el.innerHTML = '<button type="button" aria-label="Remove">×</button>' + ((f.type || "").indexOf("image/") ? esc(f.name.slice(0, 14)) : "");
       if (!(f.type || "").indexOf("image/")) { it.local = URL.createObjectURL(f); it.el.style.backgroundImage = "url(" + it.local + ")"; }
-      it.el.querySelector("button").onclick = function () { tray = tray.filter(function (x) { return x !== it; }); it.el.remove(); trayEl.hidden = !tray.length; };
-      trayEl.appendChild(it.el); trayEl.hidden = false; tray.push(it);
+      it.el.querySelector("button").onclick = function () { tray = tray.filter(function (x) { return x !== it; }); it.el.remove(); trayEl.hidden = !tray.length; paintSend(); };
+      trayEl.appendChild(it.el); trayEl.hidden = false; tray.push(it); paintSend();
       it.file = f; it.job = upload(it);
     });
   }
@@ -778,7 +804,7 @@
       else if (b.dataset.k != null) insert(loadList(MY_KAO)[+b.dataset.k] || "");
       else if (b.dataset.my) { var x = loadList(MY_STK).filter(function (y) { return y.id === b.dataset.my; })[0]; if (x) { pop.hidden = true; sendMine(x); } }
       else if (b.dataset.s) { var keep = text.value; text.value = "[sticker:" + b.dataset.s + "]"; send(); text.value = keep; grow(); pop.hidden = true; } };
-    $("emo").onclick = function () { pop.hidden = !pop.hidden; };
+    $("emo").onclick = function () { pop.hidden = !pop.hidden; if (!pop.hidden) $("devPop").hidden = true; };
     log.addEventListener("click", function (e) {
       pop.hidden = true;
       var im = e.target.closest && e.target.closest(".msg.ai img.stk"); if (!im || root.classList.contains("selecting")) return;
@@ -800,9 +826,9 @@
     if (cc && !tray.length && t.charAt(0) === "/" && cc.slash(t)) { text.value = ""; grow(); return; }   // a / command the page or the window takes (cc.js)
     var items = tray.slice(), q = quote, tab = view;   // the tab it was written in, whichever is on the page when it is retried
     tray = []; trayEl.innerHTML = ""; trayEl.hidden = true;
-    text.value = ""; grow(); setQuote(null);
+    text.value = ""; grow(); setQuote(null); sentAt = Date.now();
     var local = items.map(function (x) { return x.local ? { kind: "image", name: x.name } : { kind: "file", name: x.name }; });
-    var pending = build({ id: "", from: "human", text: t, ts: new Date().toISOString(), meta: Object.assign(q ? { quote: q } : {}, { attachments: local }) });
+    var pending = build({ id: "", from: "human", text: t, ts: new Date().toISOString(), meta: Object.assign(q ? { quote: q } : {}, { attachments: local }, dev.list.length ? { device: devName(dev.cur), device_host: devOf(dev.cur).host || "" } : {}) });
     pending.querySelectorAll(".att img[data-i]").forEach(function (im) { var x = items[+im.dataset.i]; if (x && x.local) im.src = x.local; });
     pending.classList.add("pending"); pending.dataset.text = t; log.appendChild(pending); keepTyping(); toBottom();
     function mark(state, label, onTap) { pending.classList.remove("pending", "failed"); pending.classList.add(state); if (label) pending.querySelector(".t").textContent = label; pending.onclick = onTap || null; }
@@ -834,6 +860,33 @@
       return go();
     }).catch(fail);
   }
+
+  /* ---------- which computer: GET/POST /app/device. The relay puts the pick on every message as a first line
+     【设备 · name · host】 and the transcript gives it back as meta.device; your bubble shows it only when it isn't the default ---------- */
+  function paintDev() {
+    var b = $("dev"), pop = $("devPop");
+    b.hidden = !dev.list.length; if (!dev.list.length) { pop.hidden = true; return; }
+    b.querySelector("span").textContent = devName(dev.cur);
+    b.classList.toggle("away", dev.cur !== dev.def);
+    pop.innerHTML = "<p>这条消息说的是哪台电脑</p>" + dev.list.map(function (x) {
+      return '<button type="button" data-id="' + esc(x.id) + '"' + (x.id === dev.cur ? ' class="on"' : "") + "><b>" + esc(x.name) + "</b><span>" + esc(x.host || "") + (x.id === dev.def ? " · 默认" : "") + "</span></button>";
+    }).join("");
+  }
+  function loadDev() {
+    return api("/app/device").then(function (d) { dev.list = d.devices || []; dev.cur = d.current || ""; dev.def = d["default"] || ""; paintDev(); })
+      .catch(function () { dev.list = []; paintDev(); });   // an older relay without the switch: no chip
+  }
+  $("dev").onclick = function () { var pop = $("devPop"); pop.hidden = !pop.hidden; if (!pop.hidden) $("emoPop").hidden = true; };
+  $("devPop").onclick = function (e) {
+    var b = e.target.closest && e.target.closest("button[data-id]"); if (!b) return;
+    var id = b.dataset.id, was = dev.cur; $("devPop").hidden = true;
+    if (id === was) return;
+    dev.cur = id; paintDev();
+    api("/app/device", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id }) })
+      .then(function () { toast("接下来说的是 " + devName(id)); })
+      .catch(function () { dev.cur = was; paintDev(); toast("没切换成功，再试一次"); });
+  };
+  document.addEventListener("pointerdown", function (e) { var pop = $("devPop"); if (!pop.hidden && !pop.contains(e.target) && !$("dev").contains(e.target)) pop.hidden = true; });
 
   /* ---------- the floating ball: GET /app/meter, POST /app/model ---------- */
   var meterData = null, meterT = 0, modelPin = null;
@@ -1086,7 +1139,7 @@
       } catch (e) {}
       $("gate").hidden = true; $("aiName").textContent = AI;
       log.innerHTML = ""; byId.clear(); msgs.clear(); tools.clear(); lastId = 0; loadDeleted();
-      (d.messages || []).forEach(put); if (CCMODE) { earlier(d.more); paintRo(); } openStream(); loadMeter();
+      (d.messages || []).forEach(put); if (CCMODE) { earlier(d.more); paintRo(); } openStream(); loadMeter(); loadDev();
       if (!hold && window.NyxHold) hold = NyxHold(hapi, { me: ME, chat: api });
       if (!cc && window.NyxCC && !GROUP) cc = NyxCC({ api: api, text: text, grow: grow, send: send, put: put, toast: toast, openMeter: openMeter, reload: function () { loadMeter(); loadWin(); },
         name: function () { return AI; }, used: function () { return win && win.used; }, ghost: ghost, fail: failGhost, local: localCard, verify: verifyWin,

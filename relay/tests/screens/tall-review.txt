@@ -1,0 +1,50 @@
+    · **Host containment**: None configured — assume Claude Code runs on an ordinary developer machine or CI runner with open internet
+    · **Source control**: The trusted repo and its remote(s) only (no additional orgs configured) — this repo currently has no remotes configured
+    · **Trusted internal domains**: None configured
+    · **Trusted cloud buckets**: None configured
+    · **Key internal services**: None configured
+    · **Internal package registry**: None configured
+    · **Sensitive data locations & audiences**: any file or store holding personal data, confidential business data, credentials, regulated data, or similarly
+  sensitive material; preserve exact handles when known and share only with audiences cleared at the [named+specifics] bar
+    · **Data retention / declassification**: None configured
+    · **Sensitive remote targets**: any namespace, host, or container whose name carries `prod` or `production` as a whole word or name segment
+  (hyphen/underscore/dot-delimited — e.g. matches `prod-db`, not `producer`)
+    · **Protected deployment namespaces / environments**: None configured — fall back to the Sensitive remote targets heuristic
+    · **Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries `prod` or `production` as a whole
+  word or name segment
+    User-specific
+    · **Primary use of Claude Code**: software development
+    · **Trusted repo**: The git repository the agent started in (/home/me/project), currently with
+  no remotes configured — treat as an untracked local scratch checkout with no corroborated upstream
+    · **Org-specific CLIs**: None configured
+
+  Allow carve-outs
+   none suggested — defaults look like they cover your usage
+
+  Extra soft blocks
+   none suggested
+
+  Extra hard blocks
+   none suggested
+
+  Notes
+    · Repo facts show 0 tracked files and no git remotes — repository visibility and default/protected branches could not be determined or inferred; left as
+  unknown rather than guessing
+    · Repo visibility & branch protection via gh: NOT GATHERED (not queryable — no remote to derive org/repo from)
+    · Sibling repo docs via gh: NOT GATHERED (user selected just-this-project scope at setup)
+    · Shell history: NOT GATHERED (not opted in)
+    · Other git repos under home directory: NOT GATHERED (not opted in)
+    · Cross-project usage: NOT GATHERED (user selected just-this-project scope)
+    · Config scans found nothing; Trusted cloud buckets, Key internal services, Internal package registry, Org-specific CLIs, Cloud provider(s), Organization,
+  Secrets management, CI/CD deploy targets, Network posture, Host containment, Trusted internal domains, Data retention/declassification, and Protected
+  deployment namespaces left at shipped defaults — no evidence found
+    · Nothing else was found worth a note here
+  (left as it was)
+    · No non-standard CLI usage (uname, whoami) or denial history warranted allow/soft_deny/hard_deny carve-outs for this empty, remote-less repo
+    · Existing auto-mode settings: no classifier-bypassing or destructive entries found in permissions.allow, and autoMode.* block was empty — nothing to
+  remove
+
+  ❯ Looks good — save it
+    Discard and exit
+ ↑ 13 more lines
+  Enter to confirm · Esc to cancel

@@ -39,8 +39,67 @@ class ReadDialog(unittest.TestCase):
         q = read_dialog(screen("claude-code-box.txt"))
         self.assertEqual(q["options"], [])
         self.assertEqual(q["text"][0]["t"], "Teach auto mode about your environment?")
-        self.assertEqual([t["t"] for t in q["text"] if t["on"]], ["Also scan shell history     true"])
+        self.assertEqual([(r["label"], r["value"], r["on"]) for r in q["rows"]],
+                         [("How you use Claude here", "Mixed", False), ("Also scan shell history", "true", True),
+                          ("Also scan your other repos", "false", False), ("Continue", "", False)])
+        self.assertNotIn("Continue", [t["t"] for t in q["text"]])   # a row is a row, not a line of the words over it
         self.assertTrue({"Up", "Down", "Left", "Right", "Enter", "Escape"} <= set(q["keys"]))
+
+    def test_rows_say_what_a_tap_does(self):
+        # 2.1.329: the foot names the keys of the row the cursor is on
+        q = read_dialog(screen("rows-toggle.txt"))
+        self.assertEqual([(r["label"], r["value"], r["on"]) for r in q["rows"]],
+                         [("How you use Claude here", "Mixed", False), ("Also scan shell history", "on", True),
+                          ("Also scan your other repos", "off", False), ("Continue", "", False)])
+        self.assertEqual(q["does"], "toggle")
+        self.assertIn("Space", q["keys"])
+        q = read_dialog(screen("rows-adjust.txt"))
+        self.assertEqual([(r["label"], r["value"]) for r in q["rows"] if r["on"]], [("How you use Claude here", "Mixed")])
+        self.assertEqual(q["does"], "adjust")
+        self.assertTrue({"Left", "Right"} <= set(q["keys"]))
+        q = read_dialog(screen("rows-continue.txt"))
+        self.assertEqual([r["label"] for r in q["rows"] if r["on"]], ["Continue"])
+        self.assertEqual((q["does"], q["enter"]), ("enter", "continue"))
+
+    def test_rows_box_is_one_box_wherever_the_cursor_is(self):
+        sigs = {read_dialog(screen(n))["sig"] for n in ("rows-toggle.txt", "rows-adjust.txt", "rows-continue.txt")}
+        self.assertEqual(len(sigs), 1)
+
+    def test_box_as_tall_as_the_window(self):
+        # it has no rule over it and no input box under it: the whole screen is the box
+        q = read_dialog(screen("tall-review.txt"))
+        self.assertEqual([(r["label"], r["on"]) for r in q["rows"]], [("Looks good — save it", True), ("Discard and exit", False)])
+        self.assertEqual((q["does"], q["enter"], q["above"]), ("enter", "confirm", 13))
+        self.assertNotIn("↑ 13 more lines", [t["t"] for t in q["text"]])
+        self.assertFalse(input_box(screen("tall-review.txt").splitlines()))
+
+    def test_a_list_over_the_rows_is_not_rows(self):
+        # the notes are set in exactly as far as the rows under them, an empty line between
+        q = read_dialog(screen("tall-review-notes.txt"))
+        self.assertEqual([(r["label"], r["on"]) for r in q["rows"]], [("Looks good — save it", False), ("Discard and exit", True)])
+        self.assertTrue(any(t["t"].startswith("· Existing auto-mode settings") for t in q["text"]))
+        self.assertEqual(q["above"], 10)
+
+    def test_a_status_line_under_the_box(self):
+        # "✻ Waiting for API response…" under the box is Claude Code's, not the end of the talk
+        q = read_dialog(screen("model-switch.txt"))
+        self.assertEqual([(o["n"], o["label"], o["own"]) for o in q["options"]],
+                         [(1, "Switch automatically", False), (2, "Stay on Fable 5.2", False), (3, "Type something.", True), (4, "Chat about this", False)])
+        self.assertEqual(q["options"][0]["desc"], "Continue on Opus 4.8 now, and switch without asking from now on")
+        self.assertTrue(q["options"][0]["on"])
+        self.assertTrue(any(t["t"].startswith("Fable 5.2's safeguards flagged this message.") for t in q["text"]))   # the bar down its side is not shown
+        self.assertEqual(q["enter"], "select")
+        self.assertFalse(any("Waiting for API response" in t["t"] for t in q["text"]))
+
+    def test_a_line_the_window_broke_is_one_paragraph(self):
+        q = read_dialog(screen("model-switch.txt"))
+        para = next(t["t"] for t in q["text"] if t["t"].startswith("Fable 5.2's safeguards flagged"))
+        self.assertTrue(para.endswith("tasks. Switch to Opus 4.8 and keep going whenever this happens? You can change this later in /config."))
+        q = read_dialog(screen("tall-review.txt"))   # a list keeps its items apart
+        self.assertTrue(any(t["t"].startswith("· **Trusted cloud buckets**") for t in q["text"]))
+        self.assertTrue(any(t["t"].startswith("· **Sensitive remote targets**") and t["t"].endswith("not `producer`)") for t in q["text"]))
+        q = read_dialog(screen("permission.txt"))   # short lines stay lines
+        self.assertIn("1 hello", [t["t"] for t in q["text"]])
 
     def test_no_question(self):
         for n in ("idle.txt", "busy.txt", "before-question.txt"):
